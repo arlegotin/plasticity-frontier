@@ -33,6 +33,9 @@ class Method:
         if family in ('B00','B01'): realization=construct_canonical(metric,budget.depth)
         elif family=='B02': realization=construct_head_zero(metric)
         resources=realization.resources if realization else (metric_resources(metric,budget.depth) if metric is not None and family!='B05' else Resources(None,None,0,0))
+        if family=='B05':
+            count=1+metric.basis.size+metric.increments.size
+            resources=Resources(None,None,count,8*count)
         if mid=='B08:gd': resources=Resources(0.,d,d,8*d)
         return PreparedState(metric, realization.layers if realization else None,budget,task,resources,mid,prior, self.options)
     def adapt(self, prepared, context):
@@ -56,7 +59,10 @@ class Method:
         info={'method_id':prepared.method_id,'information_access':prepared.prior.information_access,'resource_class':'network' if prepared.initial_layers is not None or prepared.method_id=='B08:gd' else ('compact_direct' if prepared.metric is not None else 'software_estimator')}
         if prepared.method_id.startswith('B09:'): info['basis_provenance']=prepared.prior.fit_metadata.get('basis_provenance','oracle covariance directions')
         if prepared.method_id.startswith('B10:'):
-            info.update({'posterior_reference':'Gaussian prior and noise', 'covariance_rank':int(np.linalg.matrix_rank(prepared.prior.covariance)), 'added_ridge':0.})
+            eigenvalues=np.linalg.eigvalsh(prepared.prior.covariance)
+            rank=int(np.linalg.matrix_rank(prepared.prior.covariance))
+            condition=float(eigenvalues[-1]/eigenvalues[-rank]) if rank else None
+            info.update({'posterior_reference':'Gaussian prior and noise', 'covariance_rank':rank, 'covariance_condition':condition, 'added_ridge':0.})
         return info
 
 

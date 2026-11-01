@@ -52,3 +52,10 @@ class BaselineTests(unittest.TestCase):
             self.assertEqual(m.diagnostics(p,a)['method_id'],mid)
             if mid.startswith('B10'): self.assertEqual(m.diagnostics(p,a)['covariance_rank'],2)
             if mid != 'B08:gd': self.assertIsNone(p.resources.initialization_norm)
+    def test_direct_storage_and_posterior_condition_diagnostics(self):
+        target=make_method('B02',{}).prepare(self.prior,self.budget,self.task)
+        direct=make_method('B05:B02',{'metric':target.metric})
+        p=direct.prepare(self.prior,self.budget,self.task)
+        self.assertEqual(p.resources.stored_scalars,1+p.metric.basis.size+p.metric.increments.size)
+        method=make_method('B10:posterior',{}); p=method.prepare(self.prior,self.budget,self.task)
+        self.assertEqual(method.diagnostics(p,method.adapt(p,self.context))['covariance_condition'],1.)
