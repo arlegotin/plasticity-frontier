@@ -8,13 +8,14 @@ class CandidateFitError(ValueError):
 
 _ALLOWED={'budget','preparation','fitting_candidates','information_policy','source_access_manifest','selection_class','tuning_resolution_policy'}
 
-TUNING_RESOLUTION_POLICY='min_marginal_loss_se_v1'
+TUNING_RESOLUTION_POLICY='min_marginal_loss_se_branch_envelope_v2'
 
 def tuning_resolution_policy():
     """Fixed, source-versioned convention; not an optional tuning parameter."""
     return {'version':TUNING_RESOLUTION_POLICY,'loss_units':'mean_query_squared_error',
         'uncertainty_unit':'independent_source_validation_task',
         'objective_resolution':'absolute_mean_gap <= min(left_marginal_se, right_marginal_se)',
+        'branch_envelope':'supported_local_possible_improvement_below_unchanged_tau_float64_diagnostic',
         'ranking':'minimum_validation_mean_with_paired_difference_diagnostics',
         'shrinkage_probe':'include_endpoints_and_an_interior_candidate_before_local_checks',
         'scope':'finite_local_objective_resolution_not_confidence_or_global_optimality',
@@ -150,6 +151,12 @@ def select_method(candidates,train,validation,config):
                 group[best].setdefault('tuning_checks',[]).append(check)
                 if check['decision']=='uncertainty_unavailable': uncertainty_missing=True
                 if check['decision']=='refine_objective_gap':
+                    from .tuning_bounds import branch_interval_check
+                    envelope=branch_interval_check(left,right,group[best],validation,trial_config)
+                    check['branch_envelope']=envelope
+                    if envelope['status']=='resolved':
+                        check['decision']='objective_resolved_by_branch_envelope'
+                        continue
                     midpoint=(left['gamma']+right['gamma'])/2
                     check.update(proposed_coordinate=midpoint,representable_progress=left['gamma']<midpoint<right['gamma'])
                     refinements.add(midpoint)

@@ -103,7 +103,12 @@ class TuningResolutionTests(unittest.TestCase):
         self.assertAlmostEqual(check['absolute_mean_gap'], .8125)
         self.assertAlmostEqual(check['objective_tolerance'], 1.5)
         self.assertGreater(check['absolute_mean_gap'], check['paired_difference_se'])
-        self.assertEqual(selected['tuning_resolution_policy'], 'min_marginal_loss_se_v1')
+        self.assertEqual(selected['tuning_resolution_policy'], 'min_marginal_loss_se_branch_envelope_v2')
+        fallback = [c for row in result.candidate_records for c in row.get('tuning_checks', [])
+                    if 'branch_envelope' in c]
+        self.assertTrue(fallback)
+        self.assertTrue(all(c['branch_envelope']['status'] == 'unsupported'
+                            and c['decision'] == 'refine_objective_gap' for c in fallback))
 
     def test_all_families_including_losing_groups_receive_same_checks(self):
         methods = [AnalyticCandidates('B01', lambda g: [0., 0.])]
@@ -204,7 +209,7 @@ class TuningResolutionTests(unittest.TestCase):
             PreparationSpec(1, 1, 'gaussian_isotropic', 'squared_error_over_2n', 1.), {}, {}, (), {},
             SamplePlan('deterministic_frontier', None, None, None, None, None), {})
         public = public_method_config(config)
-        self.assertEqual(public['tuning_resolution_policy']['version'], 'min_marginal_loss_se_v1')
+        self.assertEqual(public['tuning_resolution_policy']['version'], 'min_marginal_loss_se_branch_envelope_v2')
         public['tuning_resolution_policy']['version'] = 'resolve_at_cap'
         with self.assertRaisesRegex(ValueError, 'unsupported tuning resolution policy'):
             select_method([], [], [], public)
