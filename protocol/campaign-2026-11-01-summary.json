@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "executed_source": {
+    "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+    "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+    "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+    "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+    "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+    "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+    "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+    "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+    "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+    "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+    "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+  },
+  "scope": "Completed local gated campaign; learned confirmation and finalized full operational panel not run. No population effect sign or practical superiority established.",
+  "stages": [
+    {
+      "gate": "G0-G4",
+      "status": "supported_in_recorded_scope",
+      "qualification": "Finite exact cases and executable numerical diagnostics; three near-zero grid intervals unresolved."
+    },
+    {
+      "gate": "G5",
+      "status": "exploratory_tuning_unresolved",
+      "qualification": "17/18 final-source preparations resolve; a valid B04 branch switch remains unresolved at cap8."
+    },
+    {
+      "gate": "G6",
+      "status": "INSENSITIVE_OR_UNSUITABLE",
+      "full_pilot": "not_run",
+      "qualification": "No >=30/block pilot or final sample count; preliminary block variance unstable and tuning prerequisite unresolved."
+    },
+    {
+      "gate": "G7",
+      "status": "not_run",
+      "qualification": "No campaign protected root allocated and no protected observations generated."
+    },
+    {
+      "gate": "G8",
+      "status": "descriptive_suite_completed",
+      "qualification": "26 actual small diagnostic arms; 26 amendments and two transfers remain unperformed; no confirmatory inference."
+    },
+    {
+      "gate": "G9",
+      "status": "exploratory_cost_only",
+      "full_finalized_14_method_panel": "not_run",
+      "qualification": "Four controls,16 exploratory workers; no finalized operational or practical-superiority claim."
+    },
+    {
+      "gate": "G10",
+      "status": "SUPPORTED_IN_SCOPE",
+      "qualification": "Report reconstruction/clean replay only; seven executions matched and23 provenance/forecast/not-run inputs retained."
+    }
+  ],
+  "source_cohort": {
+    "root": 202611011007,
+    "independent_preparations": 18,
+    "per_level": 6,
+    "levels": [
+      32,
+      128,
+      256
+    ],
+    "cap5_and_cap8_same_observations": true,
+    "unique_source_task_keys": 4992,
+    "new_independent_units_from_cap8_repeat": 0
+  },
+  "protected_keys_allocated": false,
+  "final_primary_sample_count": null,
+  "primary_confidence_interval": null,
+  "verification": {
+    "full_suite_tests": 304,
+    "elapsed_seconds": 128.096,
+    "result": "OK",
+    "executed_git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+    "log_path": "runs/campaign/2026-11-01-main-objective-v1/final-full-suite.log",
+    "log_sha256": "13a8c5594dc1377e24391bc713099906251661be3d654f7b7f341fff8e2056c7",
+    "replay_receipt_sha256": "9fde6c8855fe8cde7a76f0805e00362c6f2a24cb5da63c6db8407d4305d88547",
+    "input_order_sha256": "cf237b4192651839303837c632d9762cc0a09835c85f13c1f750ec5061512720",
+    "report_inventory_files_preserved": 144,
+    "archived_original_files_preserved": 81560,
+    "archived_original_bytes_preserved": 2043974526,
+    "preservation_mismatches": 0
+  },
+  "original_inputs_verified": {
+    "docs/blueprint.md": "b866527eaae4cf73991ceb9afda1459691aa0d8a68cfd7f3d7d528f53a2deb7e",
+    "docs/prepared_learning_research.pdf": "2e0bf090bb2c8504e513b08b14c3bb1ed356dde5d7dd39ebb90f30b281f430b1",
+    "docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+    "source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+    "requirements.lock.txt": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6"
+  },
+  "raw_campaign_root": "runs/campaign/2026-11-01-main-objective-v1",
+  "raw_archive_handoffs": [
+    "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-sealed-handoff.json",
+    "runs/campaign/2026-11-01-main-objective-v1/history/old-identity-source-input.json"
+  ],
+  "publication_boundary": "This evidence is committed after execution. Do not relabel the computation with the later evidence commit."
+}

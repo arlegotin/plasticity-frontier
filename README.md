@@ -2,6 +2,8 @@
 
 This repository preserves the supplied research inputs and builds a local CPU float64 research environment. The original ZIP and PDFs are inputs: do not modify them or run the source scripts in place. `doctor` stages a validated read-only source snapshot under `source_bundle/`; experiments must use copies and write outputs under `runs/`. Optional source assets do not gate equation-based fixtures.
 
+The [1 November local verdict](docs/results/2026-11-01-local-verdict.md) records a verified exact example and a source-tuning gate that stopped protected confirmation. Practical learned performance remains unconfirmed. [Selected evidence and figures](reports/2026-11-01-local/README.md), the [campaign summary](protocol/campaign-2026-11-01-summary.json), and the [execution audit](docs/superpowers/reviews/2026-11-01-execution-audit.md) preserve the executed scope and its limits.
+
 Bootstrap on a native arm64 macOS Python compatible with the locked wheels (the recorded environment used Python 3.14.6):
 
 ```sh

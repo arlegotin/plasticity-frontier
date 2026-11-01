@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "status": "forecast_not_executed",
+  "evidence_level": "forecast",
+  "source": {
+    "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+    "candidate_sha256": "5e32f04b77af035083d754371bc8b273e58f2432c3dc79cbfcd4b7917abbf529",
+    "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+    "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+    "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+    "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+    "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+    "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42",
+    "runtime_sha256": "0945436b7222ba04be5d5d5c823a1c6c1b29c0f6b3451a827efc875bab0641ca",
+    "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+    "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+  },
+  "package": {
+    "archive": {
+      "path": "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip",
+      "bytes": 116598253,
+      "sha256": "501ed580f45ac33dba616f9da45fa782ef3a10ae80095a027544012717377d42",
+      "format": "ZIP64-capable DEFLATElevel6; repository-relative membernames; explicitselecteddirectory entries"
+    },
+    "manifest": {
+      "path": "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz",
+      "bytes": 872300,
+      "sha256": "bda0de1efa74450df23fbc8dd174429da31ced492557999801e9ce657c4d3496",
+      "uncompressed_JSON_bytes": 12881101,
+      "uncompressed_JSON_sha256": "45912d7f81a517aff8aabc995f3de2be93b4e523d2592721db6bc46fee76ff9d"
+    },
+    "verification_receipt": {
+      "path": "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json",
+      "sha256": "d7ae3fde7b493e73759513acfe37e093e6f3cee8b0dcc16f66a159ab46d099e5",
+      "bytes": 1962
+    }
+  },
+  "same_measured_origin": "Current16workerroot202611011011andcap8root202611011007; no newworker/simulation/result/hash invented. Zeroadditionalindependentdata.",
+  "full14_conditional_cost_storage_model": {
+    "scope": "Conditional engineering extrapolation from this actual four-control/fixed-preparation dataset and schema; ten other methods, freshdatasets, finalizedrequest overhead and actual future timing variability are unmeasured. No synthetic worker files/hashes/results created.",
+    "structural_counts": {
+      "methods": 14,
+      "balanced_blocks_per_phase_minimum": 14,
+      "workers_per_phase": 196,
+      "calibration_and_fixed_workers": 392,
+      "technical_replay_fixed_workers": 196
+    },
+    "observed_mean_raw_worker_JSON_bytes": 2441557.0,
+    "observed_mean_request_JSON_bytes": 1963.5,
+    "observed_max_raw_worker_JSON_bytes": 5916078,
+    "actual_indivisible_calibration_benchmark_JSON_bytes": 9901688,
+    "actual_coordinator_top_field_JSON_bytes": {
+      "accelerator": 48,
+      "comparison_gate": 497,
+      "condition_strata": 39745,
+      "conditions": 2483,
+      "config": 1138,
+      "context_generation": 45,
+      "decision": 315,
+      "energy": 115,
+      "equality": 295,
+      "identity": 5064,
+      "input_hash": 66,
+      "inputs": 1151,
+      "operations": 594,
+      "pareto": 13478,
+      "phase": 13,
+      "pilot": 3912,
+      "prior_cost": 84,
+      "resources": 9736336,
+      "schedule": 261,
+      "schema_version": 1,
+      "scientific_hash": 66,
+      "status": 13,
+      "summaries": 18631,
+      "timing_blocks": 76077,
+      "timing_scope": 914
+    },
+    "uniform_observed_mix_projected_calibration_plus_fixed_worker_JSON_bytes": 957090344,
+    "uniform_observed_mix_projected_calibration_plus_fixed_request_JSON_bytes": 769692,
+    "coordinator_14_method_linear_methodmix_model_bytes": 34655908,
+    "uniform_observed_mix_projected_total_retained_JSON_bytes": 992515944,
+    "uniform_observed_mix_256x_JSON_component_plus_base_bytes": 254151190528,
+    "known_four_controls_only_conditional_28_workers_each_block_JSON_bytes": 273454384,
+    "known_four_controls_only_256x_JSON_component_plus_base_bytes": 70071431168,
+    "four_control_finalized_calibration_and_fixed_JSON_model_bytes": 88094344,
+    "four_control_finalized_256x_JSON_component_plus_base_bytes": 22619260928,
+    "actual_report_budget_reference_bytes": 11200159744,
+    "current_report_plus_actual_calibration_JSON_component_lower_estimate_bytes": 12611810032,
+    "benchmark_replay_policy": "Benchmark replay reexecutes fixed requests and retains original/new worker JSON; it does not use the confirmation SQLite index. Initial replay JSON/inventory admission doubles copies.",
+    "benchmark_technical_replay_additional_fixed_worker_JSON_model_bytes": 478545172,
+    "benchmark_original_calibration_fixed_plus_technical_replay_worker_JSON_model_bytes": 1435635516,
+    "confirmation_only_temporary_disk_policy": "8*(original+replay RunStoreJSONbytes)+64MiB must fit within half live temporaryfilesystemfree space. This does NOT apply as an invented index to benchmark workers.",
+    "actual_half_free_temp_bytes": 17276749824,
+    "disk_limitations": "Add rawrequests/coordinator/manifests, derivedreports, replaylogs/freshclone/venv and primaryconfirmation data. No finalprimaryJ exists, so primaryindex cost remains symbolic/previous measured-envelope forecast.",
+    "no_G9_promotion": "Probe remains exploratory; no finalize_benchmark_manifest or fixedproductionG9 executed."
+  },
+  "source_cap8_resource_forecast": {
+    "maximum_envelope_256x_RAM_component_bytes": 14484624128,
+    "postrun_available_memory_bytes": 22510600192,
+    "half_available_bytes": 11255300096,
+    "256x_component_alone_exceeds_half_available": true,
+    "replay_index_model_at_minimum_J30_bytes": 27225779104,
+    "current_half_free_disk_bytes": 17462331392,
+    "scope": "Forecast from recorded envelope, not actual protected/report admission. Current confirmation layout may differ; no finalJ exists or is guessed."
+  },
+  "measurement_provenance": {
+    "archive_member": "runs/campaign/2026-11-01-main-objective-v1/operational-cost-probe-summary.json",
+    "sha256": "bcd8048a564ba599febad239208c4197a04e12d3ef97213eb697a4afea6206e2",
+    "bytes": 49624
+  },
+  "source_cap8_provenance": {
+    "archive_member": "runs/campaign/2026-11-01-main-objective-v1/source-cap8-verification-summary.json",
+    "sha256": "c89d8e1fc0e281ab97924bea08b56750d02d56d2f84c29e27991c2d85ecdce73",
+    "bytes": 28949
+  },
+  "limitations": [
+    "Counts196workers/phase are structuralAPI arithmetic; byte/RAMextrapolations are conditionalengineeringforecasts,not executedfull14evidence.",
+    "Tenothermethods/newdatasets/finalizedrequestextraoverhead unknown; finalprimaryJ isunresolved.",
+    "Actualsinglephasepublicreportadmissionpassed; forecastfinalized/full14admissionhasnotbeenexecuted.",
+    "Benchmarkreplay doesnotuseconfirmationSQLiteindex; primaryindexpolicy iskeptseparate.",
+    "No forecast supportsoperational/protectedadvantage or changesG6offramp."
+  ]
+}

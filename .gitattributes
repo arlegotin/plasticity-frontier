@@ -1,2 +1,8 @@
 # Third-party license notices are preserved byte-for-byte, including whitespace.
 licenses/** -whitespace
+# Preserve recorded scientific exports and receipt hashes across Git checkouts.
+reports/2026-11-01-local/** -text
+reports/2026-11-01-local/*.csv -whitespace
+reports/2026-11-01-local/*.svg -whitespace
+protocol/campaign-2026-11-01-*.json -text
+protocol/controller-rulings-2026-11-01.json -text

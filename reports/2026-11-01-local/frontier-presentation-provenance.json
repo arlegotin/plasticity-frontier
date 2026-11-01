@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "operation": "presentation_only_from_immutable_CSV",
+  "source_csv": {
+    "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/report-final/frontier.csv",
+    "bytes": 704829,
+    "sha256": "41c528ffcde524aa9dfded638771595090790a4eab88abf3990b93b87ecf56c7",
+    "unchanged_after_render": true
+  },
+  "source_row_counts": {
+    "total": 507,
+    "grid_branch_points": 502,
+    "standalone_primary_points": 2,
+    "unresolved_intervals": 3
+  },
+  "curve_vertices_by_width_and_branch": {
+    "width_1_F": 71,
+    "width_1_Z": 71,
+    "width_2_F": 85,
+    "width_2_Z": 85,
+    "width_3_F": 95,
+    "width_3_Z": 95
+  },
+  "parameter_caps_from_CSV_actual_resources": {
+    "1": 7,
+    "2": 14,
+    "3": 21
+  },
+  "primary_width_mapped_by_CSV_resources": 3,
+  "primary_budget_from_CSV": 0.6,
+  "unresolved_intervals": [
+    {
+      "width": 1,
+      "lower": "0.0",
+      "upper": "0.003125"
+    },
+    {
+      "width": 2,
+      "lower": "0.0",
+      "upper": "0.003125"
+    },
+    {
+      "width": 3,
+      "lower": "0.0",
+      "upper": "0.003125"
+    }
+  ],
+  "transformations": [
+    "classify by existing row type/width",
+    "group width and branch",
+    "sort by existing budget",
+    "connect all source grid vertices without simplification",
+    "annotate source intervals and standalone primary points"
+  ],
+  "no_model_evaluation_fits_inference_resampling_or_new_data": true,
+  "public_instrument_figures_and_report_inputs_modified": false,
+  "script": {
+    "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/curated/render_frontier.py",
+    "sha256": "4fac2e4812079317816a4d19c2a316cff9687c63d57282823abe2ed6bb3d42bf"
+  },
+  "runtime": {
+    "python": "3.14.6",
+    "matplotlib": "3.11.2",
+    "backend": "Agg",
+    "svg_fonttype": "none",
+    "path_simplify": false
+  },
+  "outputs": [
+    {
+      "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/curated/frontier-curated.svg",
+      "bytes": 38324,
+      "sha256": "4ebb4fb852dbda455dd7dbbda245542e79fe8845584343b595e1cf0b202408ff"
+    },
+    {
+      "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/curated/frontier-curated.pdf",
+      "bytes": 26872,
+      "sha256": "47edbdfa2b0307ab4a999de64215d99520f5b1666157347de21f83da8615cd57"
+    },
+    {
+      "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/curated/frontier-curated.png",
+      "bytes": 237770,
+      "sha256": "5a30902970383d521a0a53005124d3169f24a447286fc7c05c57dacf75c5a8ef"
+    }
+  ]
+}

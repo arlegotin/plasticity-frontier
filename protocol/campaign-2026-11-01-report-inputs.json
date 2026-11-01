@@ -1,0 +1,1590 @@
+{
+  "schema_version": 1,
+  "inputs": [
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "G0 actual environment and source provenance at 536a400",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stdout.json",
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "reason": "Actual volatile environment observations retained as provenance; not reexecuted or treated as scientific confirmation.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/environment.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/gate_decision.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/hardware.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/source_manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity-after.json"
+      ],
+      "input_id": 0,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g0-environment-source.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/environment.json": "3b40b9dcbd0f4c58e2f8997d6ae8554294ee0e0c4fafd23f5f0b4883a961248b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/gate_decision.json": "71395d8c9614dab64982076cf7319d9fd65602cef74873ef2fb711cec2e32f8f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/hardware.json": "56dee178a5cc1884b0d57ce2c500b54cb0d42b2cdec9919e3becf8dc474d4b2c",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity-after.json": "8bfa55ec568790bb29b371648e2069cf0a46b4c2b8ef7a253a5e71d8501a1a7e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity.json": "fc0a72ecee2c38339fbb4cfcbc3556fda5c1a268828601238a5a24294fe6a6c0",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g0-environment-source.json": "a2a1c702d7fe50b39492dbfccf749374df4ed7dd176d7d90f658a8fb0c466221",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.process.json": "7a1ebd1bf31f07b88d2b82c2e8fc84762654febb64ac9fd6f850acdcdefc16ab",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stdout.json": "c3a279c086332620c85c4abdd5a9552834c0c44d35d37dbb5e3cd1f5fd472b4f"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "diagnostic",
+      "label": "G1 actual finite exact-theory checks; not a global theorem",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stdout.json",
+      "command": [
+        "check-theory",
+        "--config",
+        "configs/exploration/exact_cases.json"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/exact_cases.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/protocol/proof_obligations.md",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stderr"
+      ],
+      "input_id": 1,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g1-theory.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/exact_cases.json": "12dc185ab38f36be26c2f13e235e4bfa751c81f9e6a2bfde013625f23fe7fa7c",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/protocol/proof_obligations.md": "eedfd02f73c80ee4c6dc14ab0cdccce305be13a43ad07d718fc0e4fe806f81a1",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g1-theory.json": "ca7f48f1f4b98de6854cfa3321e8dd453f4c9a845ca499f522ee4cf2f164bed8",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.process.json": "2ae092b49a5ffb8151885f62ed9221b472b48c31b97371b0934871b153b6be24",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stdout.json": "925c2c4206fd9ad7fe11269fa256ef5e3711454ceb6441de28fcf46cc67e8260",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json": "5ce2f61fcbea419c9c68b72a5a9319a7d229fd70cea3d4f91748ee8c10c9d7f2"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "diagnostic",
+      "label": "G2 actual adversarial geometry and simultaneous-step diagnostics",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stdout.json",
+      "command": [
+        "check-geometry",
+        "--suite",
+        "adversarial"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stderr"
+      ],
+      "input_id": 2,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g2-geometry.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g2-geometry.json": "438b24c7cb04347ff8c1016bf165bb03b773901bd400c88d7f6182da296e04aa",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.process.json": "4ca84026ad06c12283553e4e391a302bc9d954832a43edb740b23de2e873d346",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stdout.json": "3748207ec1e4a0f1d8eb13444ca9033ead07e0c55a9cb15002c25280d183007c"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Supplied frozen source record: results_phase.json",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json",
+      "source": {
+        "git_commit": null,
+        "code_sha256": null,
+        "dependency_lock_sha256": null,
+        "identity_status": "historical_producing_or_executed_identity_not_recorded; do_not_substitute_current_commit",
+        "source_archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f"
+      },
+      "reason": "Supplied source-package output with frozenZIP/member hash provenance; producing Git identity unrecorded, not a current experiment or independent confirmation.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json"
+      ],
+      "input_id": 3,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-results_phase-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-results_phase-input.json": "9fb032782135841bc8f11df97b99c28232224ad7d4a31dfba6fb86d0c7fe3b9a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json": "5c6b830ff97363a393513c7ccbe0782ad2ceb461e3b167a2f829d499ab114f0b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Supplied frozen source record: results_plasticity.json",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json",
+      "source": {
+        "git_commit": null,
+        "code_sha256": null,
+        "dependency_lock_sha256": null,
+        "identity_status": "historical_producing_or_executed_identity_not_recorded; do_not_substitute_current_commit",
+        "source_archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f"
+      },
+      "reason": "Supplied source-package output with frozenZIP/member hash provenance; producing Git identity unrecorded, not a current experiment or independent confirmation.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json"
+      ],
+      "input_id": 4,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-results_plasticity-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-results_plasticity-input.json": "23aa77a00711256b83a8269bb06b5f9a8979c815d710bff836e5a327dbae6a88",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json": "8a958e014e3ab2734ff5a48077e389d7a0b9dfb20b10c47615409dd67a158741",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Supplied frozen source record: audit_geometry_results.json",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json",
+      "source": {
+        "git_commit": null,
+        "code_sha256": null,
+        "dependency_lock_sha256": null,
+        "identity_status": "historical_producing_or_executed_identity_not_recorded; do_not_substitute_current_commit",
+        "source_archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f"
+      },
+      "reason": "Supplied source-package output with frozenZIP/member hash provenance; producing Git identity unrecorded, not a current experiment or independent confirmation.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json"
+      ],
+      "input_id": 5,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-audit_geometry_results-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/supplied-audit_geometry_results-input.json": "02a3fc0118f42b8332bfcf5f209e87254f4eb0e3b9706b55c1c74c9acec449fc",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json": "a61eee75bd22db4e0cc13577bd25680c580d95beaae3e37af7b2ef8dc6ba7f86",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Historical developer full-matrix attempt:5of6 diagnostic success=false",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json",
+      "source": {
+        "git_commit": null,
+        "code_sha256": null,
+        "dependency_lock_sha256": null,
+        "identity_status": "historical_producing_or_executed_identity_not_recorded; do_not_substitute_current_commit",
+        "source_archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f"
+      },
+      "reason": "Actual retained developer diagnostic; task report names invocation, per-run executed Git SHA is unrecorded. All11 attempt files, all six outcomes and returncodes preserved; no independent confirmation or protected claim.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/task-4-implementation-report.md",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry_results.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/reproduction.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json"
+      ],
+      "process_report_provenance": {
+        "original_authoring_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/.superpowers/sdd/2026-11-01-plasticity-frontier/task-4-report.md",
+        "durable_byte_copy": "task-4-implementation-report.md",
+        "sha256": "357bf49050772f34ae4425c9efabb5a96266a4efd761a1ff5c5d7f1fce0c7269",
+        "reason": "Original task scratch is cleaned after completion; this byte-identical source-report copy remains a report asset."
+      },
+      "input_id": 6,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/developer-full-matrix-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/developer-full-matrix-input.json": "460adbb2555dba9d7e793d02f3c68164e80887d8543f172304f4705cfc35ba59",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/task-4-implementation-report.md": "357bf49050772f34ae4425c9efabb5a96266a4efd761a1ff5c5d7f1fce0c7269",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry_results.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stdout": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/reproduction.json": "1c3e74d16e07da487df4555e691bffcce4418ad0ef334e1ad605f82f5abd0cd7",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Historical supplied/developer adverse-source provenance index",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json",
+      "source": {
+        "git_commit": null,
+        "code_sha256": null,
+        "dependency_lock_sha256": null,
+        "identity_status": "historical_producing_or_executed_identity_not_recorded; do_not_substitute_current_commit",
+        "source_archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f"
+      },
+      "reason": "Bounded provenance summary with explicit full raw assets; source-only and not a separate independent sample. Use alongside direct raw records to preserve negative/unresolved outcomes.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/task-4-implementation-report.md",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry_results.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/reproduction.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json"
+      ],
+      "process_report_provenance": {
+        "original_authoring_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/.superpowers/sdd/2026-11-01-plasticity-frontier/task-4-report.md",
+        "durable_byte_copy": "task-4-implementation-report.md",
+        "sha256": "357bf49050772f34ae4425c9efabb5a96266a4efd761a1ff5c5d7f1fce0c7269",
+        "reason": "Original task scratch is cleaned after completion; this byte-identical source-report copy remains a report asset."
+      },
+      "input_id": 7,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-index-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-index-input.json": "da0d0f3551ebb145e94d1c993a3eba5e6ad5ca8dc6ad8b3b1c24b43d57ac58e6",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/task-4-implementation-report.md": "357bf49050772f34ae4425c9efabb5a96266a4efd761a1ff5c5d7f1fce0c7269",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/audit_geometry_results.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stdout": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/reproduction.json": "1c3e74d16e07da487df4555e691bffcce4418ad0ef334e1ad605f82f5abd0cd7",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json": "a61eee75bd22db4e0cc13577bd25680c580d95beaae3e37af7b2ef8dc6ba7f86",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json": "5c6b830ff97363a393513c7ccbe0782ad2ceb461e3b167a2f829d499ab114f0b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json": "8a958e014e3ab2734ff5a48077e389d7a0b9dfb20b10c47615409dd67a158741",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "G3 actual current source and baseline reproduction, all original scripts/captures retained",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stdout.json",
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "reason": "Current source reproduction is provenance. Dynamic attempt paths and original output destinations are retained without reexecution; every supplied/developer failure is separately inventoried. No optional full-matrix rerun or protected inference.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry_results.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/reproduction.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/README.txt",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram.pdf",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram.png",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram_note.pdf",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/geometry_section.tex",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/literature_plasticity.txt",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_section.tex",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/plot_phase.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/research_note.pdf",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/research_note.tex",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verification_section.tex",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/source.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.output.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.output.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stdout",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.output.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stderr",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stdout"
+      ],
+      "input_id": 8,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g3-reproduction-source.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/source.json": "a73d479c19c069524a9bce00c24c9edb6a651cc03602d297f5cdf7d5bc5a3817",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g3-reproduction-source.json": "b9409b0f6b1bb03995e59cd70d70547361dccff0d907c0b0d42039d7b2dc0d3b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.process.json": "20f8f5317dc6da1075d93d72f5536b6162df6eadcfba515fc5b6667f14bd4628",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stdout.json": "264d30978da142cbe43976412b6e7d0db9c878ee7e94575b2b5fe819b4a0b503",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.output.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.process.json": "69ac748f20f5495597b30a374f8f32b9d76de74a769fc41ceca9e447ef8002d1",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.output.json": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.process.json": "9dc31f40e325aff2b36a2bcd2066a03890acd3c0bf7bd2c1a8d987ecdfff99c4",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stdout": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.output.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.process.json": "085f38c9df8f04c7c9c2cd4fe0121dbc91c555e8cc2915a75df4a5985cb6f4c2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry_results.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.json": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stdout": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/reproduction.json": "b100a5f018b434e48d931fef00b56d88cc5e38d6f551369e21706b0013a065b0",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/README.txt": "86f639b69bda7add031a08ba4ee09eeb89bc5656e88f8aa3176d33407f66ac77",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/audit_geometry_results.json": "a61eee75bd22db4e0cc13577bd25680c580d95beaae3e37af7b2ef8dc6ba7f86",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram.pdf": "6a1c8c830eec7a5793e94d245e3ff26461f693c33850163eb7b26bbd1eb78aab",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram.png": "a3532faf1ef61e634a8d6aa90083a3f91480d1215ff7efe0df0efe8dfd15ea8c",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/figures/phase_diagram_note.pdf": "8571d068c1b18cb8a882b1c480d00398a7e6dae2661541b0c57d76802e78d25b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/geometry_section.tex": "b7d354347397d16f7f2d6c3a555acbace2541ca1bc2fd08e945d6ea8378da8b3",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/literature_plasticity.txt": "254984e76a2bc0a3535c2e45a83472dfbaaa58aaec8076ceeb40901eb755bb0b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_section.tex": "74ac897ef059b11a08889d2083c010f9fca63196511b70c9f39bb81cf734bd73",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/plot_phase.py": "5ca80fe672268e9486f985eae84c0fd1866c44e6f5257350ab8571c4e48581f3",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/research_note.pdf": "d21569825103249a352bba5e69f951bcc163dbc748b33df9124ff637920de4f9",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/research_note.tex": "8012b649d20c60821646f7fb4aa78002cc73713125e773639bd7e81a6ca8d744",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_phase.json": "5c6b830ff97363a393513c7ccbe0782ad2ceb461e3b167a2f829d499ab114f0b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/results_plasticity.json": "8a958e014e3ab2734ff5a48077e389d7a0b9dfb20b10c47615409dd67a158741",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verification_section.tex": "67a0324d86fa14f7131da79142e143f48bdbb86a44048fe2c2779c29c74d7e35",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_bundle/prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "diagnostic",
+      "label": "G4 actual single-point F/Z analytic diagnostic with exact-certificate attachment",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stdout.json",
+      "command": [
+        "frontier",
+        "--config",
+        "configs/exploration/frontier.json",
+        "--certify"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stderr"
+      ],
+      "input_id": 9,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-frontier.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json": "1c020462eef26b398cdf08af99bfd971ae1370131351d168773ef29206b24092",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-frontier.json": "0be5725320b40472e19bcb143268b78d5c88657855fb5d1caac3c7602366bf8a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.process.json": "f795e9455f437d311ebf15fb50233adcd787e02a2fc69fc6234626a0540791db",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stdout.json": "dd503eaace3585fc16ec653eb202f565af74d7fd9322957ace6fa045bb7a8e2d",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json": "5ce2f61fcbea419c9c68b72a5a9319a7d229fd70cea3d4f91748ee8c10c9d7f2"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "exact",
+      "label": "G4 F exact rational finite-fixture KKT export, actual committed public execution",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stdout.json",
+      "command": [
+        "export-exact",
+        "--config",
+        "configs/exploration/frontier.json",
+        "--branch",
+        "F"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stderr"
+      ],
+      "input_id": 10,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-exact-F.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json": "1c020462eef26b398cdf08af99bfd971ae1370131351d168773ef29206b24092",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-exact-F.json": "297dbbc2daf5f0c381a4417950d6864c9a2d23e6b61ca0f4889fea60cd4aff20",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.process.json": "3fd16b60b5c2ed3fce2958351048d6935623c61cefc3e8c04682463179c8ddb6",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stdout.json": "d0fbbf1366ea798bfa3a0a299f10c3170979697f3c9319247f0cdf06f9f4760e",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json": "5ce2f61fcbea419c9c68b72a5a9319a7d229fd70cea3d4f91748ee8c10c9d7f2"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "exact",
+      "label": "G4 Z exact rational finite-fixture KKT export, actual committed public execution",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stdout.json",
+      "command": [
+        "export-exact",
+        "--config",
+        "configs/exploration/frontier.json",
+        "--branch",
+        "Z"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stderr"
+      ],
+      "input_id": 11,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-exact-Z.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/configs/exploration/frontier.json": "1c020462eef26b398cdf08af99bfd971ae1370131351d168773ef29206b24092",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-exact-Z.json": "78e4e1bdca5b97cec1970eb754c22ed25cc107f8ebe07dc8002ca3c9061e966a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.process.json": "bb821a932aefd8acf5d05624680824d63a31333a105c516ff57bf0f90ba3aca2",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stdout.json": "8584f94214e19eebb1fdb458484ad88d7f9d6f46e070ff09452b4e998a91d4fb",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/tests/fixtures/exact_cases.json": "5ce2f61fcbea419c9c68b72a5a9319a7d229fd70cea3d4f91748ee8c10c9d7f2"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "diagnostic",
+      "label": "G4 actual full width-1/2/3 frontier grid; both branches and three unresolved intervals",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid/attempt-q8qgzc3t/frontier.json",
+      "process_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid-process.json",
+      "output_artifact": {
+        "filename": "frontier.json"
+      },
+      "command": [
+        "frontier",
+        "--config",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid-config.json",
+        "--output",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid-config.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stderr"
+      ],
+      "input_id": 12,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-grid.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid/attempt-q8qgzc3t/frontier.json": "1af746ddb9d5ea4d6ffb13985aaa775efde9b76b33984d4ead214264e9076800",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid-config.json": "2fb7278fae60dfc68636f7b2bdbb41a00dce2dd1a1494e0d3998e1cd6e8992fa",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/grid-process.json": "b49275c9bc98a667cfb4d31be8bafe5b7b97e3204ca004ea3d6b7e390a7e2f1d",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g4-grid.json": "7f0ae60b45e39c9bc72de681fc77b195e4c0b00eceae387f7aaf704ec832ed28",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.process.json": "d9ae84b17a5d3534992ab3580e82e2d7b5e398691014534f4f77ac53e1e5d4b1",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stdout.json": "04445b8cdb838d29ad0d65b8a6b8d61b4e654596e20e0dcf023d4aadfa42ea87"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Complete old3e7d329 exploration and mathematical/source provenance, losslessly archived",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-source-index.json",
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "3e7d329ae27c632f356d6f190c546ca266339981",
+        "code_sha256": "7237a80f35dd644f42505c0d062469dc476e1832bbd5464514cef9ea3dae0060",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "c1c955caeb29a20a4b53ea53c7a043d400881ba597ad9b61bc07942a654a156b",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "reason": "Historical source-only provenance; unresolved old G6; no protected/operational promotion. Every old record is losslessly archived and original remains retained.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-complete-evidence.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-original-manifest.json.gz",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-archive-verification.json"
+      ],
+      "input_id": 13,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-source-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-archive-verification.json": "f3f576d5a7193620b902f068a99eeaed9a79c6d156c0e4e1dcfff1249c7acc7b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-complete-evidence.zip": "fe764a482327cf7553f3561479a0c9357d1a7bdf3ccbbc5d3ec37357917218b1",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-original-manifest.json.gz": "1b62ae0e915b6d2b6a67fdf40e2a2af976907fb37ca770211d7157cce8270f71",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-source-index.json": "b4aa42b01ec385100bccf005611f161999d44aff7482a228a4e076907105b172",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-source-input.json": "e28aa126239e0a17221c575c09da25ee2e86fca832627d0d2787a82bb9d823d5"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "CompletecurrentC1exploratorysource/fit/probes/diagnosis/G8provenance",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-source-index.json",
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "reason": "RootacceptedINSENSITIVEofframp; archival/forecastscopeonly. Companionviewsreferthesameverifiedrawpackage,notindependentsamples. No productionG9/protectedclaimpromotion.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json"
+      ],
+      "input_id": 14,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-source-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json": "d7ae3fde7b493e73759513acfe37e093e6f3cee8b0dcc16f66a159ab46d099e5",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip": "501ed580f45ac33dba616f9da45fa782ef3a10ae80095a027544012717377d42",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz": "bda0de1efa74450df23fbc8dd174429da31ced492557999801e9ce657c4d3496",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-source-index.json": "7ea99043fabafaf17d4b432511d5c59d99107c83c811685086155f4150e85ea1",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-source-input.json": "3f0a762830cdb22cf189c95e8f47871969e4c700d94a485451c762e8dde7be0e"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Source-only B04 branch-switch diagnosis: valid unresolved cap-8 tuning gate",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/source-branch-switch-diagnosis.json",
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "reason": "Read-only source-validation query-MSE diagnosis; all61 retained B04 rows preserve basis and correct branch. Same cap-5/cap-8 outer12 cohort; not another independent population observation and not conditional-coefficient-risk superiority. Full original ledger is in the separately verified current exploration archive.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/source-branch-switch-diagnosis.md"
+      ],
+      "input_id": 15,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/source-branch-switch-diagnosis.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/source-branch-switch-diagnosis.json": "bc189946c55d1a33bc3f7ebd1513d6d49c5d78579ef036c31e6dfae5ffd9aafe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/source-branch-switch-diagnosis.json": "da8589b0089b4db113c900756d9e1e5507dbc35e3149edf7ccdd1580ab8fc7be",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/source-branch-switch-diagnosis.md": "efaf628745ea00dbbb6e9fd593c7f521de84c276f9064c3bfa3452ee4c0f1961"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "G6 full at-least-30-preparation pilot not run",
+      "reason": "Source-only cap5 and cap8 same18-cohort probes retain17/18 resolved; outer12T=V256 has a valid B04 F/Z branch jump and unresolved objective gap at cap8. Controller stopped the dependent full pilot; no cap inflation, convention change or favorable-sign selection.",
+      "assets": [],
+      "input_id": 16,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g6-full-pilot-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g6-full-pilot-not-run.json": "fe248e761fd8bee28b7eb394d6d71c4f41134212a896b004503a6207decbb25a"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "G7 protected primary learned comparison not run",
+      "reason": "Dependent source tuning gate remains INSENSITIVE_OR_UNSUITABLE. No protected keys allocated, freeze/confirmation performed, primary population effect or confidence interval obtained.",
+      "assets": [],
+      "input_id": 17,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g7-primary-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g7-primary-not-run.json": "1154602a1a498f4be9e3abc37edd0cadbf406d8bdc02e39bf217cfb5da3af750"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "Protected fixed-preparation secondary study not run",
+      "reason": "No independent declared pilot/freeze/confirmation for this retained secondary mode; full program stopped before protected allocation. Descriptive fixed maps and repeated source probes are not its observations.",
+      "assets": [],
+      "input_id": 18,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/fixed-preparation-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/fixed-preparation-not-run.json": "e4809eddd7aca3ecaa828ca63e4b21f4d4d809c1acdddbb70c3478ca74dd6dd0"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "Protected nested-task secondary study not run",
+      "reason": "No independent declared nested-task pilot/freeze/confirmation; no protected secondary claim or family inference.",
+      "assets": [],
+      "input_id": 19,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/nested-secondary-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/nested-secondary-not-run.json": "167a53675070a779de88d1aaf71b49fc0f96f8720c7866bbd8eb2af8cfe020a3"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "W1 retained transfer confirmation not run",
+      "reason": "Declared dimension64 rank8 scenario family has no new scenario-specific pilot/freeze/confirmation; retained transfer unperformed.",
+      "assets": [],
+      "input_id": 20,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/W1-transfer-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/W1-transfer-not-run.json": "0b7094d35e3eaa365f2a7a51af659742b4b9522736d16b42faf08f845b24e497"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "W2 retained transfer confirmation not run",
+      "reason": "Declared dimension64 normalized power-law scenario family has no new scenario-specific pilot/freeze/confirmation; retained transfer unperformed.",
+      "assets": [],
+      "input_id": 21,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/W2-transfer-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/W2-transfer-not-run.json": "dbea96ced28c3ab8851ed3f1bd56086c81cc7c508eb6cac09f899cea5f1d2a96"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "G8 retained amended/shift claims not run",
+      "reason": "All26 descriptive robustness arms executed, but their amendment records remain unperformed. No retained amendment CI or protected shift conclusion, regardless of descriptive signs.",
+      "assets": [],
+      "input_id": 22,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g8-retained-amendments-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g8-retained-amendments-not-run.json": "e1ef77c3564cdcfe52a53f3f9502a96cca054f1bb99f05eacdd61a5da66ea87f"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "diagnostic",
+      "label": "G8 all26 actual fixed-small descriptive robustness arms; no retained amendments or transfer CI",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness/robustness.json",
+      "process_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-process.json",
+      "output_artifact": {
+        "filename": "robustness.json"
+      },
+      "command": [
+        "robustness",
+        "--manifest",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-manifest.json",
+        "--output",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness"
+      ],
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "94edbe779a46e612cda69e6f6eadbc0d80538d9999f1cca38e957e15dcdb8522",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-manifest.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-base.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g8-input-identity.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g8-identity-after.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.process.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stdout.json",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stderr"
+      ],
+      "input_id": 23,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g8-robustness.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g8-identity-after.json": "2ff40a8ed253cdc224e80be8aff27fa4620b8359145baa0c67663dd2eed4fcfa",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/g8-input-identity.json": "293af744331b7377902258ee3e35385362a810e1780a87504773231db177d18b",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g8-robustness.json": "ae1694c0e4de0ed4f5b998850c1fe596162794d0294a18dbdc21d0f41177ece4",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.process.json": "22182bb537e2d3e0d28f62ea9103bc4890915f66366cd6032ad07e06984882d6",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stdout.json": "bc65c57ef274432d1a89898798fa30b5b52be02a88b3c2a563690f84dee78988",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness/robustness.json": "871729dfc377db9630da54b40f18d80a6eb734e984196f2b092078f367ae51f0",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-base.json": "1cda1d8d8e80e4b42846ece449ad50e207b8f99e29a8f913f892c278130efbbe",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-manifest.json": "58aadb6c25f8c178e14670d2ea03573ddcf95c916f8f004abbfe615b4285dc57",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/robustness-process.json": "6bee5f5c7a4ff789c982f2569f9243f4d9b02b5de353237299150537c3813f6c"
+      },
+      "status": "recorded",
+      "evidence_level": "numerical_diagnostic"
+    },
+    {
+      "schema_version": 1,
+      "kind": "source",
+      "label": "Actualfour-controlcostcalibrationandadmissionSOURCEprovenance,notG9",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-cost-source-index.json",
+      "source": {
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "candidate_sha256": "5e32f04b77af035083d754371bc8b273e58f2432c3dc79cbfcd4b7917abbf529",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42",
+        "runtime_sha256": "0945436b7222ba04be5d5d5c823a1c6c1b29c0f6b3451a827efc875bab0641ca",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "reason": "RootacceptedINSENSITIVEofframp; archival/forecastscopeonly. Companionviewsreferthesameverifiedrawpackage,notindependentsamples. No productionG9/protectedclaimpromotion.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json"
+      ],
+      "input_id": 24,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-cost-source-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-cost-source-index.json": "86c908ed9d0e65025e346a25ed9bda6b24d1b38cdf27a05c330b8e6bd4c21394",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-cost-source-input.json": "0c20459fb49d54d64dbad46cff8195b42b8ee1e281948b74b7487e3c3231f97a",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json": "d7ae3fde7b493e73759513acfe37e093e6f3cee8b0dcc16f66a159ab46d099e5",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip": "501ed580f45ac33dba616f9da45fa782ef3a10ae80095a027544012717377d42",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz": "bda0de1efa74450df23fbc8dd174429da31ced492557999801e9ce657c4d3496"
+      },
+      "status": "recorded",
+      "evidence_level": "source_record"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "G9 finalized full14-method operational benchmark not run",
+      "reason": "Only four-control exploratory cost/raw-resource probe exists. Its16workers are unfinalized source provenance; no full14-method calibration/finalization/fixed benchmark, operational dominance or practical learned claim.",
+      "assets": [],
+      "input_id": 25,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g9-full14-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/g9-full14-not-run.json": "63e67137402fb28c7aed81c03131e5f41f0fdcc5b2df1957fc3d58bad9ea224e"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "Natural-input execution not run",
+      "reason": "No verified official acquisition/license receipt or executed natural-input asset; no natural transfer conclusion.",
+      "assets": [],
+      "input_id": 26,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/natural-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/natural-not-run.json": "883ec5c05e4506e34c4763127be9af633722589b6dc666baa00a64bbf0978447"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "Accelerator/GPU benchmark not run",
+      "reason": "No declared executed accelerator benchmark or GPU measurement; CPU descriptive and source-cost evidence does not imply GPU behavior.",
+      "assets": [],
+      "input_id": 27,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/gpu-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/gpu-not-run.json": "ccf7a2ad28d6c671b34f44430f570796207d844aa7c22165548aa6218eeea1bb"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "not_run",
+      "label": "Physical energy measurement not run",
+      "reason": "No physical energy instrumentation or joule measurement. Elapsed time and initialization norm do not measure energy.",
+      "assets": [],
+      "input_id": 28,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/energy-not-run.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/inputs/energy-not-run.json": "bcda48ada539a6cf59bdfa882011b5cb34c7975f7051e290c0102e1e11b44cfc"
+      },
+      "source": {
+        "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+      },
+      "status": "not_run",
+      "evidence_level": "not_run"
+    },
+    {
+      "schema_version": 1,
+      "kind": "forecast",
+      "label": "Conditionalfull14/confirmationresourceforecastsfromsamemeasurements,notexecuted",
+      "raw_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-forecast.json",
+      "source": {
+        "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+        "candidate_sha256": "5e32f04b77af035083d754371bc8b273e58f2432c3dc79cbfcd4b7917abbf529",
+        "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+        "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+        "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+        "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+        "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+        "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42",
+        "runtime_sha256": "0945436b7222ba04be5d5d5c823a1c6c1b29c0f6b3451a827efc875bab0641ca",
+        "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+        "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724"
+      },
+      "reason": "RootacceptedINSENSITIVEofframp; archival/forecastscopeonly. Companionviewsreferthesameverifiedrawpackage,notindependentsamples. No productionG9/protectedclaimpromotion.",
+      "assets": [
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json"
+      ],
+      "input_id": 29,
+      "descriptor_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-forecast-input.json",
+      "inventory": {
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json": "d7ae3fde7b493e73759513acfe37e093e6f3cee8b0dcc16f66a159ab46d099e5",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip": "501ed580f45ac33dba616f9da45fa782ef3a10ae80095a027544012717377d42",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-forecast-input.json": "973926032a1916b90cc79fc120a1e00a4925712bac8a1b53147358d0a8c62caf",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-forecast.json": "d5a3f3eca80cfc3f5ad362745bc52c2190d2689b3f002088b2c073ccaa24671f",
+        "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz": "bda0de1efa74450df23fbc8dd174429da31ced492557999801e9ce657c4d3496"
+      },
+      "status": "recorded",
+      "evidence_level": "forecast"
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "actual-exact-F",
+      "statement": "exact_rational_fixture_kkt_verified",
+      "evidence_level": "rigorous_certificate",
+      "input_ids": [
+        10
+      ],
+      "architecture": {
+        "class": "all-entry deep linear, zero-output initialization",
+        "depth": 2,
+        "branch": "F",
+        "width": 3,
+        "learning_rate": [
+          1,
+          1
+        ],
+        "biases": false,
+        "tied_weights": false,
+        "frozen_features": false
+      },
+      "population": {
+        "input_law": "independent Gaussian N(0,I_d)",
+        "dimension": 6,
+        "n": 4,
+        "spectrum": [
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            3,
+            20
+          ],
+          [
+            7,
+            100
+          ],
+          [
+            1,
+            50
+          ],
+          [
+            1,
+            100
+          ]
+        ],
+        "mean": [
+          0,
+          1
+        ],
+        "sigma2": [
+          1,
+          1
+        ],
+        "task_second_moment_trace": [
+          1,
+          1
+        ],
+        "noise": "independent mean zero",
+        "information_access": "oracle"
+      },
+      "baseline": {
+        "scope": "branch-constrained rational QP optimum at declared caps",
+        "branch": "F",
+        "fixture_id": "primary_richer_k_3_5"
+      },
+      "metric": {
+        "risk": "expected squared coefficient error [coefficient^2]",
+        "adaptation_loss": "squared_error_over_2n"
+      },
+      "resource_contract": {
+        "initialization_norm_cap": [
+          3,
+          5
+        ],
+        "trainable_parameter_cap": 21,
+        "depth": 2,
+        "count_rule": "every matrix entry, including initialized zeros"
+      },
+      "qualification": "Exact finite fixture KKT verification; not a global theorem or empirical campaign."
+    },
+    {
+      "claim_id": "actual-exact-Z",
+      "statement": "exact_rational_fixture_kkt_verified",
+      "evidence_level": "rigorous_certificate",
+      "input_ids": [
+        11
+      ],
+      "architecture": {
+        "class": "all-entry deep linear, zero-output initialization",
+        "depth": 2,
+        "branch": "Z",
+        "width": 3,
+        "learning_rate": [
+          1,
+          1
+        ],
+        "biases": false,
+        "tied_weights": false,
+        "frozen_features": false
+      },
+      "population": {
+        "input_law": "independent Gaussian N(0,I_d)",
+        "dimension": 6,
+        "n": 4,
+        "spectrum": [
+          [
+            1,
+            2
+          ],
+          [
+            1,
+            4
+          ],
+          [
+            3,
+            20
+          ],
+          [
+            7,
+            100
+          ],
+          [
+            1,
+            50
+          ],
+          [
+            1,
+            100
+          ]
+        ],
+        "mean": [
+          0,
+          1
+        ],
+        "sigma2": [
+          1,
+          1
+        ],
+        "task_second_moment_trace": [
+          1,
+          1
+        ],
+        "noise": "independent mean zero",
+        "information_access": "oracle"
+      },
+      "baseline": {
+        "scope": "branch-constrained rational QP optimum at declared caps",
+        "branch": "Z",
+        "fixture_id": "primary_richer_k_3_5"
+      },
+      "metric": {
+        "risk": "expected squared coefficient error [coefficient^2]",
+        "adaptation_loss": "squared_error_over_2n"
+      },
+      "resource_contract": {
+        "initialization_norm_cap": [
+          3,
+          5
+        ],
+        "trainable_parameter_cap": 21,
+        "depth": 2,
+        "count_rule": "every matrix entry, including initialized zeros"
+      },
+      "qualification": "Exact finite fixture KKT verification; not a global theorem or empirical campaign."
+    }
+  ],
+  "challenges": {
+    "exact prior art": {
+      "status": "limited_no_priority_claim",
+      "response": "Supplied source files, original records, and the historical full-matrix attempt retain their original provenance. The two rational claims concern only the executed finite F/Z fixtures. No novelty, priority or global-theorem claim is made.",
+      "input_ids": [
+        7,
+        8,
+        10,
+        11
+      ]
+    },
+    "strongest estimator outside theorem class": {
+      "status": "unperformed_full_operational_comparison",
+      "response": "The actual four-control exploratory probe and G8 direct-map/ridge equivalence diagnostics are retained without operational promotion. The finalized full14-method comparison is not run; no practical or learned superiority claim follows.",
+      "input_ids": [
+        23,
+        24,
+        25
+      ]
+    },
+    "scarce memory": {
+      "status": "measured_small_scope_forecast_only_at_full_scale",
+      "response": "The16-worker exploratory report was actually admitted and reconstructed. Complete worker/selection data are losslessly archived. Larger full14 memory/disk figures are separately labelled conditional forecasts, not measured admission or a reason to truncate evidence; no C2 implementation or full benchmark was performed.",
+      "input_ids": [
+        24,
+        29,
+        25
+      ]
+    },
+    "critical operation failure": {
+      "status": "adverse_history_preserved",
+      "response": "Retain the historical developer full-matrix diagnostic success=false, all supplied diagnostics and source failures. Current B04 source tuning fails its declared finite resolution gate despite correct branch selection; no implementation repair or gate relaxation is inferred. G8 retains its intentionally injected storage failure and precision-support loss.",
+      "input_ids": [
+        6,
+        7,
+        15,
+        23
+      ]
+    },
+    "optional data or license unavailable": {
+      "status": "not_run",
+      "response": "No official acquisition/license receipt or executed natural-input asset exists for this campaign. No substitute data or unsupported license assertion is introduced.",
+      "input_ids": [
+        26
+      ]
+    },
+    "synthetic success fails on natural covariates": {
+      "status": "unperformed_no_transfer_claim",
+      "response": "G8 is fixed-small synthetic mechanism/assumption sensitivity only. Natural execution and both W1/W2 retained confirmations are not run; no transfer conclusion follows from exact fixtures or synthetic diagnostics.",
+      "input_ids": [
+        23,
+        26,
+        20,
+        21
+      ]
+    },
+    "toy misses width requirements": {
+      "status": "supported_only_in_recorded_diagnostic_scope",
+      "response": "The full widths1/2/3 grid retains both F/Z branches,251 sampled points and three unresolved intervals. G8 preserves actual versus padded/minimum counts, infeasible unchanged-gain floor removal and separately reoptimized widths1/2. Exact KKT claims concern width3 only; no high-dimensional transfer claim.",
+      "input_ids": [
+        12,
+        10,
+        11,
+        23,
+        20,
+        21
+      ]
+    },
+    "gain vanishes after tuning": {
+      "status": "insensitive_or_unsuitable_no_primary_claim",
+      "response": "The same18-preparation cohort at caps5 and8 is not36 independent observations.17/18 resolves; outer12T=V256 retains a B04 F/Z branch-switch source-validation mean-query-MSE gap0.1102021343 above tolerance0.0703255481. This is not a conditional coefficient-risk effect. Full G6 and G7 stop without increasing the cap again, changing policy, dropping candidates or selecting an outcome sign.",
+      "input_ids": [
+        14,
+        15,
+        16,
+        17
+      ]
+    },
+    "mean hides shifted-task regression": {
+      "status": "descriptive_adverse_tails_retained",
+      "response": "Every G8 shift/input-law arm keeps all24 paired coefficient and prediction losses, signed differences and adverse tails. Negative differences and the Student-df3 infinite-fourth-moment qualification remain. No pooled144-task independence, retained shift CI or amended claim.",
+      "input_ids": [
+        23,
+        22
+      ]
+    },
+    "interrupted resume inconsistency": {
+      "status": "diagnostic_scope_only",
+      "response": "G8 resume_error retains the abandoned staging test, one recovered pair and its injected failed method row; changed identity and duplicate pair are rejected. Source archives preserve original keys/hashes and same-cohort cap comparisons. Clean technical replay checks this fixed evidence but adds no independent observations.",
+      "input_ids": [
+        23,
+        14
+      ]
+    },
+    "negative or inconclusive result": {
+      "status": "preserved_and_stopped",
+      "response": "Retain historical adverse source results, three unresolved grid intervals, the actual B04 tuning off-ramp and all G8 adverse outcomes. No protected population mean or interval exists; failure to pass tuning is not evidence of a positive or negative learned population effect, and no dependent sample extension occurs.",
+      "input_ids": [
+        7,
+        12,
+        15,
+        17,
+        23
+      ]
+    },
+    "hidden trainability of zeros": {
+      "status": "explicit_resource_contract",
+      "response": "Exact claims count every matrix entry including initialized zeros. G8 actual_counts retains minimum and padded counts; same_map has21 versus42 parameters, while the fixed-feature head has3 trainable parameters and21 stored scalars and is outside the all-trainable class. No zero-entry exemption.",
+      "input_ids": [
+        10,
+        11,
+        23
+      ]
+    },
+    "loss normalization": {
+      "status": "explicit_distinct_loss_units",
+      "response": "Adaptation uses squared-error-over-2n and eta1 under the core contract. Source-validation tuning uses mean query squared error without the factor1/2. The source branch-switch gap is this query MSE, not the conditional expected squared coefficient-error endpoint. Frontier/exact diagnostics report coefficient-squared risk; nonisotropic robustness retains separately sampled coefficient and prediction losses.",
+      "input_ids": [
+        10,
+        11,
+        15,
+        23,
+        17
+      ]
+    },
+    "basis degeneracy": {
+      "status": "retained_precision_and_ordering_limits",
+      "response": "G8 repeated-eigenspace and near-minimum diagnostics retain float32 support loss. The actual unresolved B04 group preserves one ordered moment basis across all61 rows and uses correct F/Z metric columns; its gap follows a genuine branch switch. No exact multiplicity claim is inferred from floating eigendecompositions.",
+      "input_ids": [
+        23,
+        15
+      ]
+    },
+    "numerical versus exact rank": {
+      "status": "separated_evidence_levels",
+      "response": "Exact positive claims are only independently verified rational KKT for the two finite fixtures, with full actual contracts. Grid/geometry/robustness values, support truncations and float32 collapses remain numerical diagnostics; no global exact rank or theorem deduction.",
+      "input_ids": [
+        10,
+        11,
+        2,
+        12,
+        23
+      ]
+    },
+    "covariance leakage": {
+      "status": "source_only_selection_scope",
+      "response": "Current fit/probe archives preserve training/validation role keys and the same18-cohort cap comparison; the B04 diagnosis used source-validation records, not evaluator truth or a primary contrast. G8 information/oracle geometry access is explicit and descriptive; no oracle observation is promoted into learned selection or protected evidence.",
+      "input_ids": [
+        14,
+        15,
+        23,
+        17
+      ]
+    },
+    "mutated initializer reuse": {
+      "status": "diagnostic_scope_only",
+      "response": "G2 and G8 retain literal first-step/direct-map checks and concrete initializers; repeated-gamma B04 prepared hashes are stable across refinement rounds. These support the inspected diagnostic computations only. No unexecuted protected multi-task study is claimed.",
+      "input_ids": [
+        2,
+        23,
+        15,
+        17
+      ]
+    },
+    "full-rank head-zero miscompilation": {
+      "status": "actual_constructor_diagnostic_scope",
+      "response": "G8 same_map compares a full-rank positive-floor map compiled canonically and with the final-zero-head constructor, retaining errors and21 versus42 trainable entries. It does not assign the compact canonical count to the full head-zero network or establish an unperformed high-dimensional learned Z campaign.",
+      "input_ids": [
+        23,
+        2,
+        20
+      ]
+    },
+    "sequential updates": {
+      "status": "literal_simultaneous_diagnostics",
+      "response": "G2 independently checks derivatives and simultaneous first-step updates. G8 keeps same-map equalities, float32 gradients, the noncanonical0.64 versus0.6 discrepancy and the second-step fixed-metric disagreement. First-step equivalence is not extended to multiple steps or noncanonical networks.",
+      "input_ids": [
+        2,
+        23
+      ]
+    },
+    "uncharged source-subspace oracle": {
+      "status": "information_and_resource_limits_explicit",
+      "response": "Exact/frontier geometry uses an explicitly oracle covariance and is not practical learned evidence. G8 distinguishes oracle/observed-estimated/no-prior access, shared known noise, canonical reference counts and actual compact storage. Current unfinalized cost records stay SOURCE provenance; no full operational claim or free learned representation is asserted.",
+      "input_ids": [
+        10,
+        11,
+        23,
+        24,
+        25
+      ]
+    }
+  },
+  "replay": {
+    "source_root": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier",
+    "source": {
+      "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+      "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+      "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+      "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+      "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+      "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+      "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+      "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+      "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+      "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+      "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+    },
+    "builder_dirty_sha256": null,
+    "wheelhouse": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/wheelhouse",
+    "rtol": 1e-10,
+    "atol": 1e-12,
+    "timing_policy": "remeasured_not_equal",
+    "receipt": {
+      "path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/clean-replay/replay.json",
+      "sha256": "9fde6c8855fe8cde7a76f0805e00362c6f2a24cb5da63c6db8407d4305d88547"
+    }
+  },
+  "input_order_sha256": "cf237b4192651839303837c632d9762cc0a09835c85f13c1f750ec5061512720"
+}

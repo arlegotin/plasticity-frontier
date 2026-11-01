@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "status": "presentation_verified",
+  "verified_at_utc": "2026-11-01T21:36:19.220691+00:00",
+  "source_csv_sha256": "41c528ffcde524aa9dfded638771595090790a4eab88abf3990b93b87ecf56c7",
+  "source_csv_unchanged": true,
+  "svg_bytes": 38324,
+  "svg_under_200KiB": true,
+  "six_encoded_curve_paths": [
+    {
+      "stroke": "F",
+      "vertices": 71
+    },
+    {
+      "stroke": "Z",
+      "vertices": 71
+    },
+    {
+      "stroke": "F",
+      "vertices": 85
+    },
+    {
+      "stroke": "Z",
+      "vertices": 85
+    },
+    {
+      "stroke": "F",
+      "vertices": 95
+    },
+    {
+      "stroke": "Z",
+      "vertices": 95
+    }
+  ],
+  "all_502_original_grid_branch_vertices_encoded": true,
+  "unresolved_interval_annotations": 3,
+  "standalone_primary_diamonds": 2,
+  "primary_panel_width": 3,
+  "primary_cap": 0.6,
+  "visual_inspection": {
+    "tool": "view_image",
+    "artifact": "frontier-curated.png",
+    "artifact_sha256": "5a30902970383d521a0a53005124d3169f24a447286fc7c05c57dacf75c5a8ef",
+    "result": "Readable three-panel layout; all panel titles/caps, shared axis labels, two-entry blue/vermillion line legend, three near-zero unresolved labels, primary-fixture diamonds and exact-separate/no-CI annotation visible. No overlapping/clipped labels observed."
+  },
+  "data_processing": "Only CSV row-type classification, existing width/branch grouping and budget sorting. No fits/model evaluation/inference/resampling or value alteration.",
+  "write_scope": "curated outputs/script/provenance only plus isolated temporary Matplotlibcache; no public instrumentfigure/reportinput path written."
+}

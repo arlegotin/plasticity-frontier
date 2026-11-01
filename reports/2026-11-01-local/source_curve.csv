@@ -1,0 +1,4 @@
+source_training_tasks,source_validation_tasks,replications,relative_covariance_error_mean,relative_covariance_error_upper_diagnostic,validation_stability,tuning_resolution
+32,32,6,0.7009327669502406,0.7980788130582792,stable,resolved
+128,128,6,0.484284818795442,0.5593693456701802,stable,resolved
+256,256,6,0.35765953118690685,0.39677943259172316,stable,unresolved

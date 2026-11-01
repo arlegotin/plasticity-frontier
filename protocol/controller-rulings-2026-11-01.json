@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "scope": "All controller rulings in original order; task scratch is cleaned only after durable evidence is committed.",
+  "rulings": [
+    {
+      "sequence": 1,
+      "original_ledger_line": 126,
+      "ruling": "Work in the existing main checkout without worktree creation \u2014 user explicitly requested current branch \u2014 cost if wrong is reversible commits on this branch.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 2,
+      "original_ledger_line": 127,
+      "ruling": "Real pilot/freeze/confirmation waits until all required executable code and dependencies are committed \u2014 campaign section and immutable-identity spec override earlier task command ordering \u2014 cost if wrong is refreezing with fresh protected keys.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 3,
+      "original_ledger_line": 128,
+      "ruling": "Task reports/reviews and this ledger live only in this plan workspace; reusable scientific decisions also go in protocol/decisions.jsonl \u2014 preserve recovery state without publishing process scratch \u2014 cost if wrong is incomplete recovery context.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 4,
+      "original_ledger_line": 129,
+      "ruling": "Do not run costly optional natural-input or accelerator arms unless a measured unresolved question justifies them; preserve explicit not_run statuses \u2014 matches gated scope \u2014 cost if wrong is narrower transfer evidence.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 5,
+      "original_ledger_line": 166,
+      "ruling": "Composite operational method IDs distinguish GD/ridge/projected/Bayes variants while preserving family IDs \u2014 prevent ambiguous records and later selector collisions \u2014 cost if wrong is reversible serialization migration; Task 4 brief carries exact labels.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 6,
+      "original_ledger_line": 177,
+      "ruling": "Interpret B08 as the explicitly outside-class Panel C operational control in spec \u00a76/blueprint \u00a7\u00a75.1\u20135.2, reporting actual d parameters and scope rather than imposing the main fixed-depth cap as eligibility \u2014 preserves the approved stronger-baseline contract \u2014 cost if wrong is mislabelled scope, to check with reviewer before task acceptance. Reviewer asked to reassess against cited authority.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 7,
+      "original_ledger_line": 184,
+      "ruling": "Close the single-point/grid handoff gap in Task 6 by adding deterministic width/budget frontier records and adaptive sampled midpoint/switch diagnostics \u2014 spec \u00a711 and blueprint WP04 require a full frontier before reports can consume raw records \u2014 cost if wrong is extra reversible CLI/data work. No statistical population, metric, inference or information contract changes.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 8,
+      "original_ledger_line": 191,
+      "ruling": "Complete PopulationTruth with required keyword-only target_context_size and input_law default gaussian_isotropic \u2014 conditional_risk needs n and must reject unsupported moment laws without changing its fixed signature \u2014 cost if wrong is evaluator metadata migration; Task 7 brief updated and later callers must use explicit target n.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 9,
+      "original_ledger_line": 195,
+      "ruling": "Use explicit public source_access_manifest with independently assigned training_keys/validation_keys rather than inventing SourceTask phase tags \u2014 opaque keys need a trusted cohort authorization boundary \u2014 cost if wrong is source-access metadata migration. Methods/selectors cannot construct their own authorization from input tasks.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 10,
+      "original_ledger_line": 202,
+      "ruling": "Add descriptive_only interval procedure for unsupported moment assumptions \u2014 blueprint \u00a75.9 forbids Gaussian CIs when required moments do not exist; Gaussian pseudoinverse near interpolation is relevant to n4,d6 operational controls \u2014 cost if wrong is conservative descriptive reporting. Local SciPy invwishart source confirms mean requires df>dim+1 and variance df>dim+3; fixed-map primary risk is bounded by its cap. Classification belongs to pilot/confirmation, never silent comparator exclusion.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 11,
+      "original_ledger_line": 204,
+      "ruling": "Add run.pairing_spec (unit_fields and required method_ids by record kind) \u2014 opaque generic records cannot enforce paired completeness without declared roles; stable procedure IDs differ from selected variants \u2014 cost if wrong is run schema migration, scientific endpoints unchanged.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 12,
+      "original_ledger_line": 208,
+      "ruling": "authoritative journal must precede secondary marker so ordinary interrupted commits recover, while impossible finalized marker without journal preserves/refuses corruption; no test relabelling to claim crash support.",
+      "completion_cost_annotation": "If wrong, interrupted transaction recovery may refuse or lose a legitimate commit."
+    },
+    {
+      "sequence": 13,
+      "original_ledger_line": 214,
+      "ruling": "Escalate remaining Task 10 architecture/integration to fresh gpt-6-astra high owner \u2014 first implementer delivered only provisional planning and identified substantial cross-module scientific gates, requiring more design judgment \u2014 cost if wrong is one fresh context; original report/code is handoff, no duplicate implementation seat remains active. Review BASE stays baf26fe.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 14,
+      "original_ledger_line": 218,
+      "ruling": "Complete nonprimary deterministic/fixed-prior/nested execution/evidence-to-freeze in Task 11 with actual simulation driver \u2014 Task10 currently has all-mode count/planning helpers but calibrates/freezes only primary bounded fixed-map inference; inventing missing evidence now is wrong \u2014 cost if wrong is larger Task11 integration. Four-mode scientific scope remains mandatory, not waived; brief11 explicitly owns and tests it before final campaign.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 15,
+      "original_ledger_line": 221,
+      "ruling": "Task11 must decouple fixed population rotation seed/asset from fresh protected data RNG root \u2014 current population_for uses TaskKey.root_seed and freeze generates a new root, risking undeclared S drift \u2014 cost if wrong is generator/manifest schema migration. Explicit population_seed + covariance asset hash binds one scenario across phases; true source/test shifts remain separate arms.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 16,
+      "original_ledger_line": 222,
+      "ruling": "Task11 normalizes legacy isotropic_gaussian input-law spelling to approved canonical gaussian_isotropic with read compatibility \u2014 prevent published spec/API mismatch without changing distribution \u2014 cost if wrong is alias migration; original artifacts retain old source identity.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 17,
+      "original_ledger_line": 228,
+      "ruling": "Permit the exact validated untracked frozen manifest at confirmation entry (per-file status, canonical contents/hash checked), not arbitrary untracked files \u2014 committing generated manifest would change frozen source commit and deadlock freeze\u2192confirm \u2014 cost if wrong is input-vs-code identity ambiguity; snapshot validated manifest for execution and reject tampering/other untracked/tracked changes.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 18,
+      "original_ledger_line": 264,
+      "ruling": "Escalate remaining Task13 benchmark architecture/integration to fresh gpt-6-astra high owner after current worker returns \u2014 missing cold/upstream/provenance/Pareto capabilities require broader design judgment \u2014 cost if wrong is a fresh context, while existing tested work is retained; review BASE stays8f60a76 and no parallel implementer is allowed.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 19,
+      "original_ledger_line": 266,
+      "ruling": "Permit a private benchmark worker module if needed to isolate fresh-process cold timing/RSS with serialized recorded inputs \u2014 process isolation is an explicit Task13 requirement and separation keeps source-fitting/accounting and worker execution focused \u2014 cost if wrong is one reversible helper module. No unrelated restructuring.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 20,
+      "original_ledger_line": 269,
+      "ruling": "Task13 must implement a small finalized operational-manifest phase now, while actual calibration/finalization waits until all code/deps are committed \u2014 the plan states performance.json remains calibration until measured schedule is finalized; campaign cannot silently recalibrate counts or change methods/assets/procedures \u2014 cost if wrong is a reversible helper/phase rather than a separate generic freeze framework. Reuse source/runtime/thread identity helpers and recorded calibration evidence; implementation fixtures never establish G9.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 21,
+      "original_ledger_line": 286,
+      "ruling": "Defer the optional natural-input experiment entirely under Task14 explicit omission allowance; retain all required local gate/split/transform/sampling/omission tests \u2014 no unresolved question currently justifies acquisition, and official metadata alone is not a byte/license acquisition receipt \u2014 cost if wrong is narrower optional transfer evidence, with synthetic core unaffected. No downloader or realwine manifest is required at this checkpoint. Operator-attested origin must stay labelled unverified for natural scientific conclusions; execution not_run pending real official receipt. This creates no new human-approval requirement.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 22,
+      "original_ledger_line": 290,
+      "ruling": "Task15 clean same-machine replay may restore the recorded source into a temporary local clone/export and build a fresh environment without changing this primary checkout/branch \u2014 this is the approved replay requirement, while the user current-branch preference governs development \u2014 cost if wrong is reversible temporary disk use; no feature worktree, public push or merge. A clone with exact Git metadata may be needed by existing identity checks; do not weaken those checks to fake a clean replay.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 23,
+      "original_ledger_line": 305,
+      "ruling": "Before Task15 review, implement bounded reporting or at least conservative pre-allocation inventory/JSON/array/serialization working-set checks with explicit LOCAL_RESOURCE_LIMIT/offending scale \u2014 fixtures do not establish report feasibility at final scientific counts, and hidden OOM is not a valid local-resource outcome \u2014 cost if wrong is a reversible resource guard/streaming change. Preserve all scientific counts/evidence; no generic framework. Original worker resumed for scoped correction, no review fix-round counted yet. Original BASEdf63340 retained; prepared old package df63340..00d089b not yet used.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 24,
+      "original_ledger_line": 329,
+      "ruling": "Retain this plan recovery workspace until the mandatory actual scientific campaign/report/replay is complete \u2014 this final review covers the executable implementation before the approved campaign, and deleting the recovery map while the full user objective remains active would risk losing state \u2014 cost if wrong is temporary ignored scratch retention; clean up at actual finish without repeating the broad code review.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 25,
+      "original_ledger_line": 338,
+      "ruling": "Defer production effect, final-count feasibility and G6/G7/G9/G10 judgments only to the mandatory next campaign \u2014 these runs are intentionally unperformed before final code review \u2014 cost if wrong is unfinished scientific work, so the campaign remains a required continuation.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 26,
+      "original_ledger_line": 339,
+      "ruling": "Treat formal proof-assistant verification, peer-review status and historical novelty as unestablished \u2014 approved scope uses supplied arguments, exact fixtures and independent numerical checks \u2014 cost if wrong is narrower mathematical/priority claims, not a fabricated proof or novelty assertion.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 27,
+      "original_ledger_line": 340,
+      "ruling": "Limit operational inference to recorded selected assets and finite declared tuning procedures \u2014 current evidence cannot establish universal estimator superiority or every global optimum \u2014 cost if wrong is narrower practical/generalization claims.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 28,
+      "original_ledger_line": 341,
+      "ruling": "Make no new adjusted multi-scenario confirmatory claim in this campaign without explicit protocol/inference integration and fresh evidence \u2014 current secondary schedules are descriptive and no such family is retained \u2014 cost if wrong is narrower secondary inference; primary inference and family descriptive records remain required.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 29,
+      "original_ledger_line": 342,
+      "ruling": "Keep natural-data execution, remote acquisition, accelerator timing and energy measurement unperformed under their approved gates \u2014 no verified natural receipt or validated energy/device measurement exists \u2014 cost if wrong is narrower transfer/hardware evidence.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 30,
+      "original_ledger_line": 343,
+      "ruling": "Accept measured admission and the declared soft benchmark reserve rather than claim a hard OS memory cap or arbitrary-scale guarantee \u2014 indivisible source fits and actual machine pressure must be measured \u2014 cost if wrong is an explicit local-resource stop at the affected scale.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 31,
+      "original_ledger_line": 344,
+      "ruling": "Keep bundled multi-direction robustness arms scoped to their declared fixtures rather than promise every scalar parameter combination \u2014 scalar mathematical core limits are checked separately \u2014 cost if wrong is narrower robustness-builder API coverage.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 32,
+      "original_ledger_line": 345,
+      "ruling": "Trust the local controller for authorization manifests while retaining mutation/corruption/configuration validation \u2014 this research tool is not authentication against a malicious controller rewriting every hash \u2014 cost if wrong is no adversarial multi-user security guarantee.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 33,
+      "original_ledger_line": 346,
+      "ruling": "Limit recovery claims to the recorded same-machine source and locked editable environment \u2014 other OS/build/BLAS/thread combinations require separate support/equivalence \u2014 cost if wrong is narrower portability, with unsupported changes refused.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 34,
+      "original_ledger_line": 347,
+      "ruling": "Verify local dependency provenance and byte-preserved notices without asserting a separate legal audit or latest-version recommendation \u2014 that is the approved reproducibility scope \u2014 cost if wrong is no independent legal/latest-release assurance.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 35,
+      "original_ledger_line": 365,
+      "ruling": "Correct this concrete original-data-write bypass before production with one narrowly bounded guard/test correction, making an explicit exception to the normal final-review single-wave cap \u2014 preserving original authority and completing the user-authorized full program take precedence over stopping at a known unsafe handoff \u2014 cost if wrong is one small additional guard/verification cycle, not another broad review. No user permission is needed for this reversible authorized correctness fix.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 36,
+      "original_ledger_line": 379,
+      "ruling": "Replace paired slope detectability as the sole mesh stopping test with an explicit finite objective-resolution convention using the smaller marginal candidate-loss SE, while retaining paired comparison diagnostics, mandatory inward probes, all-family parity, finite ridge boundary extension and unresolved positive-gap/zero-or-missing uncertainty \u2014 builder numerical refinement choices remain within blueprint5.7, and actual sourcefit proves the current criterion can chase vanishing changes \u2014 cost if wrong is coarser tuning that may miss a finer interior optimum; make no global-optimum claim, record the convention, independently review it, commit new source and rerun fresh pilot before any protected data.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 37,
+      "original_ledger_line": 391,
+      "ruling": "Preserve complete old exploratory evidence as a verified lossless archive plus original per-file byte-hash manifest and compact source-provenance index for report inventory, with every original left untouched \u2014 parsing1.14GB of historical candidate ledgers is unnecessary for source-only provenance and exceeds conservative report working-set limits \u2014 cost if wrong is retrieval friction and fewer default parsed historical rows; archive extraction restores every byte, no old source result becomes protected evidence, and current confirmation/operational raw reconstruction remains mandatory.",
+      "completion_cost_annotation": null
+    },
+    {
+      "sequence": 38,
+      "original_ledger_line": 408,
+      "ruling": "Take the approved campaign's INSENSITIVE_OR_UNSUITABLE off-ramp for the learned-confirmation program after the genuine B04 cross-branch validation jump remains unresolved at the bounded cap \u2014 do not silently replace the scientific stopping convention again merely to unlock a gate \u2014 cost if wrong is deferring a potentially successful learned study; this is a protocol/tuning limitation, not evidence that the final learned selector loses. Full >=30/block pilot, protected G7, retained transfers and full14-method finalized G9 remain not_run; finish valid exact/descriptive/source-cost/report/clean-replay work with explicit scope and every adverse record. A branch-aware protocol is separately declared future work, not an unrecorded amendment in this campaign.",
+      "completion_cost_annotation": null
+    }
+  ]
+}

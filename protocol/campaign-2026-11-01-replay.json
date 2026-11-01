@@ -1,0 +1,342 @@
+{
+  "schema_version": 1,
+  "status": "matched",
+  "clean_environment": true,
+  "source": {
+    "runtime_sha256": "811ac6ab70956520cb018d53719f84c374cf8e1504961395d9eaf278b8fb7a7a",
+    "git_commit": "536a4003ca402d2e67d51b3bf24da256c3829314",
+    "code_sha256": "04806bbd50355d1c16986541e6986c37e8f1c8f5b28fff5f2ba8e249772ce89d",
+    "dependency_lock_sha256": "6e648a5a51d603b8a9fcd4ea85c2d7316fd5b022ab6dcd48b80b021685507fe6",
+    "analysis_sha256": "271c63edebbe60fb20861164c7fa28634945d36c3d2412932dc5df54d5f6ba8b",
+    "generator_sha256": "800cc5207fdc3ea096dc696dfe528ff3bc10f734502252471ca992969eb353fb",
+    "evaluation_sha256": "c5a798e8e0f9a6c3f6e282fc043e3eec46065e399c01fd5b5bcf844e3eba9ae0",
+    "selection_sha256": "20e32498db20115c8579ce1ba2f38663bebe0451f15e5af9bd08b6c1c9e41b10",
+    "candidate_sha256": "772cb164839917e1374ea24409c6844c8f741fb3ed61e6fecd5756973ff77e17",
+    "source_manifest_sha256": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+    "preprocessing_sha256": "0ece79809d8da16040b7010a5ee34f3bbaebe20f9d7b425ca30bc784c6d4eb42"
+  },
+  "fixture": false,
+  "input_order_sha256": "cf237b4192651839303837c632d9762cc0a09835c85f13c1f750ec5061512720",
+  "wheel_hashes": {
+    "numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl": "956555e0603a4d38019ae6925711cb9dc43195c076a928accf7ea5d50bddfe53",
+    "scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl": "011413b7426b75012840e35649e00fe0a2c3bae89fed433876e3a99251572efc",
+    "setuptools-84.2.1-py3-none-any.whl": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2",
+    "contourpy-1.4.0-cp314-cp314-macosx_11_0_arm64.whl": "072a702e2e178f4fcf96f04775d0c059e4c917925abf0d3208ebb6865df3c23d",
+    "cycler-0.12.1-py3-none-any.whl": "85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30",
+    "fonttools-4.68.0-cp314-cp314-macosx_10_15_universal2.whl": "b2ee7b9c1a5e1d637073c39b0978956febad7e862a1269719f527934c65535a4",
+    "kiwisolver-1.5.1-cp314-cp314-macosx_11_0_arm64.whl": "c2306e8bb53601979fcb3fa09cc65e031876d9ae01eff2fcbcd7a84ef94d5bc1",
+    "matplotlib-3.11.2-cp314-cp314-macosx_11_0_arm64.whl": "1a3040b209f3968b4e84161df7b174f07a9fad33b0f2d7e48ea3bbd3075e2863",
+    "packaging-26.3-py3-none-any.whl": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+    "pillow-13.0.0-cp314-cp314-macosx_11_0_arm64.whl": "d9b0a2bee3f3e03e9f29057aedb807dbf1e1d96ee1b9d0f422d9db6c8583271d",
+    "pyparsing-3.3.3-py3-none-any.whl": "ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4",
+    "python_dateutil-4.0.0-py3-none-any.whl": "a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c",
+    "tzdata-2026.6-py2.py3-none-any.whl": "0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec"
+  },
+  "resource_preflight": {
+    "files_scanned": 204,
+    "json_bytes": 2370763,
+    "max_json_bytes": 1421028,
+    "json_working_bytes": 2370763,
+    "array_bytes": 0,
+    "max_array_bytes": 0,
+    "inventory_bytes": 1260736,
+    "largest_file_bytes": 165041838,
+    "largest_file": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/history/old-identity-complete-evidence.zip",
+    "inventory_complete": true,
+    "phase": "replay_inputs",
+    "available_memory_bytes": 21974302720,
+    "reserve_fraction": 0.5,
+    "budget_bytes": 10987151360,
+    "estimated_peak_bytes": 1287443456,
+    "object_bytes": 248904,
+    "scalar_and_key_working_bytes": 0,
+    "retained_copies": 2,
+    "policy": {
+      "base_bytes": 67108864,
+      "json_expansion_factor": 256,
+      "array_workspace_factor": 16,
+      "inventory_entry_bytes": 4096
+    },
+    "scientific_counts": "not inferred from file counts; all raw observations remain unchanged",
+    "recovery": "retry the identical inputs with sufficient local reserve; no truncation, sampling or changed scientific identity"
+  },
+  "restored_assets": {
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.process.json": "7a1ebd1bf31f07b88d2b82c2e8fc84762654febb64ac9fd6f850acdcdefc16ab",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stdout.json": "c3a279c086332620c85c4abdd5a9552834c0c44d35d37dbb5e3cd1f5fd472b4f",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g0-doctor.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/environment.json": "3b40b9dcbd0f4c58e2f8997d6ae8554294ee0e0c4fafd23f5f0b4883a961248b",
+    "runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/gate_decision.json": "71395d8c9614dab64982076cf7319d9fd65602cef74873ef2fb711cec2e32f8f",
+    "runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/hardware.json": "56dee178a5cc1884b0d57ce2c500b54cb0d42b2cdec9919e3becf8dc474d4b2c",
+    "runs/campaign/2026-11-01-main-objective-v1/doctor/attempt-zfd81a82/source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+    "runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity.json": "fc0a72ecee2c38339fbb4cfcbc3556fda5c1a268828601238a5a24294fe6a6c0",
+    "runs/campaign/2026-11-01-main-objective-v1/g0-g4-identity-after.json": "8bfa55ec568790bb29b371648e2069cf0a46b4c2b8ef7a253a5e71d8501a1a7e",
+    "configs/exploration/exact_cases.json": "12dc185ab38f36be26c2f13e235e4bfa751c81f9e6a2bfde013625f23fe7fa7c",
+    "tests/fixtures/exact_cases.json": "5ce2f61fcbea419c9c68b72a5a9319a7d229fd70cea3d4f91748ee8c10c9d7f2",
+    "protocol/proof_obligations.md": "eedfd02f73c80ee4c6dc14ab0cdccce305be13a43ad07d718fc0e4fe806f81a1",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.process.json": "2ae092b49a5ffb8151885f62ed9221b472b48c31b97371b0934871b153b6be24",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stdout.json": "925c2c4206fd9ad7fe11269fa256ef5e3711454ceb6441de28fcf46cc67e8260",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g1-theory.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.process.json": "4ca84026ad06c12283553e4e391a302bc9d954832a43edb740b23de2e873d346",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stdout.json": "3748207ec1e4a0f1d8eb13444ca9033ead07e0c55a9cb15002c25280d183007c",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g2-geometry.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source_manifest.json": "eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724",
+    "docs/prepared_learning_research_bundle.zip": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+    "source_bundle/prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+    "runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/historical-adverse-source-index.json": "6f63b9d9ce9367308b3db9bb2056011ef5e360d19962a1d8265735ec307eda9e",
+    "source_bundle/prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2",
+    "source_bundle/prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+    "runs/campaign/2026-11-01-main-objective-v1/history/historical-adverse/task-4-implementation-report.md": "357bf49050772f34ae4425c9efabb5a96266a4efd761a1ff5c5d7f1fce0c7269",
+    "runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+    "runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/source_reproduction/attempt-xzdk3u0j/audit_geometry.py.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/source_reproduction/attempt-xzdk3u0j/audit_geometry_results.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.json": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+    "runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/source_reproduction/attempt-xzdk3u0j/phase_transition.py.stdout": "875abb750c345f5a60d240fbd21721f48bcdca4bdb5650c61e64d4fcf0d1de2a",
+    "runs/source_reproduction/attempt-xzdk3u0j/reproduction.json": "1c3e74d16e07da487df4555e691bffcce4418ad0ef334e1ad605f82f5abd0cd7",
+    "runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/source_reproduction/attempt-xzdk3u0j/verify_plasticity.py.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "source_bundle/prepared_learning_research/audit_geometry_results.json": "a61eee75bd22db4e0cc13577bd25680c580d95beaae3e37af7b2ef8dc6ba7f86",
+    "source_bundle/prepared_learning_research/results_phase.json": "5c6b830ff97363a393513c7ccbe0782ad2ceb461e3b167a2f829d499ab114f0b",
+    "source_bundle/prepared_learning_research/results_plasticity.json": "8a958e014e3ab2734ff5a48077e389d7a0b9dfb20b10c47615409dd67a158741",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.process.json": "20f8f5317dc6da1075d93d72f5536b6162df6eadcfba515fc5b6667f14bd4628",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stdout.json": "264d30978da142cbe43976412b6e7d0db9c878ee7e94575b2b5fe819b4a0b503",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-reproduction.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry.py.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/audit_geometry_results.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.json": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/phase_transition.py.stdout": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/reproduction.json": "b100a5f018b434e48d931fef00b56d88cc5e38d6f551369e21706b0013a065b0",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/reproduction/attempt-42xa5s38/verify_plasticity.py.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "source_bundle/prepared_learning_research/README.txt": "86f639b69bda7add031a08ba4ee09eeb89bc5656e88f8aa3176d33407f66ac77",
+    "source_bundle/prepared_learning_research/figures/phase_diagram.pdf": "6a1c8c830eec7a5793e94d245e3ff26461f693c33850163eb7b26bbd1eb78aab",
+    "source_bundle/prepared_learning_research/figures/phase_diagram.png": "a3532faf1ef61e634a8d6aa90083a3f91480d1215ff7efe0df0efe8dfd15ea8c",
+    "source_bundle/prepared_learning_research/figures/phase_diagram_note.pdf": "8571d068c1b18cb8a882b1c480d00398a7e6dae2661541b0c57d76802e78d25b",
+    "source_bundle/prepared_learning_research/geometry_section.tex": "b7d354347397d16f7f2d6c3a555acbace2541ca1bc2fd08e945d6ea8378da8b3",
+    "source_bundle/prepared_learning_research/literature_plasticity.txt": "254984e76a2bc0a3535c2e45a83472dfbaaa58aaec8076ceeb40901eb755bb0b",
+    "source_bundle/prepared_learning_research/phase_section.tex": "74ac897ef059b11a08889d2083c010f9fca63196511b70c9f39bb81cf734bd73",
+    "source_bundle/prepared_learning_research/plot_phase.py": "5ca80fe672268e9486f985eae84c0fd1866c44e6f5257350ab8571c4e48581f3",
+    "source_bundle/prepared_learning_research/research_note.pdf": "d21569825103249a352bba5e69f951bcc163dbc748b33df9124ff637920de4f9",
+    "source_bundle/prepared_learning_research/research_note.tex": "8012b649d20c60821646f7fb4aa78002cc73713125e773639bd7e81a6ca8d744",
+    "source_bundle/prepared_learning_research/verification_section.tex": "67a0324d86fa14f7131da79142e143f48bdbb86a44048fe2c2779c29c74d7e35",
+    "configs/exploration/source.json": "a73d479c19c069524a9bce00c24c9edb6a651cc03602d297f5cdf7d5bc5a3817",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.output.json": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.process.json": "69ac748f20f5495597b30a374f8f32b9d76de74a769fc41ceca9e447ef8002d1",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-audit_geometry.stdout": "362577b286c4674c29b67e5680636ac2c50845bae2c6952b10f9443588752178",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.output.json": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.process.json": "9dc31f40e325aff2b36a2bcd2066a03890acd3c0bf7bd2c1a8d987ecdfff99c4",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-phase_transition.stdout": "51fb9174f1ab59fa2e94ff2a039905da72d97ae7897aea359a0c61fd882b30ed",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.output.json": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.process.json": "085f38c9df8f04c7c9c2cd4fe0121dbc91c555e8cc2915a75df4a5985cb6f4c2",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g3-source-verify_plasticity.stdout": "4ea9b5fb872dac035de68e99afee30f060ed5d58501fbd0dbb818d9ee1e61d05",
+    "configs/exploration/frontier.json": "1c020462eef26b398cdf08af99bfd971ae1370131351d168773ef29206b24092",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.process.json": "f795e9455f437d311ebf15fb50233adcd787e02a2fc69fc6234626a0540791db",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stdout.json": "dd503eaace3585fc16ec653eb202f565af74d7fd9322957ace6fa045bb7a8e2d",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-frontier.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.process.json": "3fd16b60b5c2ed3fce2958351048d6935623c61cefc3e8c04682463179c8ddb6",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stdout.json": "d0fbbf1366ea798bfa3a0a299f10c3170979697f3c9319247f0cdf06f9f4760e",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-F.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.process.json": "bb821a932aefd8acf5d05624680824d63a31333a105c516ff57bf0f90ba3aca2",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stdout.json": "8584f94214e19eebb1fdb458484ad88d7f9d6f46e070ff09452b4e998a91d4fb",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-exact-Z.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/grid-config.json": "2fb7278fae60dfc68636f7b2bdbb41a00dce2dd1a1494e0d3998e1cd6e8992fa",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.process.json": "d9ae84b17a5d3534992ab3580e82e2d7b5e398691014534f4f77ac53e1e5d4b1",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stdout.json": "04445b8cdb838d29ad0d65b8a6b8d61b4e654596e20e0dcf023d4aadfa42ea87",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g4-grid.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "runs/campaign/2026-11-01-main-objective-v1/history/old-identity-complete-evidence.zip": "fe764a482327cf7553f3561479a0c9357d1a7bdf3ccbbc5d3ec37357917218b1",
+    "runs/campaign/2026-11-01-main-objective-v1/history/old-identity-original-manifest.json.gz": "1b62ae0e915b6d2b6a67fdf40e2a2af976907fb37ca770211d7157cce8270f71",
+    "runs/campaign/2026-11-01-main-objective-v1/history/old-identity-archive-verification.json": "f3f576d5a7193620b902f068a99eeaed9a79c6d156c0e4e1dcfff1249c7acc7b",
+    "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-complete-evidence.zip": "501ed580f45ac33dba616f9da45fa782ef3a10ae80095a027544012717377d42",
+    "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-original-manifest.json.gz": "bda0de1efa74450df23fbc8dd174429da31ced492557999801e9ce657c4d3496",
+    "runs/campaign/2026-11-01-main-objective-v1/history/current-exploration-archive-verification.json": "d7ae3fde7b493e73759513acfe37e093e6f3cee8b0dcc16f66a159ab46d099e5",
+    "runs/campaign/2026-11-01-main-objective-v1/source-branch-switch-diagnosis.md": "efaf628745ea00dbbb6e9fd593c7f521de84c276f9064c3bfa3452ee4c0f1961",
+    "runs/campaign/2026-11-01-main-objective-v1/robustness-manifest.json": "58aadb6c25f8c178e14670d2ea03573ddcf95c916f8f004abbfe615b4285dc57",
+    "runs/campaign/2026-11-01-main-objective-v1/robustness-base.json": "1cda1d8d8e80e4b42846ece449ad50e207b8f99e29a8f913f892c278130efbbe",
+    "runs/campaign/2026-11-01-main-objective-v1/g8-input-identity.json": "293af744331b7377902258ee3e35385362a810e1780a87504773231db177d18b",
+    "runs/campaign/2026-11-01-main-objective-v1/g8-identity-after.json": "2ff40a8ed253cdc224e80be8aff27fa4620b8359145baa0c67663dd2eed4fcfa",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.process.json": "22182bb537e2d3e0d28f62ea9103bc4890915f66366cd6032ad07e06984882d6",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stdout.json": "bc65c57ef274432d1a89898798fa30b5b52be02a88b3c2a563690f84dee78988",
+    "runs/campaign/2026-11-01-main-objective-v1/raw/g8-robustness.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "executions": [
+    {
+      "input_id": 0,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 1,
+      "kind": "diagnostic",
+      "status": "matched",
+      "returncode": 0
+    },
+    {
+      "input_id": 2,
+      "kind": "diagnostic",
+      "status": "matched",
+      "returncode": 0
+    },
+    {
+      "input_id": 3,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 4,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 5,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 6,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 7,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 8,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 9,
+      "kind": "diagnostic",
+      "status": "matched",
+      "returncode": 0
+    },
+    {
+      "input_id": 10,
+      "kind": "exact",
+      "status": "matched",
+      "returncode": 0,
+      "comparison_scope": "exact_rational_no_tolerance"
+    },
+    {
+      "input_id": 11,
+      "kind": "exact",
+      "status": "matched",
+      "returncode": 0,
+      "comparison_scope": "exact_rational_no_tolerance"
+    },
+    {
+      "input_id": 12,
+      "kind": "diagnostic",
+      "status": "matched",
+      "returncode": 0,
+      "artifact_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/clean-replay/executions/12/generated/attempt-49agve6v/frontier.json",
+      "artifact_sha256": "1af746ddb9d5ea4d6ffb13985aaa775efde9b76b33984d4ead214264e9076800",
+      "comparison_scope": "complete scientific output artifact and process summary/status"
+    },
+    {
+      "input_id": 13,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 14,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 15,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 16,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 17,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 18,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 19,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 20,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 21,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 22,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 23,
+      "kind": "diagnostic",
+      "status": "matched",
+      "returncode": 0,
+      "artifact_path": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/clean-replay/executions/23/generated/robustness.json",
+      "artifact_sha256": "871729dfc377db9630da54b40f18d80a6eb734e984196f2b092078f367ae51f0",
+      "comparison_scope": "complete scientific output artifact and process summary/status"
+    },
+    {
+      "input_id": 24,
+      "kind": "source",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 25,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 26,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 27,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 28,
+      "kind": "not_run",
+      "status": "retained_not_executed"
+    },
+    {
+      "input_id": 29,
+      "kind": "forecast",
+      "status": "retained_not_executed"
+    }
+  ],
+  "rtol": 1e-10,
+  "atol": 1e-12,
+  "timing_policy": "remeasured_not_equal",
+  "elapsed_seconds": 25.142354500014335,
+  "verification_scope": "same machine, exact committed source and fresh locked editable environment; replay is not a new independent sample; fixtures cannot establish production G10"
+}

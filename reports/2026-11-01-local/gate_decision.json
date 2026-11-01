@@ -1,0 +1,14 @@
+{
+  "code": "SUPPORTED_IN_SCOPE",
+  "evidence": {
+    "gate": "G10",
+    "report": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/report-final/results.md",
+    "claim_ledger": "/Users/artemlegotin/Documents/git_alter/plasticity-frontier/runs/campaign/2026-11-01-main-objective-v1/report-final/claim_ledger.csv",
+    "clean_replay": "matched",
+    "input_order_sha256": "cf237b4192651839303837c632d9762cc0a09835c85f13c1f750ec5061512720",
+    "blocked_claims": [],
+    "scientific_conclusions": []
+  },
+  "rationale": "Report reconstruction and clean replay completed in the recorded scope.",
+  "next_action": "Retain scoped negative and positive conclusions and unsuccessful history alike."
+}
