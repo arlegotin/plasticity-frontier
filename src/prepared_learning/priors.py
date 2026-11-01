@@ -19,11 +19,21 @@ def _blocks(tasks, d=None):
             yield c
 
 
-def _asset(cov, noise, metadata):
+def _asset(cov, noise, metadata, basis=None, eigenvalues=None):
     cov=(np.asarray(cov)+np.asarray(cov).T)/2
-    vals,vecs=np.linalg.eigh(cov); order=np.argsort(vals)[::-1]; vals=vals[order]; vecs=vecs[:,order]
+    if basis is None:
+        vals,vecs=np.linalg.eigh(cov); order=np.argsort(vals)[::-1]; vals=vals[order]; vecs=vecs[:,order]
+    else:
+        vecs=np.asarray(basis,dtype=float)
+        if vecs.shape!=cov.shape or not np.allclose(vecs.T@vecs,np.eye(len(cov)),atol=1e-10): raise ValueError('invalid prior basis')
+        diagonal=vecs.T@cov@vecs
+        if not np.allclose(diagonal,np.diag(np.diag(diagonal)),atol=1e-10): raise ValueError('basis does not diagonalize covariance')
+        vals=np.diag(diagonal).copy() if eigenvalues is None else np.asarray(eigenvalues,dtype=float).copy()
+        if vals.shape!=(len(cov),) or not np.allclose(diagonal,np.diag(vals),atol=1e-10): raise ValueError('invalid prior eigenvalues')
     if vals.min() < -1e-10: raise ValueError('prior covariance is not PSD')
-    vals=np.maximum(vals,0.); vals/=vals.sum(); cov=(vecs*vals)@vecs.T
+    vals=np.maximum(vals,0.)
+    if eigenvalues is None or not np.isclose(vals.sum(),1.,atol=1e-12,rtol=0): vals/=vals.sum()
+    cov=(vecs*vals)@vecs.T
     payload={'covariance':cov,'basis':vecs,'eigenvalues':vals,'noise_variance':noise,'information_access':'estimated','fit_metadata':metadata}
     return PriorAsset(cov,vecs,vals,noise,'estimated',metadata,content_hash(payload))
 
@@ -46,13 +56,14 @@ def estimate_moment_directions(tasks,rank):
     for c in blocks:
         if c.X.shape[1]!=d: raise ValueError('dimension mismatch')
         moment+=(c.X.T*(c.y*c.y))@c.X; count+=len(c.y)
-    vals,vecs=np.linalg.eigh(moment/count); order=np.argsort(vals)[::-1]; vecs=vecs[:,order[:rank]]
-    return _asset(vecs@vecs.T/rank,None,{'estimator':'moment_directions','basis_provenance':'y_squared_xx','rank':rank,'moment_eigenvalues':vals[order], 'source_hash':content_hash(tasks)})
+    vals,vecs=np.linalg.eigh(moment/count); order=np.argsort(vals)[::-1]; vecs=vecs[:,order]
+    cov=vecs[:,:rank]@vecs[:,:rank].T/rank
+    return _asset(cov,None,{'estimator':'moment_directions','basis_provenance':'y_squared_xx','rank':rank,'moment_eigenvalues':vals[order], 'variance_interpretation':'equal-variance surrogate on selected directions','source_hash':content_hash(tasks)},basis=vecs,eigenvalues=np.r_[np.full(rank,1/rank),np.zeros(d-rank)])
 
 
 def shrink_prior(prior,gamma):
     if prior.information_access=='oracle' or not np.isfinite(gamma) or not 0<=gamma<=1: raise ValueError('invalid prior or shrinkage')
-    d=len(prior.covariance); return _asset((1-gamma)*prior.covariance+gamma*np.eye(d)/d,prior.noise_variance,{**prior.fit_metadata,'gamma':float(gamma),'parent_hash':prior.asset_hash})
+    d=len(prior.covariance); return _asset((1-gamma)*prior.covariance+gamma*np.eye(d)/d,prior.noise_variance,{**prior.fit_metadata,'gamma':float(gamma),'parent_hash':prior.asset_hash},basis=prior.basis,eigenvalues=(1-gamma)*prior.eigenvalues+gamma/d)
 
 
 def estimate_noise(tasks):

@@ -157,3 +157,51 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(result.selected_id,'')
         self.assertTrue(result.candidate_records)
         self.assertTrue(all(r['status']=='failed' for r in result.candidate_records))
+
+    def test_learned_apis_reject_unsupported_scientific_contracts(self):
+        import numpy as np
+        from prepared_learning.records import Context, SourceTask
+        from prepared_learning.methods import make_method
+        def t(k): return SourceTask(Context(np.eye(1),np.ones(1),k+'a'),Context(np.eye(1),np.ones(1),k+'b'),k)
+        c={'budget':{'depth':2,'initialization_norm_cap':1.,'trainable_parameter_cap':2,'learning_rate':1.},'preparation':{'target_context_size':1,'input_dimension':1,'input_law':'isotropic_gaussian','loss_normalization':'squared_error_over_2n','task_second_moment_trace':1.},'fitting_candidates':{'gammas':[0.,1.],'ranks':[1]},'information_policy':{},'source_access_manifest':{'training_keys':['a'],'validation_keys':['b']}}
+        for field,bad in (('input_law','arbitrary_real_labels'),('task_second_moment_trace',2.),('loss_normalization','arbitrary')):
+            invalid={**c,'preparation':{**c['preparation'],field:bad}}
+            with self.assertRaises(ValueError): make_method('B01',{}).fit_meta([t('a')],[t('b')],invalid)
+            with self.assertRaises(ValueError): select_method([make_method('B01',{})],[t('a')],[t('b')],invalid)
+
+    def test_refinement_preserves_each_attempt_failure_and_cost(self):
+        import numpy as np
+        from prepared_learning.records import Context, SourceTask, SelectionResult
+        from prepared_learning.methods import make_method
+        def t(k,y): return SourceTask(Context(np.eye(2),np.array(y),k+'a'),Context(np.eye(2),np.array(y),k+'b'),k)
+        c={'budget':{'depth':2,'initialization_norm_cap':1.,'trainable_parameter_cap':6,'learning_rate':1.},'preparation':{'target_context_size':2,'input_dimension':2,'input_law':'isotropic_gaussian','loss_normalization':'squared_error_over_2n','task_second_moment_trace':1.},'fitting_candidates':{'gammas':[0.,1.],'ranks':[1],'max_refinement_rounds':2},'information_policy':{},'source_access_manifest':{'training_keys':['a'],'validation_keys':['b','c']}}
+        underlying=make_method('B02',{})
+        class Transient:
+            method_id='B02'
+            calls=0
+            def fit_meta(self,train,validation,config):
+                result=underlying.fit_meta(train,validation,config); self.calls+=1
+                if self.calls==1:
+                    failure={'candidate_id':'transient','method_id':'B02','status':'failed','error':'first attempt failed','elapsed_ns':5}
+                    return SelectionResult(result.selected_id,result.candidate_records+(failure,),result.asset)
+                return result
+        m=Transient(); result=select_method([m],[t('a',[1.,0.])],[t('b',[1.,0.]),t('c',[1.,0.])],c)
+        self.assertGreater(m.calls,1)
+        self.assertTrue(any(r.get('error')=='first attempt failed' for r in result.candidate_records))
+        self.assertEqual(len({r['candidate_id'] for r in result.candidate_records}),len(result.candidate_records))
+        self.assertEqual(len(result.candidate_records),result.candidate_records[0]['total_candidate_evaluations'])
+        self.assertEqual(sum(r['candidate_id']==result.selected_id for r in result.candidate_records),1)
+        self.assertTrue(all(r.get('asset_fit_elapsed_ns',-1)>=0 for r in result.candidate_records if r['status']=='completed'))
+
+    def test_cost_records_do_not_change_scientific_asset_hash(self):
+        import numpy as np
+        from prepared_learning.records import Context, SourceTask
+        from prepared_learning.methods import make_method
+        def t(k): return SourceTask(Context(np.eye(2),np.ones(2),k+'a'),Context(np.eye(2),np.ones(2),k+'b'),k)
+        c={'budget':{'depth':2,'initialization_norm_cap':1.,'trainable_parameter_cap':6,'learning_rate':1.},'preparation':{'target_context_size':2,'input_dimension':2,'input_law':'isotropic_gaussian','loss_normalization':'squared_error_over_2n','task_second_moment_trace':1.},'fitting_candidates':{'gammas':[0.,1.],'ranks':[1],'regularization':[0.]},'information_policy':{},'source_access_manifest':{'training_keys':['a'],'validation_keys':['b']}}
+        f=make_method('B11:F',{}).fit_meta([t('a')],[t('b')],c)
+        z=make_method('B11:Z',{}).fit_meta([t('a')],[t('b')],c)
+        self.assertEqual({r['asset_hash'] for r in f.candidate_records},{r['asset_hash'] for r in z.candidate_records})
+        self.assertTrue(all(r['base_fit_id'] and r['noise_fit_id'] and r['shrink_fit_id'] for r in f.candidate_records))
+        again=make_method('B11:F',{}).fit_meta([t('a')],[t('b')],c)
+        self.assertEqual([r['asset_hash'] for r in f.candidate_records],[r['asset_hash'] for r in again.candidate_records])

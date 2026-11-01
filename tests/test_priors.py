@@ -31,3 +31,26 @@ class PriorTests(unittest.TestCase):
     def test_reused_observation_block_is_rejected(self):
         a=Context(np.eye(2),np.ones(2),'same')
         with self.assertRaises(ValueError): estimate_cross_moment([SourceTask(a,a,'one')],2)
+
+    def test_rotated_moment_order_survives_shrinkage(self):
+        from prepared_learning.priors import estimate_moment_directions
+        X=np.array([[2.,1.],[1.,2.]])
+        a=Context(X,np.array([2.,1.]),'a'); b=Context(X,np.array([2.,1.]),'b')
+        task=SourceTask(a,b,'s'); moment=(X.T*np.array([4.,1.]))@X
+        p=estimate_moment_directions([task],2)
+        self.assertTrue(np.array_equal(p.eigenvalues,np.array([.5,.5])))
+        for gamma in (0.,.4,1.):
+            q=shrink_prior(p,gamma)
+            projected=q.basis.T@moment@q.basis
+            self.assertAlmostEqual(projected[0,1],0.,places=10)
+            self.assertGreater(projected[0,0],projected[1,1])
+            self.assertEqual(q.fit_metadata['variance_interpretation'],'equal-variance surrogate on selected directions')
+            if gamma==1.: self.assertTrue(np.array_equal(q.eigenvalues,np.array([.5,.5])))
+
+    def test_isotropic_shrink_preserves_sorted_exact_surrogate_values(self):
+        from prepared_learning.priors import _asset
+        rng=np.random.default_rng(123); q,_=np.linalg.qr(rng.normal(size=(6,6)))
+        p=_asset(q@np.diag([.4,.25,.15,.1,.06,.04])@q.T,None,{})
+        shrunk=shrink_prior(p,1.)
+        self.assertTrue(np.array_equal(shrunk.eigenvalues,np.full(6,1/6)))
+        np.testing.assert_array_equal(shrunk.basis,p.basis)
