@@ -1,0 +1,1 @@
+{"schema_version": 1, "suite": "source_and_baselines", "d": 6, "r": 2, "n": 4, "sigma2": 1.0, "budgets": [0.08, 0.16, 0.4, 0.8, 0.8888888888888888, 1.2], "source_monte_carlo_tasks": 200000}

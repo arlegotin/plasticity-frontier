@@ -61,7 +61,7 @@ class SupportMetadata(ImmutableArrays):
     policy: str; exact_zero_multiplicity: int; minimum_multiplicity: int; retained_indices: tuple; projections: tuple = (); truncations: tuple = ()
 @dataclass(frozen=True)
 class Resources(ImmutableArrays):
-    initialization_norm: float; trainable_parameters: int; stored_scalars: int; serialized_bytes: int
+    initialization_norm: float | None; trainable_parameters: int | None; stored_scalars: int; serialized_bytes: int
 @dataclass(frozen=True)
 class NetworkRealization(ImmutableArrays):
     layers: Layers; resources: Resources; support_metadata: SupportMetadata
@@ -91,7 +91,7 @@ class PriorAsset(ImmutableArrays):
     covariance: Array | None; basis: Array | None; eigenvalues: Array | None; noise_variance: float | None; information_access: str; fit_metadata: JsonRecord; asset_hash: str
 @dataclass(frozen=True)
 class PreparedState(ImmutableArrays):
-    metric: object; initial_layers: Layers | None; budget: BudgetSpec; preparation: PreparationSpec; resources: Resources; method_id: str
+    metric: object; initial_layers: Layers | None; budget: BudgetSpec; preparation: PreparationSpec; resources: Resources; method_id: str; prior: PriorAsset | None = None; options: JsonRecord | None = None
 @dataclass(frozen=True)
 class AdaptedState(ImmutableArrays):
     coefficient: Array; layers: Layers | None; status: str; timing: object
