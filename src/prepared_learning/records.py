@@ -96,7 +96,7 @@ class PriorAsset(ImmutableArrays):
     covariance: Array | None; basis: Array | None; eigenvalues: Array | None; noise_variance: float | None; information_access: str; fit_metadata: JsonRecord; asset_hash: str
 @dataclass(frozen=True)
 class PreparedState(ImmutableArrays):
-    metric: object; initial_layers: Layers | None; budget: BudgetSpec; preparation: PreparationSpec; resources: Resources; method_id: str; prior: PriorAsset | None = None; options: JsonRecord | None = None
+    metric: object; initial_layers: Layers | None; budget: BudgetSpec; preparation: PreparationSpec; resources: Resources; method_id: str; prior: PriorAsset | None = None; options: JsonRecord | None = None; solver_diagnostics: JsonRecord | None = None
 @dataclass(frozen=True)
 class AdaptedState(ImmutableArrays):
     coefficient: Array; layers: Layers | None; status: str; timing: object
@@ -132,6 +132,8 @@ class PopulationTruth(ImmutableArrays):
 # Required raw evidence fields. Units are encoded in field names where applicable;
 # null measurements require an accompanying status/reason in the producing record.
 RAW_RECORD_FIELDS = {
+    'execution_task': frozenset('outer_replication result status failure_reason'.split()),
+    'replication_completion': frozenset('outer_replication result status failure_reason'.split()),
     'execution': frozenset('outer_replication result status failure_reason'.split()),
     'task_metrics': frozenset('run_id outer_replication task_id task_key method_id information_access n d depth norm_cap parameter_cap eta branch loss_parameter_mse loss_noiseless_prediction_mse adaptation_ns prediction_ns status failure_reason'.split()),
     'preparation_risks': frozenset('run_id outer_replication source_key method_id selection_procedure_hash prior_asset_hash metric_hash analysis_mode source_training_tasks source_validation_tasks total_source_labels conditional_risk paired_contrast_id paired_risk_difference risk_evaluator_version true_S_evaluator_hash noise_truth_evaluator_hash numerical_error_assessment status failure_reason'.split()),
@@ -237,7 +239,7 @@ def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
             if not isinstance(reasons.get(field), str) or not reasons[field].strip(): raise ValueError(f'{field} requires null reason')
     if kind in ('task_metrics', 'preparation_risks'):
         for name in ('method_id', 'status'): _text(row[name], name)
-    if kind == 'execution':
+    if kind in ('execution','execution_task','replication_completion'):
         if not isinstance(row['result'],dict) or row['result'].get('status')!=status:
             raise ValueError('invalid execution result')
         return

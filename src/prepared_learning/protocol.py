@@ -161,7 +161,7 @@ def _validate_draft(draft, evidence):
         if resource['status']!='feasible': raise ValueError('unresolved local feasibility')
         for key in ('preparation_seconds','estimated_total_seconds','peak_rss_bytes','available_memory_bytes','memory_budget_bytes'): _finite(resource[key],key)
         _finite(resource['max_seconds'],'runtime budget')
-        projection=project_runtime(resource,counts['outer_replicates'],schedule,s.get('simulation_schedule'))
+        projection=project_runtime(resource,counts['outer_replicates'],schedule,s.get('simulation_schedule'))+validate_execution_envelope(s,resource)['seconds']
         if resource['max_seconds']<=0 or projection>resource['max_seconds'] or not math.isclose(resource['estimated_total_seconds'],projection,rel_tol=1e-12,abs_tol=1e-9): raise ValueError('runtime projection or declared budget infeasible')
         if len(resource['replication_seconds'])!=sum(len(b['differences']) for b in blocks): raise ValueError('runtime observations do not match pilot schedule')
         if not math.isclose(resource['preparation_seconds'],chosen['preparation_seconds'],rel_tol=1e-12): raise ValueError('source preparation timing mismatch')
@@ -464,7 +464,37 @@ def _validate_mode_draft(draft,evidence):
             if evidence['source_accuracy']['status'] not in ('resolved','descriptive_unverified'): raise ValueError('source accuracy status required')
         resource=evidence['resources']; _finite(resource['max_seconds'],'runtime budget')
         tasks=(p.outer_replicates or 1)*(p.tasks_per_replicate or 0)+sum(len(s.get(name,{}).get('outer_replications',[]))*s.get(name,{}).get('tasks_per_replication',0) for name in ('update_check_schedule','simulation_schedule'))
-        projection=float(np.mean(base_costs))*(p.outer_replicates or 1)+float(np.mean(task_costs))*tasks
+        projection=float(np.mean(base_costs))*(p.outer_replicates or 1)+float(np.mean(task_costs))*tasks+validate_execution_envelope(s,resource)['seconds']
         if resource['status']!='feasible' or resource['max_seconds']<=0 or projection>resource['max_seconds'] or not math.isclose(projection,resource['estimated_total_seconds'],rel_tol=1e-12): raise ValueError('unverified schedule resource projection')
         if not 0<resource['peak_rss_bytes']<=resource['memory_budget_bytes']<=resource['available_memory_bytes']*(1-op['reserve_memory_fraction']): raise ValueError('memory reserve unverified')
     except (KeyError,TypeError,AttributeError) as exc: raise ValueError(f'incomplete mode evidence: {exc}') from exc
+
+
+def execution_overhead(scientific, resources):
+    """Final-count memory and I/O/analysis allowance for the streaming driver.
+
+    Bounds account for bounded JSON copies, scalar inference, bootstrap draws,
+    and the small per-block journal inventory, rather than extrapolating pilot
+    peak RSS as if the final N were unchanged.
+    """
+    p=scientific['config']['sample_plan']; j=p['outer_replicates'] or 1
+    tasks=j*(p['tasks_per_replicate'] or 0)+sum(len(scientific.get(key,{}).get('outer_replications',[]))*scientific.get(key,{}).get('tasks_per_replication',0) for key in ('update_check_schedule','simulation_schedule'))
+    units=p['tasks_per_replicate'] if p['analysis_mode']=='fixed_prior_task_simulation' else j
+    measured=resources['execution_envelope']
+    if measured['policy']!='paired_chunks_v1': raise ValueError('unknown bounded execution policy')
+    for key in ('max_preparation_record_bytes','max_task_record_bytes','serialization_seconds_per_byte','checkpoint_seconds','analysis_seconds_per_unit'):
+        _finite(measured[key],key)
+        if measured[key]<=0: raise ValueError('measured serialization/analysis envelope required')
+    blocks=16*j+2*math.ceil(tasks/16)+4
+    analysis=16*units+32*j*len(scientific['secondary_family']['contrasts'])+250000
+    memory=8*measured['max_preparation_record_bytes']+8*16*measured['max_task_record_bytes']+analysis+4096*blocks
+    # Two passes cover publication and subsequent verified raw-record analysis.
+    seconds=2*(j*measured['max_preparation_record_bytes']+tasks*measured['max_task_record_bytes'])*measured['serialization_seconds_per_byte']+blocks*measured['checkpoint_seconds']+units*measured['analysis_seconds_per_unit']
+    return {'additional_peak_bytes':memory,'analysis_working_bytes':analysis,'projected_block_inventory':blocks,'seconds':seconds}
+
+
+def validate_execution_envelope(scientific, resources):
+    bounds=execution_overhead(scientific,resources)
+    if resources['peak_rss_bytes']+bounds['additional_peak_bytes']>resources['memory_budget_bytes']:
+        raise ValueError('final checkpoint, serialization and inference working sets exceed memory reserve')
+    return bounds

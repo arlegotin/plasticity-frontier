@@ -41,7 +41,9 @@ def _name(key):
 
 
 class RunStore:
-    def __init__(self, path): self.path = Path(path)
+    def __init__(self, path):
+        self.path = Path(path)
+        self._append_index = None
 
     @classmethod
     def create(cls, root: Path, run: JsonRecord) -> "RunStore":
@@ -78,11 +80,42 @@ class RunStore:
 
     @contextmanager
     def _lock(self):
+        if self._append_index is not None:
+            yield
+            return
         with open(self.path / '.lock', 'a+b') as lock:
             try: fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc: raise ValueError('run store is busy') from exc
             try: yield
             finally: fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+    @contextmanager
+    def append_session(self):
+        """Exclusive bounded append session; verify all old blocks once.
+
+        A disposable on-disk uniqueness index replaces rescanning every old
+        scientific ledger for every new chunk. All data are verified again on
+        exit and on every later open; the index is never evidence or authority.
+        """
+        import sqlite3
+        with self._lock():
+            self._reconcile()
+            fd,name=tempfile.mkstemp(prefix='.pair-index-',dir=self.path); os.close(fd)
+            index=sqlite3.connect(name)
+            index.execute('PRAGMA cache_size=-1024')
+            index.execute('CREATE TABLE units (kind TEXT, unit BLOB, PRIMARY KEY(kind,unit))')
+            try:
+                for block in (self.path/'blocks').iterdir():
+                    rows=json.loads((block/'records.json').read_text())
+                    index.executemany('INSERT INTO units VALUES (?,?)',self._validate_rows(rows))
+                self._append_index=index
+                yield self
+            finally:
+                self._append_index=None
+                index.close(); Path(name).unlink(missing_ok=True)
+                # Reconcile interrupted publication and verify corruption before
+                # any session result is returned to its caller.
+                self._reconcile()
 
     def _replace_metadata(self, name, data):
         fd,pending=tempfile.mkstemp(prefix='.lifecycle-',dir=self.path)
@@ -155,6 +188,7 @@ class RunStore:
         except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc: raise ValueError('corrupt committed block') from exc
 
     def _reconcile(self):
+        if self._append_index is not None: return
         self._recover_lifecycle()
         if _hash(self.path / 'run.json') != (self.path / 'run.sha256').read_text(): raise ValueError('run metadata corrupt')
         blocks = self.path / 'blocks'; journal = self.path / 'journal'
@@ -212,7 +246,25 @@ class RunStore:
     def committed_keys(self) -> set[str]:
         with self._lock():
             self._reconcile()
+            if self._append_index is not None:
+                return {json.loads(p.read_text())['key'] for p in (self.path/'journal').iterdir()}
             return {self._verify(p) for p in (self.path / 'blocks').iterdir()}
+
+    def iter_records(self, kind: str, *, block_prefix=None):
+        """Verify then yield one bounded block at a time in logical-key order.
+
+        Keep only the small journal inventory in memory. Scientific ledgers and
+        task arrays are never concatenated across blocks.
+        """
+        with self._lock():
+            self._reconcile()
+            inventory=sorted((json.loads(p.read_text())['key'],p.name) for p in (self.path/'journal').iterdir())
+        for key,name in inventory:
+            if block_prefix is not None and not key.startswith(block_prefix): continue
+            block=self.path/'blocks'/name
+            self._verify(block)
+            for row in json.loads((block/'records.json').read_text()):
+                if row.get('kind')==kind: yield row
 
     def read_records(self, kind: str) -> list[JsonRecord]:
         with self._lock():
@@ -231,9 +283,13 @@ class RunStore:
 
     def _commit_block(self, block_key, records, assets):
         units = self._validate_rows(records)
-        for old in (self.path / 'blocks').iterdir():
-            existing = json.loads((old / 'records.json').read_text())
-            if units & self._validate_rows(existing): raise ValueError('paired unit already committed')
+        if self._append_index is not None:
+            if any(self._append_index.execute('SELECT 1 FROM units WHERE kind=? AND unit=?',unit).fetchone() for unit in units):
+                raise ValueError('paired unit already committed')
+        else:
+            for old in (self.path/'blocks').iterdir():
+                existing=json.loads((old/'records.json').read_text())
+                if units & self._validate_rows(existing): raise ValueError('paired unit already committed')
         blocks = self.path / 'blocks'; name = _name(block_key); final = blocks / name
         if final.exists(): raise ValueError('block already exists')
         temp = Path(tempfile.mkdtemp(prefix='.tmp-', dir=blocks))
@@ -257,5 +313,7 @@ class RunStore:
             _write(pending, _bytes(marker)); os.rename(pending, journal / name); _syncdir(journal)
             _write(final / 'commit.pending', _bytes(marker))
             os.rename(final / 'commit.pending', final / 'commit.json'); _syncdir(final)
+            if self._append_index is not None:
+                self._append_index.executemany('INSERT INTO units VALUES (?,?)',units)
         finally:
             if temp.exists(): shutil.rmtree(temp)

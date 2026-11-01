@@ -4,12 +4,21 @@ from scipy import stats
 from .records import GateDecision, GateCode, validate_unit_id
 
 
-def paired_interval(differences, alpha, procedure, seed):
+def paired_interval(differences, alpha, procedure, seed, *, working_chunk=4096, resource_check=None):
     x = np.asarray(differences, dtype=float)
-    if x.ndim != 1 or not len(x) or not np.all(np.isfinite(x)) or not 0 < alpha < 1:
+    if x.ndim != 1 or not len(x) or not 0 < alpha < 1 or type(working_chunk)!=int or working_chunk<1:
         raise ValueError('finite nonempty independent differences and alpha in (0, 1) required')
-    mean = float(np.mean(x)); n = len(x)
-    se = float(np.std(x, ddof=1) / np.sqrt(n)) if n > 1 else None
+    check=resource_check or (lambda size=0:None)
+    n=len(x); total=0.; m2=0.; count=0
+    for start in range(0,n,working_chunk):
+        check(working_chunk*32+80000)
+        block=x[start:start+working_chunk]
+        if not np.all(np.isfinite(block)): raise ValueError('nonfinite differences')
+        mean_block=float(np.mean(block)); k=len(block); delta=mean_block-total
+        m2+=float(np.sum((block-mean_block)**2))+delta*delta*count*k/(count+k)
+        total+=delta*k/(count+k); count+=k
+    mean=total
+    se=float(np.sqrt(max(0.,m2)/(n-1)/n)) if n>1 else None
     result = {'n': n, 'mean': mean, 'standard_error': se, 'alpha': alpha,
               'procedure': procedure, 'interval': None, 'status': 'ok',
               'coverage': 'approximate', 'seed': seed}
@@ -22,7 +31,14 @@ def paired_interval(differences, alpha, procedure, seed):
     elif procedure == 'outer_bootstrap':
         if n < 2: raise ValueError('bootstrap requires at least two independent units')
         rng = np.random.default_rng(seed)
-        means = np.mean(x[rng.integers(0, n, size=(10000, n))], axis=1)
+        means=np.empty(10000)
+        for replication in range(10000):
+            total=0.
+            for start in range(0,n,working_chunk):
+                check(working_chunk*32+80000)
+                size=min(working_chunk,n-start)
+                total+=float(np.sum(x[rng.integers(0,n,size=size)]))
+            means[replication]=total/n
         result['interval'] = np.quantile(means, [alpha/2, 1-alpha/2]).tolist()
         result['bootstrap_replicates'] = 10000
     else: raise ValueError('unknown interval procedure')

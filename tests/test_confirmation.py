@@ -263,15 +263,15 @@ class DurableConfirmationTests(unittest.TestCase):
         from pathlib import Path
         from unittest.mock import patch
         from prepared_learning import confirmation
-        actual=confirmation.execute_replication
+        from prepared_learning import execution
+        actual=execution.evaluate_task
         for effect in (-1.,0.,1.):
             def controlled(*args,**kwargs):
-                result,assets=actual(*args,**kwargs)
-                for task in result['tasks']:
-                    task['values']['baseline']['loss']=10.+effect
-                    task['values']['joint']['loss']=10.
-                return result,assets
-            with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'),patch.object(confirmation,'execute_replication',side_effect=controlled):
+                values,failures=actual(*args,**kwargs)
+                values['baseline']['loss']=10.+effect
+                values['joint']['loss']=10.
+                return values,failures
+            with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'),patch.object(execution,'evaluate_task',side_effect=controlled):
                 gate=confirmation.run_confirmation(execution_manifest('nested_task_simulation'),Path(root))
                 self.assertEqual(gate.evidence['completed_outer_replications'],2)
                 self.assertEqual(gate.evidence['primary_task_count'],6)
@@ -334,3 +334,127 @@ class MeanInferenceTests(unittest.TestCase):
                 result=confirmation.run_confirmation(manifest,Path(root)/'confirm')
             self.assertEqual(result.evidence['n'],n)
             self.assertIsNotNone(result.evidence['interval'])
+
+class ReviewIdentityTests(unittest.TestCase):
+    def test_extra_untracked_symlink_to_manifest_is_rejected(self):
+        import tempfile, json
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning.confirmation import _live_identity
+        manifest=execution_manifest()
+        with tempfile.TemporaryDirectory() as root:
+            path=Path(root)/'manifest.json'; path.write_text(json.dumps(manifest))
+            alias=Path(root)/'extra.json'; alias.symlink_to(path)
+            def git(args,**kwargs):
+                return b'' if args[1]=='diff' else str(path).encode()+b'\0'+str(alias).encode()+b'\0'
+            with patch('prepared_learning.confirmation.validate_frozen_protocol'),patch('prepared_learning.confirmation.checkout_identity',return_value=(manifest['scientific']['versions'],'dirty')),patch('subprocess.check_output',side_effect=git):
+                with self.assertRaisesRegex(ValueError,'beyond'):
+                    _live_identity(manifest,path)
+
+class ReviewResourceTests(unittest.TestCase):
+    def test_fixed_run_checks_resources_inside_its_only_replication(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation, pilot
+        actual=pilot._rss_bytes
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'),patch.object(pilot,'_rss_bytes',wraps=actual) as rss:
+            gate=confirmation.run_confirmation(execution_manifest('fixed_prior_task_simulation'),Path(root))
+            self.assertNotEqual(gate.code,'IMPLEMENTATION_INVALID')
+            self.assertGreater(rss.call_count,3)
+
+    def test_checkpoint_size_independent_interrupted_replay(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.runner import RunStore
+        self.assertTrue(hasattr(RunStore,'iter_records'),'bounded verified raw iteration missing')
+        manifest=execution_manifest('fixed_prior_task_simulation')
+        original=RunStore.commit_block; interrupted=[]
+        def interrupt(store,key,rows,assets):
+            original(store,key,rows,assets)
+            if key.startswith('tasks-') and not interrupted:
+                interrupted.append(key); raise KeyboardInterrupt()
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'):
+            with patch.object(RunStore,'commit_block',interrupt):
+                with self.assertRaises(KeyboardInterrupt): confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=1)
+            gate=confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=2)
+            store=RunStore(Path(gate.evidence['run_path']))
+            tasks=list(store.iter_records('execution_task'))
+            self.assertEqual(len(tasks),4)
+            self.assertEqual(len({r['result']['task_key'] for r in tasks}),4)
+            self.assertEqual(gate.evidence['primary_task_count'],3)
+            self.assertTrue(all(not r['result']['tasks'] for r in store.iter_records('execution')))
+
+    def test_bootstrap_draws_are_bounded_and_chunk_reproducible(self):
+        from prepared_learning.analysis import paired_interval
+        import inspect
+        self.assertIn('working_chunk',inspect.signature(paired_interval).parameters)
+        calls=[]
+        a=paired_interval(np.arange(19.),.05,'outer_bootstrap',15,working_chunk=5,resource_check=lambda size=0:calls.append(size))
+        b=paired_interval(np.arange(19.),.05,'outer_bootstrap',15,working_chunk=11)
+        np.testing.assert_allclose(a['interval'],b['interval'],atol=1e-12)
+        self.assertGreater(len(calls),10000)
+
+class ReviewEvidenceTests(unittest.TestCase):
+    def test_learned_driver_retains_both_frontier_branches_geometry_and_timing(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.runner import RunStore
+        manifest=execution_manifest()
+        manifest['scientific']['config']['methods']=['B01','B03','B04']
+        manifest['scientific']['selectors']={'baseline':['B01'],'joint':['B04']}
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'):
+            gate=confirmation.run_confirmation(manifest,Path(root))
+            store=RunStore(Path(gate.evidence['run_path']))
+            certificates=store.read_records('certificates')
+            self.assertTrue(certificates,'actual frontier solver evidence was dropped')
+            self.assertEqual({row['branch'] for row in certificates},{'F','Z'})
+            self.assertTrue(all(row['certificate_level']=='float64_diagnostic' for row in certificates))
+            geometry=store.read_records('geometry')
+            self.assertTrue(geometry)
+            self.assertTrue(any(row['post_norm'] is not None for row in geometry))
+            self.assertTrue(all(row['kernel_absolute_error'] is not None for row in geometry))
+            timings=store.read_records('timing_blocks')
+            self.assertTrue(timings)
+            self.assertTrue(all(row['wall_time_ns']>0 for row in timings))
+
+class ReviewResourceRecoveryTests(unittest.TestCase):
+    def test_resource_stop_keeps_committed_task_prefix_resumable(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.execution import ExecutionResourceLimit
+        from prepared_learning.runner import RunStore
+        actual=RunStore.commit_block; stopped=[]
+        def limit(store,key,rows,assets):
+            actual(store,key,rows,assets)
+            if key.startswith('tasks-') and not stopped:
+                stopped.append(key); raise ExecutionResourceLimit('injected resource boundary')
+        manifest=execution_manifest('fixed_prior_task_simulation')
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'):
+            with patch.object(RunStore,'commit_block',limit):
+                first=confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=1)
+            self.assertEqual(first.code,'LOCAL_RESOURCE_LIMIT')
+            path=Path(first.evidence['run_path'])
+            self.assertFalse((path/'terminal.json').exists())
+            resumed=confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=2)
+            self.assertEqual(resumed.evidence['primary_task_count'],3)
+            observed=[(r['result']['task_key'],{k:v['loss'] for k,v in r['result']['values'].items()}) for r in RunStore(path).iter_records('execution_task')]
+            with tempfile.TemporaryDirectory() as fresh:
+                reference=confirmation.run_confirmation(manifest,Path(fresh),checkpoint_tasks=3)
+                expected=[(r['result']['task_key'],{k:v['loss'] for k,v in r['result']['values'].items()}) for r in RunStore(reference.evidence['run_path']).iter_records('execution_task')]
+            self.assertEqual(observed,expected)
+
+    def test_final_schedule_memory_bound_is_recomputed(self):
+        from tests.test_protocol import draft_fixture,evidence_fixture
+        from prepared_learning.protocol import validate_execution_envelope
+        draft=draft_fixture(); evidence=evidence_fixture(draft)
+        validate_execution_envelope(draft['scientific'],evidence['resources'])
+        draft['scientific']['config']['sample_plan']['outer_replicates']=10**9
+        with self.assertRaisesRegex(ValueError,'working sets'):
+            validate_execution_envelope(draft['scientific'],evidence['resources'])

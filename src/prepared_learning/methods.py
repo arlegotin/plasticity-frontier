@@ -5,6 +5,12 @@ from .geometry import construct_canonical, construct_head_zero, effective_coeffi
 from .metrics import apply_metric, metric_resources
 from .records import AdaptedState, PreparedState, Resources, to_json_record
 
+class PreparationError(RuntimeError):
+    def __init__(self,message,diagnostics):
+        super().__init__(message)
+        self.preparation_diagnostics=diagnostics
+
+
 class Method:
     def __init__(self, method_id, options): self.method_id, self.options = method_id, dict(options)
     def fit_meta(self, train_tasks, validation_tasks, config):
@@ -17,7 +23,7 @@ class Method:
         width=min(d,(budget.trainable_parameter_cap-(budget.depth-2))//(d+1))
         if family in ('B00','B01','B02','B03','B04') and width<1: raise ValueError('infeasible architecture')
         s=np.asarray(prior.eigenvalues) if prior.eigenvalues is not None else None
-        basis=prior.basis
+        basis=prior.basis; solver_diagnostics=None
         if 'fitted_metric' in self.options: metric=self.options['fitted_metric']
         elif family=='B00': metric=metric_from_gains(np.eye(d),np.zeros(d))
         elif family=='B01': metric=metric_from_gains(np.eye(d),np.full(d,min(k,1/((n+1)/n+d*(1+prior.noise_variance)/n))))
@@ -27,13 +33,14 @@ class Method:
         elif family in ('B03','B04'):
             from .frontier import solve_frontier
             frontier=solve_frontier(prior,budget,task)
+            solver_diagnostics=to_json_record(frontier)
             if family=='B03':
-                if frontier.F.status!='completed': raise RuntimeError('F solver unresolved')
+                if frontier.F.status!='completed': raise PreparationError('F solver unresolved',solver_diagnostics)
                 metric=frontier.F.metric
             else:
-                if frontier.F.status!='completed' or frontier.Z.status!='completed': raise RuntimeError('frontier solver unresolved')
+                if frontier.F.status!='completed' or frontier.Z.status!='completed': raise PreparationError('frontier solver unresolved',solver_diagnostics)
                 if frontier.selection_status=='unresolved':
-                    if frontier.F.objective != frontier.Z.objective: raise RuntimeError('frontier comparison unresolved')
+                    if frontier.F.objective != frontier.Z.objective: raise PreparationError('frontier comparison unresolved',solver_diagnostics)
                     # Exact float ties retain both; resource use is an implementation tie-break.
                     from .metrics import metric_resources
                     chosen=min((frontier.F,frontier.Z),key=lambda b:metric_resources(b.metric,budget.depth).trainable_parameters)
@@ -54,7 +61,7 @@ class Method:
             count=1+metric.basis.size+metric.increments.size
             resources=Resources(None,None,count,8*count)
         if mid=='B08:gd': resources=Resources(0.,d,d,8*d)
-        return PreparedState(metric, realization.layers if realization else None,budget,task,resources,mid,prior, self.options)
+        return PreparedState(metric, realization.layers if realization else None,budget,task,resources,mid,prior,self.options,solver_diagnostics)
     def adapt(self, prepared, context):
         X=np.asarray(context.X); y=np.asarray(context.y); p=prepared.preparation
         if X.shape!=(p.target_context_size,p.input_dimension) or y.shape!=(p.target_context_size,) or not np.all(np.isfinite(X)) or not np.all(np.isfinite(y)): raise ValueError('context does not match preparation')

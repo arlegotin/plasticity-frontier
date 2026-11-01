@@ -428,6 +428,11 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
         'failures':failures,'resource_stop':stop,'all_pilot_source_keys':[k for r in all_results for k in r['source_keys']],
         'planning_policy':{'minimum_independent_replications_per_block':MIN_BLOCK_REPLICATES,'variance_ratio_limit':4.,'source_relative_error_target':threshold,'coverage_diagnostic_minimum':.90}}
     draft=_draft_for_pilot(config,result,versions)
+    resource['execution_envelope']=measure_execution_envelope([r for r in all_results if r['level']==selected_level],[])
+    from .protocol import execution_overhead
+    if resource['estimated_total_seconds'] is not None:
+        resource['estimated_total_seconds']+=execution_overhead(draft['scientific'],resource)['seconds']
+        if resource['estimated_total_seconds']>max_seconds: resource['status']='unresolved'
     result['scientific_contract_sha256']=scientific_contract(draft['scientific'])
     from .protocol import _validate_draft
     try:
@@ -541,7 +546,9 @@ def run_mode_pilot(config: RunConfig, output: Path) -> JsonRecord:
                 # Durable complete replication; global IDs disambiguate exploratory blocks.
                 stored={**result,'outer_replication':outer_index}
                 for task in stored['tasks']: task['outer_replication']=outer_index
+                publication_start=time.perf_counter_ns()
                 store.commit_block(f'replication-{outer_index}',_rows(stored,manifest,run['run_id']),arrays)
+                result['serialization_ns']=time.perf_counter_ns()-publication_start
                 outer_index+=1
                 if failures: break
             item={'level':level,'block_id':block,'sample_plan':to_json_record(plan),'update_check_schedule':ls['update_check_schedule'],'results':results}
@@ -565,7 +572,9 @@ def run_mode_pilot(config: RunConfig, output: Path) -> JsonRecord:
     for block in blocks:
         if failures or stopped: break
         local={**s,'config':{**s['config'],'sample_plan':block['sample_plan']},'update_check_schedule':block['update_check_schedule']}
+        analysis_start=time.perf_counter_ns()
         independent.append({'differences':analyze_results(block['results'],local,root)['differences']})
+        block['analysis_ns']=time.perf_counter_ns()-analysis_start
         if nested and reps>=2 and block['sample_plan']['tasks_per_replicate']>=2:
             rows=[{'outer_replication':r['outer_replication'],'difference':t['values']['baseline']['loss']-t['values']['joint']['loss']} for r in block['results'] for t in r['tasks'] if t['endpoint']=='primary']
             components.append(nested_variance_components(rows))
@@ -595,6 +604,10 @@ def run_mode_pilot(config: RunConfig, output: Path) -> JsonRecord:
     resources={'status':'feasible' if projection is not None and projection<=max_seconds and not stopped and _rss_bytes()<=budget else 'unresolved',
         'max_seconds':max_seconds,'estimated_total_seconds':projection,'available_memory_bytes':available,
         'memory_budget_bytes':budget,'peak_rss_bytes':_rss_bytes(),'measured_total_seconds':time.perf_counter()-started}
+    resources['execution_envelope']=measure_execution_envelope(values,blocks)
+    from .protocol import execution_overhead
+    resources['estimated_total_seconds']=(projection+execution_overhead(s,resources)['seconds']) if projection is not None else None
+    if resources['estimated_total_seconds'] is None or resources['estimated_total_seconds']>max_seconds: resources['status']='unresolved'
     result={'schema_version':1,'phase':'exploration','status':'failed' if failures else ('incomplete' if stopped else 'completed'),
         'run_path':str(store.path),'runtime_identity':runtime,'versions':versions,'dirty_diff_sha256':dirty,'excluded_roots':[root],
         'execution_blocks':blocks,'variance_components':components,'source_curve':source_curves,
@@ -612,3 +625,29 @@ def run_mode_pilot(config: RunConfig, output: Path) -> JsonRecord:
     (store.path/'pilot_report.md').write_text('Exploratory '+mode+'\n\n'+str(result['gate'])+'\n')
     store.finalize(result['status'])
     return result
+
+
+def measure_execution_envelope(results, blocks):
+    """Measured serialization sizes/times, with explicit fixed copy allowances."""
+    import json
+    import time
+    from .records import to_json_record
+    preparation=[]; tasks=[]; rates=[]; checkpoints=[]
+    for result in results:
+        prep=len(json.dumps(to_json_record({**result,'tasks':[]}),allow_nan=False).encode())
+        task_sizes=[4*len(json.dumps(to_json_record(task),allow_nan=False).encode()) for task in result.get('tasks',[])]
+        preparation.append(prep); tasks.extend(task_sizes)
+        elapsed=max(1,result.get('serialization_ns',1))/1e9
+        rates.append(elapsed/max(1,prep+sum(task_sizes))); checkpoints.append(elapsed)
+    # Measure the scalar reduction path even for analytic primary pilots.
+    started=time.perf_counter_ns()
+    for result in results:
+        float(np.mean([float(value.get('conditional_risk',0.)) if isinstance(value,dict) else float(value or 0.) for value in result.get('risks',{}).values()] or [0.]))
+    scalar=max(1,time.perf_counter_ns()-started)/1e9/max(1,len(results))
+    for block in blocks:
+        units=block['sample_plan']['tasks_per_replicate'] if block['sample_plan']['analysis_mode']=='fixed_prior_task_simulation' else len(block['results'])
+        scalar=max(scalar,block.get('analysis_ns',1)/1e9/max(1,units or 1))
+    return {'policy':'paired_chunks_v1','max_preparation_record_bytes':max(preparation,default=1),
+            'max_task_record_bytes':max(tasks,default=1),'serialization_seconds_per_byte':max(rates,default=1e-9),
+            'checkpoint_seconds':max(checkpoints,default=1e-9),'analysis_seconds_per_unit':scalar,
+            'qualification':'measured max sizes/costs; explicit 8x serialization-copy allowance and final scalar/journal bounds; live guards remain active'}

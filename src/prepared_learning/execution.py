@@ -160,7 +160,7 @@ def fixed_preparation(config):
     return prepared
 
 
-def execute_replication(config, scientific, root, outer, phases):
+def execute_replication(config, scientific, root, outer, phases, *, task_sink=None, preparation_sink=None, completed_tasks=None, resource_check=None):
     """Fit/select once, freeze every candidate, then evaluate prespecified tasks."""
     import time
     from .records import TaskKey, content_hash, to_json_record
@@ -168,6 +168,8 @@ def execute_replication(config, scientific, root, outer, phases):
     from .evaluation import conditional_risk, coefficient_loss
     mode=config.sample_plan.analysis_mode
     learned=mode in ('conditional_risk_over_preparations','nested_task_simulation')
+    check=resource_check or (lambda size=0:None)
+    check()
     start=time.perf_counter_ns()
     if learned:
         result,assets=preparation_replication(config,root,outer,phases['training_phase'],config.methods,
@@ -190,6 +192,21 @@ def execute_replication(config, scientific, root, outer, phases):
         result['frontier_result']=to_json_record(solve_frontier(prior,config.budget,config.preparation))
     # Freeze all state hashes before evaluator truth or test observations exist.
     snapshots={key:content_hash(state) for key,(_,state) in prepared.items()}
+    geometry={}; verification=[]
+    for row in result['candidate_records']:
+        captured=row.get('prepared_state',{}).get('solver_diagnostics') or row.get('preparation_diagnostics')
+        verification.extend(certificate_records(captured,row['candidate_id'],row['method_id'],outer))
+        if row.get('fit'):
+            fit=row['fit']; verification.extend(certificate_records({fit['branch']:fit},row['candidate_id'],row['method_id'],outer))
+    for key,(_,state) in prepared.items():
+        verification.extend(certificate_records(state.solver_diagnostics,'prepared:'+key,state.method_id,outer))
+        geometry[key]=geometry_record(state,key,outer)
+        if geometry[key] and geometry[key]['kernel_absolute_error']>1e-9*max(1.,geometry[key]['spectral_scale']): failures[key]='initialized tangent kernel differs from frozen metric'
+    if 'frontier_result' in result:
+        verification.extend(certificate_records(result['frontier_result'],'deterministic_frontier','frontier',outer))
+    result['prepared_resources']={key:{'method_id':state.method_id,'resources':to_json_record(state.resources),'information_access':state.prior.information_access,'prior_hash':state.prior.asset_hash,'metric_hash':content_hash(state.metric)} for key,(_,state) in prepared.items()}
+    result['verification_records']=verification
+    result['geometry_records']=[row for row in geometry.values() if row is not None]
     for key,(_,state) in prepared.items():
         if state.initial_layers is not None:
             from .geometry import effective_coefficient
@@ -222,6 +239,14 @@ def execute_replication(config, scientific, root, outer, phases):
                 failures[key]=str(exc)
     evaluation_ns=time.perf_counter_ns()-evaluation_start
     tasks=[]
+    result.update(outer_replication=outer,risks=risks,tasks=[],failures=failures,
+        frozen_state_hashes=snapshots,preparation_ns=preparation_ns,evaluation_ns=evaluation_ns,
+        task_generation_ns=0,task_ns=0,streamed_tasks=task_sink is not None,
+        truth_second_moment_hash=content_hash(population.second_moment),truth_noise_hash=content_hash(population.sigma2),
+        status='invalid' if failures else 'completed',
+        timing_records=[timing_record(list(prepared) or list(config.methods),time.perf_counter_ns()-start,stage='preparation_and_conditional_evaluation',outer=outer)])
+    check()
+    if preparation_sink is not None: preparation_sink(result,assets)
     schedules=[]
     if mode in ('fixed_prior_task_simulation','nested_task_simulation'):
         schedules.append(('primary',range(config.sample_plan.tasks_per_replicate),phases['test_phase']))
@@ -234,12 +259,17 @@ def execute_replication(config, scientific, root, outer, phases):
     task_start=time.perf_counter_ns(); task_generation_ns=0
     for endpoint,indices,phase in schedules:
         for task in indices:
+            if completed_tasks and task<completed_tasks.get(endpoint,0): continue
+            check()
             generation_start=time.perf_counter_ns()
             context,truth=generate_task(config,TaskKey(root,phase,outer,task,0))
             task_generation_ns+=time.perf_counter_ns()-generation_start
-            values,task_failures=evaluate_task(prepared,snapshots,context,truth,config)
+            values,task_failures=evaluate_task(prepared,snapshots,context,truth,config,resource_check=check,geometry=geometry)
             failures.update(task_failures)
-            tasks.append({'endpoint':endpoint,'outer_replication':outer,'task_id':task,'task_key':context.task_key,'values':values})
+            row={'endpoint':endpoint,'outer_replication':outer,'task_id':task,'task_key':context.task_key,'values':values,'status':'invalid' if task_failures else 'completed','wall_time_ns':time.perf_counter_ns()-generation_start}
+            if task_sink is None: tasks.append(row)
+            else: task_sink(row)
+            check()
             if failures: break
         if failures: break
     result.update(outer_replication=outer,risks=risks,tasks=tasks,failures=failures,
@@ -249,18 +279,24 @@ def execute_replication(config, scientific, root, outer, phases):
     return result,assets
 
 
-def evaluate_task(prepared, snapshots, context, truth, config):
+def evaluate_task(prepared, snapshots, context, truth, config, *, resource_check=None, geometry=None):
     """Evaluate one shared observation, retaining every method and failure."""
     import time
     from .records import content_hash
     from .evaluation import coefficient_loss
+    check=resource_check or (lambda size=0:None)
     values={}; failures={}
     for key,(method,state) in prepared.items():
+        check()
         try:
             if content_hash(state)!=snapshots[key]: raise ValueError('initializer changed between tasks')
             adapted,diagnostics=adapt_fresh(method,state,context)
             prediction_start=time.perf_counter_ns(); method.predict(adapted,context.X)
             diagnostics['prediction_ns']=time.perf_counter_ns()-prediction_start
+            if geometry and geometry.get(key) is not None:
+                diagnostics['geometry']={**geometry[key],
+                    'post_norm':sum(float(np.sum(a*a)) for a in adapted.layers) if adapted.layers is not None else None,
+                    'direct_step_error':diagnostics['literal_direct_step_error']}
             loss=coefficient_loss(adapted.coefficient,truth)
             direct_loss=None
             if state.metric is not None:
@@ -273,4 +309,89 @@ def evaluate_task(prepared, snapshots, context, truth, config):
             values[key]={'status':'completed','loss':loss,'direct_loss':direct_loss,'diagnostics':diagnostics}
         except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
             failures[key]=str(exc); values[key]={'status':'failed','loss':None,'failure_reason':str(exc)}
+            if geometry and geometry.get(key) is not None:
+                values[key]['diagnostics']={'geometry':{**geometry[key],'status':'failed','failure_reason':str(exc),
+                    'post_norm':None,'direct_step_error':None,'null_reasons':{**geometry[key]['null_reasons'],'post_norm':'adaptation failed','direct_step_error':'adaptation failed'}}}
     return values,failures
+
+
+class ExecutionResourceLimit(RuntimeError):
+    """Recoverable resource boundary; committed task prefixes remain replayable."""
+
+
+class ResourceBudget:
+    def __init__(self, memory_bytes, max_seconds):
+        import time
+        self.memory_bytes=memory_bytes; self.deadline=time.perf_counter()+max_seconds
+
+    def __call__(self, extra_bytes=0):
+        import time
+        from .pilot import _rss_bytes
+        if _rss_bytes()+extra_bytes>self.memory_bytes or time.perf_counter()>self.deadline:
+            raise ExecutionResourceLimit('memory reserve or runtime budget reached at a bounded checkpoint')
+
+
+def certificate_records(frontier, configuration_key, method_id, outer):
+    """Convert captured solver output; never solve while writing evidence."""
+    import scipy
+    from .records import to_json_record
+    if not frontier: return []
+    frontier=to_json_record(frontier); rows=[]
+    for branch in ('F','Z'):
+        if branch not in frontier: continue
+        value=frontier[branch]; diagnostics=value['diagnostics']
+        feasibility=diagnostics['feasibility']; kkt=diagnostics['kkt']; dual=diagnostics['dual']; rounding=diagnostics['roundoff']
+        row={'kind':'certificates','configuration_key':configuration_key,'method_id':method_id,'outer_replication':outer,
+            'branch':branch,'objective':value['objective'],'primal_upper':dual.get('primal'),
+            'dual_lower':dual.get('dual',dual.get('residual_lower_bound')),'primal_slack':feasibility.get('minimum_slack'),
+            'dual_feasibility':dual.get('minimum_multiplier'),'stationarity_residual':kkt.get('stationarity_inf'),
+            'complementarity_residual':kkt.get('complementarity_inf'),'solver_status':value['status'],
+            'solver_version':'scipy '+scipy.__version__,'solver_options':({'method':'SLSQP','ftol':1e-12,'maxiter':2000} if method_id.startswith('B11') else {'method':'SLSQP',**kkt.get('options',{'ftol':1e-14,'maxiter':2000}),'polish':'active-set diagonal QP'}),
+            'repair_size':kkt.get('repair_inf'),'certificate_level':'float64_diagnostic',
+            'roundoff_treatment':rounding.get('treatment','ordinary float64; no rigorous enclosure'),
+            'roundoff_enclosures':None,'claimed_risk_precision':None,'rational_numerators':None,'rational_denominators':None,
+            'status':'completed' if value['status']=='completed' else 'failed',
+            'failure_reason':None if value['status']=='completed' else kkt.get('solver_message','branch solver unresolved'),
+            'selection_status':frontier.get('selection_status'),'selected_branches':frontier.get('selected_branches'),
+            'full_diagnostics':diagnostics}
+        row['null_reasons']={key:'not supplied by this ordinary float64 diagnostic' for key,item in row.items() if item is None}
+        rows.append(row)
+    return rows
+
+
+def geometry_record(state, method_key, outer):
+    """Measure actual initialized layers and their tangent matrix once per state."""
+    from .records import content_hash, to_json_record
+    from .geometry import tangent_matrix, effective_coefficient
+    from .metrics import dense_metric, canonical_spectrum, relative_norm
+    if state.initial_layers is None or state.metric is None: return None
+    expected=dense_metric(state.metric); actual=tangent_matrix(state.initial_layers)
+    relative,status=relative_norm(actual-expected,expected)
+    floor,basis,gaps=canonical_spectrum(state.metric)
+    row={'kind':'geometry','outer_replication':outer,'method_id':method_key,
+        'target_hash':content_hash(state.metric),'realized_hash':content_hash(state.initial_layers),
+        'spectral_scale':float(np.max(np.abs(expected))), 'support_policy':state.metric.support_metadata.policy,
+        'minimum_eigenvalue':floor,'gamma':float(floor+np.sum(gaps)),
+        'initial_norm':sum(float(np.sum(a*a)) for a in state.initial_layers),'post_norm':None,
+        'actual_trainable_count':sum(a.size for a in state.initial_layers),'stored_scalars':state.resources.stored_scalars,
+        'serialized_bytes':state.resources.serialized_bytes,'null_residual':float(np.linalg.norm(effective_coefficient(state.initial_layers))),
+        'kernel_absolute_error':float(np.linalg.norm(actual-expected)),'kernel_relative_error':relative,
+        'kernel_relative_error_status':status,'direct_step_error':None,
+        'numerical_repairs':to_json_record(state.metric.support_metadata.projections+state.metric.support_metadata.truncations),
+        'verification_level':'float64_diagnostic','status':'completed','failure_reason':None,
+        'null_reasons':{'post_norm':'no task update at preparation checkpoint','direct_step_error':'no task update at preparation checkpoint','kernel_relative_error':'zero reference metric'}}
+    return row
+
+
+def timing_record(method_order, elapsed, *, stage, outer, tasks=1):
+    from .pilot import _rss_bytes
+    return {'kind':'timing_blocks','outer_replication':outer,'method_order':list(method_order),
+        'cold_warm':'cold' if outer==0 else 'warm','block_size':max(1,tasks),
+        'generation_boundary':'source observations or task context/noise generation',
+        'preparation_boundary':'source fitting, validation and all prepared candidate states',
+        'adaptation_boundary':'fresh literal update and direct control; geometry and coefficient evaluation included',
+        'prediction_boundary':'matrix-vector prediction, separately counted in task diagnostics',
+        'serialization_boundary':'immutable raw-block publication, separately timed by the driver',
+        'repetitions':1,'wall_time_ns':max(1,int(elapsed)),'peak_rss':_rss_bytes(),'peak_rss_unit':'bytes',
+        'power_thermal_condition':'unmeasured','timing_stratum':'CPU float64; '+stage,'gpu_metadata':None,
+        'null_reasons':{'gpu_metadata':'CPU execution'},'stage':stage}

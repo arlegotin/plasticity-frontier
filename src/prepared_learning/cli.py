@@ -46,7 +46,7 @@ def main(argv=None) -> int:
     learned = sub.add_parser('fit-priors'); learned.add_argument('--config', required=True); learned.set_defaults(handler=command_fit_priors)
     pilot = sub.add_parser('pilot'); pilot.add_argument('--config', required=True); pilot.add_argument('--output', default='runs/pilots'); pilot.set_defaults(handler=command_pilot)
     freeze = sub.add_parser('freeze'); freeze.add_argument('--protocol', required=True); freeze.add_argument('--output'); freeze.set_defaults(handler=command_freeze)
-    confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.set_defaults(handler=command_confirm)
+    confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.add_argument('--checkpoint-tasks',type=int,default=16); confirm.set_defaults(handler=command_confirm)
     analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
     args = parser.parse_args(argv); return args.handler(args)
 
@@ -316,7 +316,7 @@ def command_freeze(args: argparse.Namespace) -> int:
 def command_confirm(args: argparse.Namespace) -> int:
     from .confirmation import run_confirmation
     try:
-        result=run_confirmation(json.loads(Path(args.manifest).read_text()),Path(args.output),manifest_path=Path(args.manifest))
+        result=run_confirmation(json.loads(Path(args.manifest).read_text()),Path(args.output),manifest_path=Path(args.manifest),checkpoint_tasks=args.checkpoint_tasks)
         print(json.dumps(to_json_record(result),allow_nan=False))
         return 1 if result.code in ('IMPLEMENTATION_INVALID','LOCAL_RESOURCE_LIMIT') else 0
     except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:

@@ -44,7 +44,7 @@ def evidence_fixture(draft):
     scientific['versions']['git_commit'] = 'b'*40
     scientific['versions']['candidate_sha256'] = content_hash({'selectors':scientific['selectors'], 'fitting_candidates':scientific['config']['numerics']['fitting_candidates']})
     values = [-.02, -.01, .01, .02]*10
-    return {'schema_version':1, 'phase':'exploration','status':'completed','runtime_identity':runtime,
+    evidence={'schema_version':1, 'phase':'exploration','status':'completed','runtime_identity':runtime,
         'scientific_contract_sha256':content_hash({k:v for k,v in scientific.items() if k not in ('precision',)}),
         'blocks':[{'block_id':j,'differences':values,'source_keys':[f'{j}:{i}' for i in range(40*24)]} for j in range(2)],
         'tuning_resolution':'resolved', 'source_count_decision':{'status':'resolved','source_training_tasks':16,'source_validation_tasks':8,'source_block_size':4,'basis':'preparation_accuracy_and_cost','relative_error_target':.5},
@@ -54,6 +54,14 @@ def evidence_fixture(draft):
         'calibration':{'status':'adequate','procedure':'student','moment_basis':'bounded_constrained_fixed_maps','replicates':1000,'sample_size':400,'coverage':.952,'reference':'centered_empirical_pilot'},
         'resources':{'status':'feasible','preparation_seconds':.2,'max_seconds':200.,'replication_seconds':[.25]*80,'update_check_seconds':[.01]*80,'estimated_total_seconds':100.+.01*len(scientific['update_check_schedule']['outer_replications'])*scientific['update_check_schedule']['tasks_per_replication'],'peak_rss_bytes':1000,'available_memory_bytes':10000,'memory_budget_bytes':5000, 'scaling':[{'workload':'W1','preparation_seconds':.2,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}, {'workload':'W2','preparation_seconds':.3,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}]},
         'dirty_diff_sha256':None, 'excluded_roots':[42], 'versions': copy.deepcopy(scientific['versions'])}
+    resources=evidence['resources']
+    resources.update(available_memory_bytes=10**9,memory_budget_bytes=5*10**8,
+        execution_envelope={'policy':'paired_chunks_v1','max_preparation_record_bytes':1000,'max_task_record_bytes':500,
+            'serialization_seconds_per_byte':1e-9,'checkpoint_seconds':1e-6,'analysis_seconds_per_unit':1e-6})
+    from prepared_learning.protocol import execution_overhead
+    resources['estimated_total_seconds']+=execution_overhead(scientific,resources)['seconds']
+    return evidence
+
 
 
 class ProtocolTests(unittest.TestCase):

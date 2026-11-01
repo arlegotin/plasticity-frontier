@@ -38,10 +38,15 @@ def _live_identity(manifest, manifest_path=None):
         root=Path(__file__).resolve().parents[2]
         diff=subprocess.check_output(['git','diff','HEAD','--binary'],cwd=root)
         untracked=subprocess.check_output(['git','ls-files','--others','--exclude-standard','-z'],cwd=root).split(b'\0')
-        paths=[(root/path.decode()).resolve() for path in untracked if path]
-        allowed=Path(manifest_path).resolve() if manifest_path is not None else None
-        if diff or not paths or any(path!=allowed for path in paths):
+        import os
+        # Compare repository entries lexically: resolving aliases would admit a
+        # second untracked symlink to the allowed scientific input.
+        paths=[Path(os.path.abspath(root/os.fsdecode(path))) for path in untracked if path]
+        allowed=Path(os.path.abspath(manifest_path)) if manifest_path is not None else None
+        if diff or paths!=[allowed]:
             raise ValueError('uncommitted changes beyond the explicit frozen manifest')
+        if allowed.is_symlink() or not allowed.is_file():
+            raise ValueError('explicit manifest must be a regular file, not a symlink')
         if json.loads(allowed.read_text())!=manifest:
             raise ValueError('untracked frozen manifest content changed')
 
@@ -51,6 +56,9 @@ def _rows(result, manifest, run_id):
     reason='; '.join(result['failures'].values()) or None
     rows=[{'kind':'execution','outer_replication':result['outer_replication'],'result':result,
            'status':result['status'],'failure_reason':reason}]
+    rows.extend(result.get('verification_records',[]))
+    rows.extend(result.get('geometry_records',[]))
+    rows.extend(result.get('timing_records',[]))
     if p.analysis_mode=='conditional_risk_over_preparations':
         valid=not reason and all(role in result['risks'] for role in ('baseline','joint'))
         difference=result['risks']['baseline']['conditional_risk']-result['risks']['joint']['conditional_risk'] if valid else None
@@ -70,6 +78,11 @@ def _rows(result, manifest, run_id):
     for task in result['tasks']:
         # Distinct task IDs and RNG phases keep diagnostics outside primary inference.
         offset={'primary':0,'update_check':10**9,'secondary':2*10**9}[task['endpoint']]
+        for method_key,value in task['values'].items():
+            geometry=value.get('diagnostics',{}).get('geometry')
+            if geometry: rows.append({**geometry,'task_id':task['task_id']+offset,'task_key':task['task_key']})
+        from .execution import timing_record
+        rows.append(timing_record(task['values'] or ('baseline','joint'),task.get('wall_time_ns',1),stage='task_generation_update_prediction_evaluation',outer=result['outer_replication']))
         for role in ('baseline','joint'):
             value=task['values'].get(role,{'status':'failed','failure_reason':'missing paired procedure'})
             diagnostics=value.get('diagnostics',{})
@@ -85,12 +98,65 @@ def _rows(result, manifest, run_id):
     return rows
 
 
-def evaluate_replication(replication_id: int, manifest: JsonRecord, store: RunStore) -> JsonRecord:
-    """One atomic complete replication, including failed pairs and every candidate."""
+def evaluate_replication(replication_id: int, manifest: JsonRecord, store: RunStore, *, checkpoint_tasks=16, resource_check=None) -> JsonRecord:
+    """Freeze preparation once, then publish bounded atomic paired task chunks."""
+    check=resource_check or (lambda size=0:None)
     s=manifest['scientific']; c=config_from_record(s['config']); keys=manifest['protected_keys']
-    result,assets=execute_replication(c,s,keys['root_seed'],replication_id,keys)
-    run=json.loads((store.path/'run.json').read_text())
-    store.commit_block(f'replication-{replication_id}',_rows(result,manifest,run['run_id']),assets)
+    run=json.loads((store.path/'run.json').read_text()); committed=store.committed_keys()
+    completed={}; prior=None
+    for row in store.iter_records('execution',block_prefix=f'preparation-{replication_id:020d}'):
+        if row['outer_replication']==replication_id: prior=row['result']
+    for row in store.iter_records('execution_task',block_prefix=f'tasks-{replication_id:020d}-'):
+        check()
+        task=row['result']
+        if task['outer_replication']!=replication_id: continue
+        endpoint=task['endpoint']; index=completed.get(endpoint,0)
+        if task['task_id']!=index: raise ValueError('task checkpoint is not a contiguous prefix')
+        if row['status']!='completed': raise ValueError('failed task checkpoint cannot be silently retried')
+        completed[endpoint]=index+1
+    pending=[]; template=None
+    def publish(key,rows,assets):
+        # Budget JSON conversion, serialization bytes and validation copies before
+        # publication. Tasks are flushed early when a smaller chunk fits better.
+        size=len(json.dumps(to_json_record(rows),allow_nan=False).encode())
+        check(8*size+sum(array.nbytes for array in assets.values()))
+        publication_start=time.perf_counter_ns()
+        store.commit_block(key,rows,assets)
+        from .execution import timing_record
+        publication=timing_record(c.methods,time.perf_counter_ns()-publication_start,stage='serialization_and_checkpoint',outer=replication_id)
+        # The timing record is separate so its value can include the complete
+        # atomic serialization it describes. Missing ancillary timing after an
+        # interruption does not repeat a committed scientific task.
+        store.commit_block('timing-'+key,[publication],{})
+        check()
+    def preparation(result,assets):
+        nonlocal template
+        template=result
+        if prior is not None:
+            for field in ('frozen_state_hashes','source_keys','training_observation_hash','validation_observation_hash'):
+                if prior.get(field)!=result.get(field): raise ValueError('prepared checkpoint identity changed')
+        else:
+            publish(f'preparation-{replication_id:020d}',_rows(result,manifest,run['run_id']),assets)
+    def flush():
+        if not pending: return
+        rows=[]
+        for task in pending:
+            reason='; '.join(v.get('failure_reason','') for v in task['values'].values() if v['status']!='completed') or None
+            rows.append({'kind':'execution_task','outer_replication':replication_id,'result':task,'status':task['status'],'failure_reason':reason})
+            rows.extend(row for row in _rows({**template,'tasks':[task]},manifest,run['run_id']) if row['kind'] in ('task_metrics','geometry','timing_blocks') and (row['kind']=='task_metrics' or 'task_id' in row or row.get('stage')=='task_generation_update_prediction_evaluation'))
+        first=pending[0]
+        publish(f"tasks-{replication_id:020d}-{first['endpoint']}-{first['task_id']:020d}",rows,{})
+        pending.clear()
+    def task_sink(task):
+        if pending and pending[0]['endpoint']!=task['endpoint']: flush()
+        pending.append(task)
+        if len(pending)>=checkpoint_tasks or task['status']!='completed': flush()
+    result,assets=execute_replication(c,s,keys['root_seed'],replication_id,keys,
+        preparation_sink=preparation,task_sink=task_sink,completed_tasks=completed,resource_check=check)
+    flush()
+    completion={key:result[key] for key in ('outer_replication','status','failures','preparation_ns','evaluation_ns','task_ns','task_generation_ns')}
+    publish(f'replication-{replication_id}',[{'kind':'replication_completion','outer_replication':replication_id,
+        'result':completion,'status':result['status'],'failure_reason':'; '.join(result['failures'].values()) or None}],{})
     return result
 
 
@@ -159,14 +225,77 @@ def analyze_results(results, scientific, seed):
     return analysis
 
 
-def analyze_run(run_path: Path, manifest: JsonRecord, *, manifest_path=None) -> JsonRecord:
+def analyze_run(run_path: Path, manifest: JsonRecord, *, manifest_path=None, resource_check=None, _store=None) -> JsonRecord:
+    """Read bounded verified blocks; retain only endpoint-level scalar values."""
     _live_identity(manifest, manifest_path)
-    store=RunStore.open(Path(run_path),run_record(manifest))
+    from .execution import ResourceBudget
+    from .pilot import _available_memory
+    store=_store if _store is not None else RunStore.open(Path(run_path),run_record(manifest))
+    check=resource_check or ResourceBudget(_available_memory()*(1-manifest['operational']['reserve_memory_fraction']),manifest['evidence']['resources']['max_seconds'])
     run=json.loads((store.path/'run.json').read_text())
     if run['status'] not in ('running','completed'): raise ValueError('run stopped before a valid complete schedule')
-    results=[r['result'] for r in store.read_records('execution')]
-    return analyze_results(results,manifest['scientific'],manifest['protected_keys']['root_seed'])
-
+    s=manifest['scientific']; p=s['config']['sample_plan']; mode=p['analysis_mode']
+    j=p['outer_replicates'] or 1; n=p['tasks_per_replicate'] if mode=='fixed_prior_task_simulation' else j
+    check(16*n+32*j*len(s['secondary_family']['contrasts'])+250000)
+    values=np.lib.format.open_memmap(store.path/'analysis_differences.npy',mode='w+',dtype='float64',shape=(n,))
+    summaries=0; completed=set(); source_count=(p['source_training_tasks'] or 0)+(p['source_validation_tasks'] or 0)
+    for row in store.iter_records('replication_completion'):
+        check(); outer=row['outer_replication']
+        if outer in completed or not 0<=outer<j or row['status']!='completed': raise ValueError('invalid or duplicated replication completion')
+        completed.add(outer)
+    if len(completed)!=j: raise ValueError('incomplete frozen outer schedule')
+    for row in store.iter_records('execution'):
+        check(); result=row['result']; outer=result['outer_replication']
+        if outer!=summaries or row['status']!='completed' or result['failures']: raise ValueError('invalid prepared schedule')
+        if len(result['source_keys'])!=source_count: raise ValueError('source schedule differs from freeze')
+        if mode in ('conditional_risk_over_preparations','deterministic_frontier'):
+            values[outer]=result['risks']['baseline']['conditional_risk']-result['risks']['joint']['conditional_risk']
+        summaries+=1
+    if summaries!=j: raise ValueError('missing preparation checkpoint')
+    totals={'primary':0,'update_check':0,'secondary':0}; counts={}; sums={}; secondary={mid:[] for mid in s['secondary_family']['contrasts']}
+    current_outer=0
+    def finish_outer(outer):
+        expected={'primary':p['tasks_per_replicate'] if mode in ('fixed_prior_task_simulation','nested_task_simulation') else 0,
+                  'update_check':0,'secondary':0}
+        for endpoint,key in (('update_check','update_check_schedule'),('secondary','simulation_schedule')):
+            schedule=s.get(key,{'outer_replications':[]})
+            if outer in schedule['outer_replications']: expected[endpoint]=schedule['tasks_per_replication']
+        if any(counts.get(key,0)!=value for key,value in expected.items()): raise ValueError('task schedule differs from freeze')
+        if mode=='nested_task_simulation': values[outer]=sums['primary']/expected['primary']
+        for mid in secondary:
+            if expected['secondary']: secondary[mid].append(sums[mid]/expected['secondary'])
+    from .records import TaskKey
+    from .tasks import CONTEXT, NOISE
+    for row in store.iter_records('execution_task'):
+        check(); task=row['result']; outer=task['outer_replication']; endpoint=task['endpoint']; index=task['task_id']
+        while current_outer<outer:
+            finish_outer(current_outer); counts={}; sums={}; current_outer+=1
+        if outer!=current_outer or not 0<=outer<j or index!=counts.get(endpoint,0) or endpoint not in totals or row['status']!='completed': raise ValueError('invalid task checkpoint schedule')
+        phase=manifest['protected_keys']['test_phase']+{'primary':0,'update_check':100,'secondary':200}[endpoint]
+        expected_key=content_hash({'key':TaskKey(manifest['protected_keys']['root_seed'],phase,outer,index,0),'context_stream':CONTEXT,'noise_stream':NOISE})
+        if task['task_key']!=expected_key: raise ValueError('task key differs from frozen schedule')
+        for value in task['values'].values():
+            if value['status']!='completed': raise ValueError('failed task cannot be averaged away')
+        difference=task['values']['baseline']['loss']-task['values']['joint']['loss']
+        if mode=='fixed_prior_task_simulation' and endpoint=='primary': values[index]=difference
+        sums[endpoint]=sums.get(endpoint,0.)+difference
+        if endpoint=='secondary':
+            for mid in secondary: sums[mid]=sums.get(mid,0.)+task['values']['family:'+mid]['loss']-task['values']['joint']['loss']
+        counts[endpoint]=index+1; totals[endpoint]+=1
+    while current_outer<j:
+        finish_outer(current_outer); counts={}; sums={}; current_outer+=1
+    values.flush(); inference=s['inference']; seed=manifest['protected_keys']['root_seed']
+    if mode=='deterministic_frontier':
+        analysis={'mean':float(values[0]),'n':None,'interval':None,'coverage':None,'status':'deterministic','procedure':'inapplicable','numerical_level':'float64_diagnostic'}
+    else: analysis=paired_interval(values,inference['alpha'],inference['procedure'],seed,resource_check=check)
+    analysis.update(analysis_mode=mode,independent_unit='task' if mode=='fixed_prior_task_simulation' else ('source_preparation' if p['outer_replicates'] else None),
+        completed_outer_replications=j,primary_task_count=totals['primary'],update_check_count=totals['update_check'],secondary_task_count=totals['secondary'],
+        differences_artifact='analysis_differences.npy')
+    baseline=s['selectors']['baseline']; joint=s['selectors']['joint']
+    if len(baseline)==len(joint)==1 and (baseline[0]=='B05:'+joint[0] or joint[0]=='B05:'+baseline[0]):
+        analysis.update(interval=None,coverage=None,status='arithmetic_equality_diagnostic',comparison_kind='network_direct_equality_control')
+    analysis['secondary']={mid:paired_interval(data,.05,'descriptive_only',seed,resource_check=check) for mid,data in secondary.items()}
+    return analysis
 
 
 def _finish(store, evidence, status):
@@ -184,7 +313,8 @@ def _finish(store, evidence, status):
     (store.path/'gate_decision.json').write_text(json.dumps(to_json_record(decision),indent=2,allow_nan=False)+'\n')
     return decision
 
-def run_confirmation(manifest: JsonRecord, output: Path, *, manifest_path=None) -> GateDecision:
+def run_confirmation(manifest: JsonRecord, output: Path, *, manifest_path=None, checkpoint_tasks=16) -> GateDecision:
+    if type(checkpoint_tasks)!=int or not 1<=checkpoint_tasks<=1024: raise ValueError('checkpoint_tasks must be between 1 and 1024')
     manifest=json.loads(json.dumps(to_json_record(manifest),allow_nan=False))
     _live_identity(manifest, manifest_path)  # Before generating any observations or creating a run.
     run=run_record(manifest); path=Path(output)/run['run_id']
@@ -202,19 +332,32 @@ def run_confirmation(manifest: JsonRecord, output: Path, *, manifest_path=None) 
     from .pilot import _available_memory, _rss_bytes
     count=manifest['scientific']['config']['sample_plan']['outer_replicates'] or 1
     memory=_available_memory()*(1-manifest['operational']['reserve_memory_fraction'])
+    from .execution import ResourceBudget, ExecutionResourceLimit
     max_seconds=manifest['evidence']['resources']['max_seconds']; started=time.perf_counter()
+    budget=ResourceBudget(memory,max_seconds)
+    with (path/'checkpoint_policy.jsonl').open('a') as file:
+        file.write(json.dumps({'checkpoint_tasks':checkpoint_tasks,'scientific_counts':'unchanged'})+'\n')
     try:
-        committed=store.committed_keys()
-        for outer in range(count):
-            if f'replication-{outer}' in committed: continue
-            if _rss_bytes()>memory or time.perf_counter()-started>max_seconds:
-                return _finish(store,{'code':'LOCAL_RESOURCE_LIMIT','reason':'frozen validity/resource stop; no sample extension'},'incomplete')
-            result=evaluate_replication(outer,manifest,store)
-            if result['failures']:
-                return _finish(store,{'status':'invalid','failures':result['failures']},'invalid')
-        analysis=analyze_run(path,manifest,manifest_path=manifest_path)
-        (path/'analysis.json').write_text(json.dumps(analysis,indent=2,allow_nan=False)+'\n')
-        return _finish(store,analysis,'completed')
+        with store.append_session():
+            if 'execution_envelope' in manifest['evidence']['resources']:
+                from .protocol import execution_overhead
+                envelope=manifest['evidence']['resources']['execution_envelope']
+                bound=execution_overhead(manifest['scientific'],manifest['evidence']['resources'])['additional_peak_bytes']
+                budget(bound+max(0,checkpoint_tasks-16)*8*envelope['max_task_record_bytes'])
+            committed=store.committed_keys()
+            for outer in range(count):
+                if f'replication-{outer}' in committed: continue
+                budget()
+                result=evaluate_replication(outer,manifest,store,checkpoint_tasks=checkpoint_tasks,resource_check=budget)
+                if result['failures']:
+                    return _finish(store,{'status':'invalid','failures':result['failures']},'invalid')
+            analysis=analyze_run(path,manifest,manifest_path=manifest_path,resource_check=budget,_store=store)
+            (path/'analysis.json').write_text(json.dumps(analysis,indent=2,allow_nan=False)+'\n')
+            return _finish(store,analysis,'completed')
+    except ExecutionResourceLimit as exc:
+        decision=classify_gate({'code':'LOCAL_RESOURCE_LIMIT','run_path':str(path),'reason':str(exc),'recovery':'resume identical manifest; only checkpoint size may change'})
+        (path/'resource_stop.json').write_text(json.dumps(to_json_record(decision),indent=2)+'\n')
+        return decision
     except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
         return _finish(store,{'status':'invalid','reason':str(exc)},'invalid')
     # Process interruption leaves running metadata and only committed pairs;
