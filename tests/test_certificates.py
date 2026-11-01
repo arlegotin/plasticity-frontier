@@ -12,10 +12,18 @@ class Certificates(unittest.TestCase):
    self.assertTrue(result['verified']); self.assertEqual(F(*result['primal']),ex.frac(case[branch]['risk']))
    self.assertEqual(F(*result['dual']),ex.frac(case[branch]['risk']))
    self.assertEqual(F(*result['multipliers'][3]),ex.frac(case[branch]['multiplier']))
+   self.assertTrue(all(F(*v)==0 for v in result['stationarity']))
+   self.assertTrue(all(F(*v)>=0 for v in result['slack']+result['multipliers']))
+   self.assertTrue(all(F(*a)*F(*b)==0 for a,b in zip(result['slack'],result['multipliers'])))
  def test_false_active_set_and_multiplier_rejected(self):
   case=ex.load_exact_cases(__import__('pathlib').Path('tests/fixtures/exact_cases.json'))['primary_richer_k_3_5']
   qp=ex.primary_rational_qp(case,'F')
   self.assertFalse(ex.verify_rational_kkt(qp,(0,))['verified'])
+  qp['offset'][3]=[-3,5]
+  self.assertFalse(ex.verify_rational_kkt(qp,(3,))['verified'])
+  negative={'constant':[0,1],'linear':[[0,1]],'hessian':[[[1,1]]],'A':[[[-1,1]]],'offset':[[1,1]]}
+  result=ex.verify_rational_kkt(negative,(0,))
+  self.assertFalse(result['verified']); self.assertLess(F(*result['multipliers'][0]),0)
  def test_singular_empirical_bound(self):
   from prepared_learning.certificates import empirical_residual_bound
   qp=QPData(1.,np.array([-2.,-2.]),np.ones((2,2)),np.array([[1.,0.],[0.,1.],[-1.,-1.]]),np.array([0.,0.,1.]))

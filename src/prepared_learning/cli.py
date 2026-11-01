@@ -191,16 +191,20 @@ def command_frontier(args: argparse.Namespace) -> int:
             rows=evaluate_frontier_grid(prior,budget,task,grid['widths'],grid['norm_caps'],grid['risk_tolerance'],grid['budget_tolerance'])
             output=Path(grid.get('output','runs/frontier')); output.mkdir(parents=True,exist_ok=True)
             attempt=Path(tempfile.mkdtemp(prefix='attempt-',dir=output))
-            (attempt/'frontier.json').write_text(json.dumps(rows,indent=2,allow_nan=False)+'\n')
+            metadata={'widths':grid['widths'],'norm_caps':grid['norm_caps'],'risk_tolerance':grid['risk_tolerance'],'budget_tolerance':grid['budget_tolerance'],'certificate_level':'float64_diagnostic','qualification':'sampled interpolation diagnostics are not rigorous enclosures'}
+            (attempt/'frontier.json').write_text(json.dumps({'metadata':metadata,'records':rows},indent=2,allow_nan=False)+'\n')
             with (attempt/'frontier.csv').open('w',newline='') as stream:
-                writer=csv.DictWriter(stream,fieldnames=['width','norm_cap','branch','objective','branch_status','selection_status','selected_branches','trainable_parameters','initialization_norm','diagnostics'])
+                writer=csv.DictWriter(stream,fieldnames=['width','norm_cap','point_status','error','branch','objective','branch_status','selection_status','selected_branches','trainable_parameters','initialization_norm','diagnostics'])
                 writer.writeheader()
                 for row in rows:
                     if row['kind']!='point': continue
+                    if row['F'] is None:
+                        writer.writerow({'width':row['width'],'norm_cap':row['norm_cap'],'point_status':'failed','error':row['error'],'selection_status':row['selection_status']}); continue
                     for branch in ('F','Z'):
                         item=row[branch]; res=item['actual_resources']
-                        writer.writerow({'width':row['width'],'norm_cap':row['norm_cap'],'branch':branch,'objective':item['objective'],'branch_status':item['status'],'selection_status':row['selection_status'],'selected_branches':json.dumps(row['selected_branches']),'trainable_parameters':res['trainable_parameters'],'initialization_norm':res['initialization_norm'],'diagnostics':json.dumps(item['diagnostics'],allow_nan=False)})
-            print(json.dumps({'status':'pass','attempt_path':str(attempt),'points':sum(r['kind']=='point' for r in rows),'unresolved_intervals':sum(r['kind']=='interval' for r in rows),'certificate_level':'float64_diagnostic','qualification':'sampled interpolation diagnostics are not rigorous enclosures'})); return 0
+                        writer.writerow({'width':row['width'],'norm_cap':row['norm_cap'],'point_status':row['status'],'error':row.get('error',''),'branch':branch,'objective':item['objective'],'branch_status':item['status'],'selection_status':row['selection_status'],'selected_branches':json.dumps(row['selected_branches']),'trainable_parameters':res['trainable_parameters'],'initialization_norm':res['initialization_norm'],'diagnostics':json.dumps(item['diagnostics'],allow_nan=False)})
+            failed=sum(r['kind']=='point' and r['status']=='failed' for r in rows)
+            print(json.dumps({'status':'incomplete' if failed else 'pass','attempt_path':str(attempt),'points':sum(r['kind']=='point' for r in rows),'failed_points':failed,'unresolved_intervals':sum(r['kind']=='interval' for r in rows),'certificate_level':'float64_diagnostic','qualification':'sampled interpolation diagnostics are not rigorous enclosures'})); return 1 if failed else 0
         frontier=solve_frontier(prior,budget,task)
         result=to_json_record(frontier)
         for branch in ('F','Z'):
