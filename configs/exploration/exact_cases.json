@@ -1,5 +1,6 @@
 {
   "schema_version": 1,
+  "exact_fixture_path": "tests/fixtures/exact_cases.json",
   "budget": {
     "depth": 2,
     "initialization_norm_cap": 0.6,
