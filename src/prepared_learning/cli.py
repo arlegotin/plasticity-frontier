@@ -11,6 +11,8 @@ def command_doctor(args: argparse.Namespace) -> int:
         result = discover_environment(output)
         archive = Path('docs/prepared_learning_research_bundle.zip'); snapshot = Path('source_bundle')
         source_status = 'optional source archive absent'
+        if not archive.exists() and snapshot.exists():
+            raise ValueError('cannot verify existing snapshot without its source archive')
         if archive.exists():
             frozen = json.loads(Path('source_manifest.json').read_text())
             manifest = stage_source_bundle(archive, snapshot, frozen)

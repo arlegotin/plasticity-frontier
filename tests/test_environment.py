@@ -74,5 +74,8 @@ class EnvironmentTests(unittest.TestCase):
                     self.assertEqual(main(['doctor', '--output', 'run']), 1)
                 decision = json.loads((root/'run/gate_decision.json').read_text())
                 self.assertEqual(decision['code'], 'IMPLEMENTATION_INVALID')
+                (root/'docs/prepared_learning_research_bundle.zip').unlink()
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(main(['doctor', '--output', 'run']), 1)
             finally:
                 os.chdir(previous)
