@@ -293,11 +293,22 @@ def run_block(request, *, clock=time.perf_counter_ns, upstream=None, in_process=
         rows.append(row)
     state=cold['state']; runtime=_runtime_payload(state); inventory=storage_inventory(runtime)
     evidence={'solver_diagnostics':state.solver_diagnostics,'prior_fit_metadata':state.prior.fit_metadata,'selection':cold['asset'][2]}
-    full_resident=storage_inventory({'state':state,'method':cold['method'].options,'target':cold['target_state'],
-                                     'selection':cold['asset'][2],'inputs':cold['data'],'adapted':cold['adapted']})
+    # Inventory every retained operation field, including independent prediction
+    # arrays and original selected options that metric reuse may have copied.
+    # Method objects are projected to their actual data; the byte payload is
+    # counted separately because it is already serialized, rather than JSON data.
+    retained=dict(cold)
+    for name in ('method','target_method'):
+        retained[name]={'method_id':cold[name].method_id,'options':cold[name].options}
+    selected_method,selected_prior,selection=cold['asset']
+    retained['asset']={'method_id':selected_method.method_id,'options':selected_method.options,
+                       'prior':selected_prior,'selection':selection}
+    payload=retained.pop('payload')
+    full_resident=storage_inventory(retained)
+    full_resident['retained_serialized_payload_bytes']=len(payload)
     resource_row={'method_id':mid,'initialization_norm':state.resources.initialization_norm,'trainable_parameters':state.resources.trainable_parameters,
         'runtime_stored_scalars':inventory['array_scalars']+inventory['scalar_values'],'runtime_serialized_bytes':inventory['serialized_bytes'],
-        'runtime_storage':inventory,'resident_inventory':full_resident,'resident_inventory_scope':'retained inputs/evaluator truth, selected state/evidence and optional raw audit state; distinct from pre-audit optimized peak',
+        'runtime_storage':inventory,'resident_inventory':full_resident,'resident_inventory_scope':'all retained operation arrays/numeric fields, including inputs/evaluator truth, selected options/state/evidence, predictions and optional raw audit state; serialized byte payload counted separately; Python/container overhead only in RSS; distinct from pre-audit optimized peak',
         'frozen_prior_storage':storage_inventory(state.prior),'adapted_storage':storage_inventory(cold['adapted']),
         'evidence_serialized_bytes':len(_json_bytes(evidence)),'evidence_bytes_are_additional':True,'evidence_contains_candidate_runtime_snapshots':True,
         'evidence_storage':storage_inventory(evidence),'serialized_payload_bytes':len(cold['payload']),

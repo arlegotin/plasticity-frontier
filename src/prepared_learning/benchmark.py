@@ -195,7 +195,7 @@ def _interval(values, confidence=.95):
     return {'mean':mean,'low':mean-radius,'high':mean+radius,'standard_deviation':sd,'blocks':len(values)}
 
 
-def comparison_table(rows, resources, *, gate, confidence=.95, risk_tolerance=1e-10):
+def comparison_table(rows, resources, *, gate, confidence=.95, risk_tolerance=1e-10, phase='exploratory'):
     """Conservative scoped Pareto relation using paired timing and risk intervals.
 
     Peak RSS/storage comparisons are measured descriptive maxima, not memory
@@ -236,7 +236,7 @@ def comparison_table(rows, resources, *, gate, confidence=.95, risk_tolerance=1e
     return {'rows':pairs,'confidence':confidence,'pair_interval_confidence':adjusted,
             'uncertainty':'Bonferroni Student-t paired block/task diagnostics; repeated timings do not add risk samples',
             'memory_scope':'maximum measured process RSS; interpreter/imports/input and evidence included, not incremental workspace',
-            'scope':'fixed selected assets and generated population, this CPU/dtype/thread/thermal condition; exploratory only'}
+            'scope':'fixed selected assets and generated population, this CPU/dtype/thread/thermal condition; '+('finalized operational campaign' if phase=='finalized' else 'exploratory calibration')}
 
 
 
@@ -437,7 +437,7 @@ def benchmark_methods(methods: Sequence[Method], contexts: Sequence[Context], co
     gate={'status':'pass' if risk_available and all(r['equality_status']=='pass' for r in resources) and clock is None and upstream is None else 'unavailable',
           'missing_recommended_controls':missing,'reason':'measured risk and executable equality checks required; full practical claim also requires ridge and EB controls',
           'literal_network_equality':equality}
-    pareto=comparison_table(rows,resources,gate=gate)
+    pareto=comparison_table(rows,resources,gate=gate,phase='finalized' if campaign else 'exploratory')
     dominates=[r for r in pareto['rows'] if r['status']=='scoped_domination']
     decision={'status':'scoped_measured_domination' if dominates and not missing else ('measured_tradeoff_or_unresolved' if gate['status']=='pass' else 'inconclusive'),
               'gate':'G9_measured_comparison' if campaign else 'G9_not_established','reason':'fixed operational campaign on recorded selected assets; conditional practical scope' if campaign else 'exploratory calibration; no finalized production schedule or protected practical claim',
@@ -450,7 +450,7 @@ def benchmark_methods(methods: Sequence[Method], contexts: Sequence[Context], co
                           'limit_policy':'soft pressure threshold reduces batching/checkpoint cadence only; a single indivisible source fit may exceed the reserve'},
             'schedule':{'requested_blocks':clean.get('blocks',6),'balanced_blocks':len(orders),'orders':orders},
             'prior_cost':{'status':'measured' if generated or upstream else 'unavailable','reason':'actual per-method source fitting/held-out selection' if generated else ('caller callable; provenance unverified' if upstream else 'supplied resident assets')},
-            'context_generation':{'status':'measured' if generated else 'unavailable','elapsed_ns':sum(r['generation_ns'] or 0 for r in rows)},
+            'context_generation':{'status':'measured' if generated else 'unavailable','elapsed_ns':sum(sample['generation_ns'] or 0 for row in rows for sample in row['repetition_samples'])},
             'energy':{'status':'not_run','joules':None,'reason':'no validated measurement; weight norm and elapsed time are not energy'},
             'accelerator':{'status':'not_run','reason':'CPU float64 core'},
             'timing_scope':{'end_to_end':'generation + exact selected source fitting + prepare + optimized adapt + predict + runtime serialization in one enclosing clock; unavailable for resident inputs',

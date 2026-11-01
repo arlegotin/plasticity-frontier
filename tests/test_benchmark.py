@@ -1,3 +1,5 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -88,7 +90,10 @@ class BenchmarkTests(unittest.TestCase):
                         'pilot_blocks': 2, 'blocks': 2, 'max_repetitions': 2,
                         'output': tmp, 'measure_memory': False}
             path = Path(tmp)/'manifest.json'; path.write_text(json.dumps(manifest))
-            self.assertEqual(main(['benchmark', '--manifest', str(path)]), 0)
+            stdout=io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(main(['benchmark', '--manifest', str(path)]), 0)
+            self.assertEqual(json.loads(stdout.getvalue()),{'status':'exploratory','output':tmp})
             result = json.loads((Path(tmp)/'benchmark.json').read_text())
             self.assertEqual(result['equality'][0]['status'], 'pass')
             self.assertGreaterEqual(result['context_generation']['elapsed_ns'], 0)
@@ -148,7 +153,10 @@ class IntegrationBenchmarkTests(unittest.TestCase):
                         'memory_limit_bytes':1, 'batch_size':4, 'checkpoint_tasks':4,
                         'output':tmp, 'threads':1}
             path=Path(tmp)/'manifest.json'; path.write_text(json.dumps(manifest))
-            self.assertEqual(main(['benchmark','--manifest',str(path)]),0)
+            stdout=io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(main(['benchmark','--manifest',str(path)]),0)
+            self.assertEqual(json.loads(stdout.getvalue()),{'status':'exploratory','output':tmp})
             result=json.loads((Path(tmp)/'benchmark.json').read_text())
             self.assertEqual({r['cold_warm'] for r in result['timing_blocks']},{'cold','warm'})
             self.assertTrue(all(r['end_to_end_ns'] is not None for r in result['timing_blocks']))
@@ -309,9 +317,15 @@ class IntegrationBenchmarkTests(unittest.TestCase):
                       'fitting_candidates':{'scalar_fractions':[2.],'max_refinement_rounds':0},
                       'pilot_blocks':1,'blocks':1,'max_repetitions':1,'output':str(Path(tmp)/'result')}
             path=Path(tmp)/'manifest.json'; path.write_text(json.dumps(manifest))
-            self.assertEqual(main(['benchmark','--manifest',str(path)]),1)
+            stdout=io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                self.assertEqual(main(['benchmark','--manifest',str(path)]),1)
+            cli_result=json.loads(stdout.getvalue())
+            self.assertEqual(cli_result['status'],'failed')
+            self.assertIn('source selection failed',cli_result['error'])
             failures=list((Path(tmp)/'result'/'requests').glob('*.failure.json'))
             self.assertEqual(len(failures),1)
+            self.assertIn(str(failures[0]),cli_result['error'])
             details=json.loads(failures[0].read_text())['details']
             self.assertTrue(details['candidate_records'])
             self.assertTrue(all(r['status']=='failed' for r in details['candidate_records']))
@@ -367,3 +381,69 @@ class IntegrationBenchmarkTests(unittest.TestCase):
             with patch.object(b.subprocess,'check_output',return_value=b'tracked change'):
                 with self.assertRaisesRegex(ValueError,'uncommitted'):
                     b._allow_manifest_only(identity,manifest,path)
+
+    def test_resident_inventory_includes_retained_prediction_arrays(self):
+        import prepared_learning._benchmark_worker as w
+        from prepared_learning.records import to_json_record
+        request={'workflow':'conditional','inputs':to_json_record({'prior':self.prior,'budget':self.budget,'preparation':self.preparation,'contexts':self.contexts}),
+                 'method':{'method_id':'B01','options':{}},'methods':[{'method_id':'B01','options':{}}],
+                 'settings':{'batch_size':1,'fixed_repetitions':1},'block':0,'method_order':['B01']}
+        result=w.run_block(request)
+        # Prior 80 + metric 48 + layers 24 + context 48 + coefficient 16
+        # + independently allocated two-query prediction 16 = 232 bytes.
+        self.assertEqual(result['resource']['resident_inventory']['array_bytes'],232)
+        self.assertEqual(result['resource']['resident_inventory']['array_scalars'],29)
+
+    def test_resident_inventory_covers_retained_source_selected_method_options(self):
+        from unittest.mock import patch
+        from collections.abc import Mapping
+        from dataclasses import fields, is_dataclass
+        import prepared_learning._benchmark_worker as w
+        request={'workflow':'generated','inputs':{'manifest':{'dimension':2,'context_size':2,'seed':5,'methods':['B01'],
+                 'source_training_tasks':2,'source_validation_tasks':2,'fitting_candidates':{'scalar_fractions':[.5],'max_refinement_rounds':0}}},
+                 'method':{'method_id':'B01','options':{}},'methods':[{'method_id':'B01','options':{}}],
+                 'settings':{'batch_size':1,'fixed_repetitions':1},'block':0,'method_order':['B01']}
+        retained=[]; real_operation=w.operation
+        def capture(*args,**kwargs):
+            value=real_operation(*args,**kwargs)
+            if not retained: retained.append(value)
+            return value
+        with patch.object(w,'operation',side_effect=capture): result=w.run_block(request)
+        # Independent enumeration of live arrays, including Method objects;
+        # these fixture arrays are full contiguous allocations or exact aliases.
+        allocations={}
+        def collect(value):
+            if isinstance(value,np.ndarray): allocations[(value.__array_interface__['data'][0],value.nbytes)]=value.nbytes
+            elif is_dataclass(value):
+                for field in fields(value): collect(getattr(value,field.name))
+            elif isinstance(value,Mapping):
+                for child in value.values(): collect(child)
+            elif isinstance(value,(list,tuple)):
+                for child in value: collect(child)
+            elif hasattr(value,'options'): collect(value.options)
+        collect(retained[0])
+        self.assertEqual(result['resource']['resident_inventory']['array_bytes'],sum(allocations.values()))
+        self.assertEqual(result['resource']['serialized_payload_bytes'],len(retained[0]['payload']))
+        self.assertEqual(result['resource']['resident_inventory']['retained_serialized_payload_bytes'],len(retained[0]['payload']))
+
+    def test_generation_summary_totals_all_measured_repetitions(self):
+        class Clock:
+            t=0
+            def __call__(self): self.t+=10; return self.t
+        config={'schema_version':1,'workflow':'generated','phase':'exploratory','dimension':2,'context_size':2,'seed':5,
+                'methods':['B01'],'source_training_tasks':2,'source_validation_tasks':2,
+                'fitting_candidates':{'scalar_fractions':[.5],'max_refinement_rounds':0},
+                'clock':Clock(),'pilot_blocks':1,'blocks':1,'max_repetitions':3,'target_block_ns':10000}
+        with tempfile.TemporaryDirectory() as tmp:
+            result=benchmark_methods([make_method('B01',{})],[],config,Path(tmp))
+        self.assertEqual(result['timing_blocks'][0]['repetitions'],3)
+        self.assertEqual(result['timing_blocks'][0]['generation_ns'],50)
+        self.assertEqual(result['context_generation']['elapsed_ns'],150)
+
+    def test_pareto_scope_distinguishes_calibration_and_finalized_phase(self):
+        from prepared_learning.benchmark import comparison_table
+        calibration=comparison_table([],[],gate={'status':'unavailable'})
+        self.assertIn('exploratory calibration',calibration['scope'])
+        finalized=comparison_table([],[],gate={'status':'unavailable'},phase='finalized')
+        self.assertIn('finalized operational campaign',finalized['scope'])
+        self.assertNotIn('exploratory',finalized['scope'])
