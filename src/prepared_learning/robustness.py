@@ -145,6 +145,43 @@ def _branch(branch, prior, budget, task):
             'metric':to_json_record(branch.metric), 'diagnostics':to_json_record(branch.diagnostics)}
 
 
+def _network_accounting(realization, budget):
+    """Account for the concrete canonical layers against the unchanged base caps."""
+    resources = realization.resources
+    actual_norm = resources.initialization_norm
+    norm_cap = budget.initialization_norm_cap
+    # Constructor accumulation is float64. Report its slack and tolerance,
+    # without declaring a roundoff-sized excess a genuine cap violation.
+    tolerance = 64*np.finfo(float).eps*max(abs(actual_norm), abs(norm_cap), np.finfo(float).tiny)
+    norm_ok = actual_norm <= norm_cap+tolerance
+    count_ok = resources.trainable_parameters <= budget.trainable_parameter_cap
+    depth_ok = len(realization.layers) == budget.depth
+    return {'depth':len(realization.layers), 'resources':to_json_record(resources),
+            'cap_eligibility':{'parameter_cap':budget.trainable_parameter_cap,
+                               'initialization_norm_cap':norm_cap, 'required_depth':budget.depth,
+                               'parameter_cap_eligible':count_ok, 'norm_cap_eligible':norm_ok,
+                               'depth_matches':depth_ok, 'eligible':count_ok and norm_ok and depth_ok,
+                               'norm_slack':norm_cap-actual_norm, 'norm_roundoff_tolerance':tolerance}}
+
+
+def _executed_frontier_accounting(frontier, budget, source_hash):
+    result = {'depth':budget.depth, 'source_population_hash':source_hash,
+              'selection_status':frontier.selection_status, 'selected_branches':frontier.selected_branches,
+              'information_access':'oracle source covariance', 'noise_access':'known and shared'}
+    for branch in (frontier.F, frontier.Z):
+        metric = branch.metric
+        result[branch.branch] = {
+            **_network_accounting(construct_canonical(metric, budget.depth), budget),
+            'resource_interpretation':'canonical realization of the executed compact map; direct execution counted separately',
+            'metric':to_json_record(metric), 'solver_status':branch.status,
+            'source_objective':branch.objective, 'diagnostics':to_json_record(branch.diagnostics),
+            'direct_execution_resources':{'initialization_norm':None, 'trainable_parameters':None,
+                'stored_scalars':metric.basis.size+metric.increments.size+1,
+                'serialized_bytes':metric.basis.nbytes+metric.increments.nbytes+8},
+            'direct_execution_note':'fixed compact map; no trainable network is allocated in the sampled-loss path'}
+    return result
+
+
 def _rotate(rng, d):
     q, r = np.linalg.qr(rng.normal(size=(d,d)))
     return q*np.where(np.diag(r)<0, -1., 1.)
@@ -194,6 +231,7 @@ def _sample_boundary(name, prior, budget, task, frontier, rng):
         losses.append([float(e@e) for e in errors]); prediction.append([float(e@input_cov@e) for e in errors])
     differences = np.array(losses)[:,1]-np.array(losses)[:,0]
     return {'source_population':source,'test_population':test, 'input_law':law,'student_df':df,
+            'executed_intervention':_executed_frontier_accounting(frontier, budget, source['hash']),
             'moment_status':'infinite_fourth_moment' if df == 3 else 'finite_eighth_moment' if df == 10 else 'gaussian_moments',
             'risk_evaluator':'sampled_coefficient_and_prediction_loss','losses_F_Z':losses,
             'prediction_losses_F_Z':prediction,'signed_differences':differences,
@@ -363,10 +401,23 @@ def diagnose_arm(config):
                     outcomes.append({'gain_scale':scale,'dtype':np.dtype(dtype).name,'status':'sensitivity_failure','reason':str(exc)})
         out.update(outcomes=outcomes,interpretation='numerical support/precision boundary; not a theorem counterexample')
     elif name == 'second_step':
-        deep=construct_canonical(F.metric,max(3,budget.depth)).layers
+        realization=construct_canonical(F.metric,max(3,budget.depth))
+        deep=realization.layers
         first,_=literal_step(deep,X,y); second,gradients=literal_step(first,X,y)
         w1=effective_coefficient(first); g1=X.T@(X@w1-y)/n
-        recurrence=w1-tangent_matrix(deep)@g1
+        initial_tangent=tangent_matrix(deep)
+        recurrence=w1-initial_tangent@g1
+        out['executed_intervention']={
+            **_network_accounting(realization,budget), 'initial_layers':deep,
+            'metric':to_json_record(F.metric), 'solver_status':F.status,
+            'resource_interpretation':'literal network at diagnostic depth; eligibility is against the original base architecture and caps',
+            'controls':{
+                'base_canonical':{**_network_accounting(construct_canonical(F.metric,budget.depth),budget),
+                                  'metric':to_json_record(F.metric)},
+                'fixed_metric_recurrence':{'metric':to_json_record(F.metric), 'executed_matrix':initial_tangent,
+                    'resources':{'initialization_norm':None, 'trainable_parameters':None,
+                                 'stored_scalars':initial_tangent.size, 'serialized_bytes':initial_tangent.nbytes},
+                    'resource_interpretation':'direct recurrence using the realized initial tangent; no trainable network'}}}
         out.update(X=X,y=y,first_layers=first,second_gradients=gradients,second_coefficient=effective_coefficient(second),
                    fixed_metric_coefficient=recurrence,fixed_metric_disagreement=float(np.linalg.norm(effective_coefficient(second)-recurrence)))
     elif name == 'noncanonical':

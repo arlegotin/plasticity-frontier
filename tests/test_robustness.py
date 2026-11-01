@@ -1,6 +1,8 @@
 """Behavioral regressions for exploratory attribution and assumption boundaries."""
 import importlib.util
 import json
+import io
+from contextlib import redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 import tempfile
@@ -52,6 +54,67 @@ class RobustnessTests(unittest.TestCase):
             self.assertGreater(len(row['signed_differences']), 0)
         self.assertEqual(self.arm('leakage')['test_population']['leakage_mass'], .2)
         self.assertGreater(np.linalg.norm(self.arm('mean_shift')['test_population']['mean']), 0)
+
+    def test_shift_reports_executed_frontier_resources_separately(self):
+        for name in ('prior_rotation', 'leakage'):
+            with self.subTest(arm=name):
+                row = self.arm(name)
+                self.assertIn('executed_intervention', row)
+                executed = row['executed_intervention']
+                self.assertEqual(executed['depth'], 2)
+                self.assertIn(executed['selection_status'], ('selected','unresolved'))
+                self.assertTrue(executed['selected_branches'])
+                self.assertEqual([executed[b]['resources']['trainable_parameters'] for b in ('F','Z')], [21,14])
+                for branch, count in (('F',21), ('Z',14)):
+                    method = executed[branch]
+                    self.assertEqual(method['solver_status'], 'completed')
+                    self.assertIn('metric', method)
+                    self.assertIn('diagnostics', method)
+                    self.assertAlmostEqual(method['resources']['initialization_norm'], .6)
+                    self.assertEqual(method['resources']['stored_scalars'], count)
+                    self.assertEqual(method['resources']['serialized_bytes'], 8*count)
+                    self.assertTrue(method['cap_eligibility']['eligible'])
+                    self.assertEqual(method['cap_eligibility']['parameter_cap'], 21)
+                    self.assertEqual(method['cap_eligibility']['initialization_norm_cap'], .6)
+                    # Sampled adaptation executes the compact map, whose direct
+                    # resource counts must not masquerade as trainable layers.
+                    direct = method['direct_execution_resources']
+                    self.assertIsNone(direct['trainable_parameters'])
+                    self.assertIsNone(direct['initialization_norm'])
+                    self.assertGreater(direct['stored_scalars'], 0)
+                reference = row['matched_reference']
+                self.assertEqual([reference[b+'_actual_resources']['trainable_parameters'] for b in ('F','Z')], [21,21])
+                z = executed['Z']['metric']
+                matrix = z['floor']*np.eye(6)+(np.array(z['basis'])*z['increments'])@np.array(z['basis']).T
+                self.assertEqual(np.count_nonzero(np.linalg.eigvalsh(matrix)>1e-12), 2)
+
+    def test_second_step_reports_changed_depth_resources_and_controls(self):
+        row = self.arm('second_step')
+        self.assertIn('executed_intervention', row)
+        executed = row['executed_intervention']
+        self.assertEqual(executed['depth'], 3)
+        resources = executed['resources']
+        self.assertEqual(resources['trainable_parameters'], 22)
+        self.assertEqual(resources['stored_scalars'], 22)
+        self.assertEqual(resources['serialized_bytes'], 176)
+        self.assertAlmostEqual(resources['initialization_norm'], 2*np.sqrt(.6))
+        self.assertEqual(len(executed['initial_layers']), 3)
+        caps = executed['cap_eligibility']
+        for field in ('eligible','parameter_cap_eligible','norm_cap_eligible','depth_matches'):
+            self.assertFalse(caps[field])
+        self.assertEqual(caps['parameter_cap'], 21)
+        self.assertEqual(caps['initialization_norm_cap'], .6)
+        self.assertEqual(row['matched_reference']['F_actual_resources']['trainable_parameters'], 21)
+        controls = executed['controls']
+        self.assertEqual(controls['base_canonical']['depth'], 2)
+        self.assertTrue(controls['base_canonical']['cap_eligibility']['eligible'])
+        self.assertEqual(controls['fixed_metric_recurrence']['metric'], executed['metric'])
+        self.assertIsNone(controls['fixed_metric_recurrence']['resources']['trainable_parameters'])
+        # No false over-budget flag when the base already permits depth three.
+        deep = replace(self.base, budget=replace(self.base.budget, depth=3,
+                       initialization_norm_cap=2*np.sqrt(.6), trainable_parameter_cap=22))
+        row = self.r.diagnose_arm(self.r.build_robustness_arms(deep, ['second_step'])[0])
+        self.assertTrue(row['executed_intervention']['cap_eligibility']['eligible'])
 
     def test_free_eta_control(self):
         row = self.arm('free_eta')
@@ -186,7 +249,15 @@ class RobustnessTests(unittest.TestCase):
         manifest = self.r.make_manifest(self.base, ['no_floor', 'student3'])
         with tempfile.TemporaryDirectory() as root:
             path = Path(root)/'manifest.json'; path.write_text(json.dumps(to_json_record(manifest)))
-            self.assertEqual(main(['robustness','--manifest',str(path),'--output',str(Path(root)/'out')]), 0)
+            captured = io.StringIO()
+            with redirect_stdout(captured):
+                code = main(['robustness','--manifest',str(path),'--output',str(Path(root)/'out')])
+            self.assertEqual(code, 0)
+            decision = json.loads(captured.getvalue())
+            self.assertEqual(decision['code'], 'INSENSITIVE_OR_UNSUITABLE')
+            self.assertEqual(decision['evidence']['status'], 'completed')
+            self.assertEqual(decision['evidence']['selected_arms'], ['no_floor','student3'])
+            self.assertEqual(decision['evidence']['report'], str(Path(root)/'out'/'robustness.json'))
             report = json.loads((Path(root)/'out'/'robustness.json').read_text())
             self.assertEqual(len(report['arms']), 2)
             self.assertEqual(report['original_primary_result'], 'unchanged')
