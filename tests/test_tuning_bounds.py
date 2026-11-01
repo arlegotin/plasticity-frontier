@@ -160,6 +160,22 @@ class BranchBoundsTests(unittest.TestCase):
         out=self.bounds.branch_interval_check(left,right,left,f.validation,f.config)
         self.assertEqual(out['status'],'unsupported',out)
 
+    def test_malformed_gain_arrays_refuse_route_before_indexing(self):
+        for method, value in [('B04', []), ('B04', 0.), ('B02', 0.)]:
+            with self.subTest(method=method, value=value):
+                f=BranchFixture(method); left,right=f.row(.3),f.row(.30001)
+                if method=='B04':
+                    right['prepared_state']['solver_diagnostics']['F']['variables']=value
+                else:
+                    right['prepared_state']['metric']['increments']=value
+                right['prepared_hash']=content_hash(right['prepared_state'])
+                try:
+                    out=self.bounds.branch_interval_check(left,right,left,f.validation,f.config)
+                except IndexError as exc:
+                    self.fail(f'malformed gain prerequisite escaped instead of refusing route: {exc}')
+                self.assertEqual(out['status'],'unsupported',out)
+                json.dumps(out,allow_nan=False)
+
     def test_b02_actual_metric_must_satisfy_original_qp(self):
         f=BranchFixture('B02'); left,right=f.row(.3),f.row(.30001)
         right['prepared_state']['metric']['increments'][0]+=.1

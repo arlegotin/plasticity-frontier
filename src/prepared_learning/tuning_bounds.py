@@ -225,7 +225,9 @@ def _probe(row, branch, family, data, model):
     state = row['prepared_state']; U=family['U']; p=model['p']
     qp = build_oracle_qp(row['asset']['eigenvalues'],family['n'],family['noise'],family['k'],family['width'],branch)
     if family['method'] == 'B02':
-        metric=state['metric']; x=_finite(metric['increments'])[:p]
+        metric=state['metric']; gains=_finite(metric['increments'])
+        _require(gains.shape == (family['d'],), 'invalid B02 gain array')
+        x=gains[:p]
         _check_metric(metric,x,U,branch)
         diag=to_json_record(diagnose_qp(qp,x)); source='actual_b02_metric'
     else:
@@ -236,8 +238,8 @@ def _probe(row, branch, family, data, model):
             _require(0 <= result['diagnostics']['kkt']['rank_oracle_max_relative_error'] <= 1e-6,
                      'rank oracle disagreement')
         x=_finite(result['variables']); diag=result['diagnostics']; source='retained_frontier'
+        _require(x.shape == (p,), 'invalid branch variables')
         _check_metric(result['metric'],x,U,branch)
-    _require(x.shape == (p,), 'invalid branch variables')
     primal=float(qp.constant+qp.linear@x+x@qp.hessian@x)
     _finite([diag['dual'][key] for key in ('primal','dual','gap')])
     objective_pad=_pad(p+4,max(1.,abs(primal),float(np.abs(qp.linear)@np.abs(x)),float(np.abs(x)@np.abs(qp.hessian)@np.abs(x))))
