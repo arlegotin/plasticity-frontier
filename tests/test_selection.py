@@ -240,3 +240,32 @@ class SelectionTests(unittest.TestCase):
         self.assertLessEqual(selected['validation_loss'],.00000677179098)
         self.assertEqual(selected['tuning_resolution'],'unresolved')
         self.assertIn(.125,{row['gamma'] for row in result.candidate_records if row['status']=='completed'})
+
+class FailedPreparationEvidenceTests(unittest.TestCase):
+    def test_post_prepare_failure_retains_state_and_pre_prepare_does_not_leak(self):
+        from unittest.mock import patch
+        from prepared_learning.methods import Method,make_method
+        from prepared_learning.records import Context,SourceTask
+        from prepared_learning.selection import CandidateFitError
+        import numpy as np
+        def task(key): return SourceTask(Context(np.eye(2),np.array([1.,0.]),key+'a'),Context(np.eye(2),np.array([1.,0.]),key+'b'),key)
+        config={'budget':{'depth':2,'initialization_norm_cap':1.,'trainable_parameter_cap':6,'learning_rate':1.},
+            'preparation':{'target_context_size':2,'input_dimension':2,'input_law':'gaussian_isotropic','loss_normalization':'squared_error_over_2n','task_second_moment_trace':1.},
+            'fitting_candidates':{'gammas':[0.,1.],'ranks':[1]},'information_policy':{},
+            'source_access_manifest':{'training_keys':['a'],'validation_keys':['b']}}
+        original=Method.prepare; states=[]
+        def prepare(method,*args):
+            if states: raise RuntimeError('before state')
+            state=original(method,*args); states.append(state); return state
+        with patch.object(Method,'prepare',prepare),patch.object(Method,'adapt',side_effect=RuntimeError('after state')):
+            with self.assertRaises(CandidateFitError) as raised:
+                make_method('B03',{}).fit_meta([task('a')],[task('b')],config)
+        rows=raised.exception.records
+        after=next(row for row in rows if row['error']=='after state')
+        self.assertEqual(set(after['preparation_diagnostics']) & {'F','Z'},{'F','Z'})
+        self.assertIsNotNone(after['prepared_state'])
+        self.assertIsNotNone(after['geometry_record']['initial_norm'])
+        for row in rows:
+            if row['error']=='before state':
+                self.assertIsNone(row['prepared_state']); self.assertIsNone(row['preparation_diagnostics'])
+                self.assertIsNone(row['geometry_record']); self.assertIn('geometry',row['unavailable_reasons'])

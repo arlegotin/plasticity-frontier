@@ -10,6 +10,23 @@ def _restore_candidate(row):
     return make_method(row['method_id'],row['options']),PriorAsset(**prior)
 
 
+def failure_evidence(exc, state, key, outer=None):
+    """Preserve only this attempt's available state and solve, without re-solving."""
+    from .records import to_json_record
+    diagnostics=getattr(exc,'preparation_diagnostics',None)
+    if diagnostics is None and state is not None: diagnostics=state.solver_diagnostics
+    unavailable={}; geometry=None
+    if state is None: unavailable['prepared_state']='preparation did not return a state'
+    else:
+        try: geometry=geometry_record(state,key,outer)
+        except (ValueError,RuntimeError,np.linalg.LinAlgError) as error:
+            unavailable['geometry']='measurement failed: '+str(error)
+    if geometry is None: unavailable.setdefault('geometry','no prepared network available for measurement')
+    if diagnostics is None: unavailable['preparation_diagnostics']='no solver diagnostics available from this attempt'
+    return {'error':str(exc),'preparation_diagnostics':to_json_record(diagnostics),
+            'prepared_state':to_json_record(state),'geometry_record':geometry,'unavailable_reasons':unavailable}
+
+
 def preparation_replication(config, root, outer, phase, methods, *, selectors=None):
     """Trusted driver assigns source authorization before generating observations."""
     import time
@@ -43,13 +60,14 @@ def preparation_replication(config, root, outer, phase, methods, *, selectors=No
     projection_error=float(np.linalg.norm(raw.basis[:,:r]@raw.basis[:,:r].T-vectors[:,-r:]@vectors[:,-r:].T))
     ledger=to_json_record(selection.candidate_records)
     final=max((row.get('refinement_iteration',0) for row in ledger),default=0)
-    selected={}; risks={}; failures={}; assets={}
+    selected={}; risks={}; failures={}; assets={}; restoration_failures=[]
     selectors = selectors or {'baseline':BASELINE,'joint':JOINT}
     for role,allowed in selectors.items():
         candidates=[row for row in ledger if row.get('status')=='completed' and row['method_id'] in allowed and row.get('refinement_iteration',0)==final]
         if not candidates:
             failures[role]='no completed candidate in final refinement'; continue
         row=min(candidates,key=lambda row:(row['validation_loss'],row['method_id'],row['logical_candidate_id']))
+        prepared=None
         try:
             method,prior=_restore_candidate(row)
             prepared=method.prepare(prior,config.budget,config.preparation)
@@ -64,8 +82,10 @@ def preparation_replication(config, root, outer, phase, methods, *, selectors=No
             for i,layer in enumerate(prepared.initial_layers or ()): assets[f'{role}_layer_{i}']=layer
         except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
             failures[role]=str(exc); risks.pop(role,None); selected.pop(role,None)
+            restoration_failures.append({'configuration_key':'restoration:selected:'+role,'method_id':row['method_id'],
+                **failure_evidence(exc,prepared,'restoration:selected:'+role,outer)})
     source_keys=public['source_access_manifest']['training_keys']+public['source_access_manifest']['validation_keys']
-    return {'selected':selected,'risks':risks,'failures':failures,'candidate_records':ledger,
+    return {'selected':selected,'risks':risks,'failures':failures,'candidate_records':ledger,'restoration_failures':restoration_failures,
         'source_keys':source_keys,'source_key':content_hash(public['source_access_manifest']),
         'training_observation_hash':content_hash(train),'validation_observation_hash':content_hash(validation),
         'relative_covariance_error':relative_error,'eigenspace_projection_error':projection_error,
@@ -109,11 +129,17 @@ def prepared_candidates(result, config):
     for row in ledger:
         if row.get('refinement_iteration',0)!=final: continue
         key='candidate:'+row['candidate_id']
+        if row['status']!='completed':
+            failures[key]=row.get('error',row.get('failure_reason','candidate fitting failed')); continue
+        state=None
         try:
-            if row['status']!='completed': raise ValueError(row.get('failure_reason','candidate fitting failed'))
             method,prior=_restore_candidate(row)
-            prepared[key]=(method,method.prepare(prior,config.budget,config.preparation))
-        except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc: failures[key]=str(exc)
+            state=method.prepare(prior,config.budget,config.preparation)
+            prepared[key]=(method,state)
+        except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
+            failures[key]=str(exc)
+            result.setdefault('restoration_failures',[]).append({'configuration_key':'restoration:'+key,'method_id':row['method_id'],
+                **failure_evidence(exc,state,'restoration:'+key)})
     for mid in {r['method_id'] for r in ledger}:
         eligible=[r for r in ledger if r['method_id']==mid and r.get('status')=='completed' and r.get('refinement_iteration',0)==final]
         if eligible:
@@ -192,12 +218,16 @@ def execute_replication(config, scientific, root, outer, phases, *, task_sink=No
         result['frontier_result']=to_json_record(solve_frontier(prior,config.budget,config.preparation))
     # Freeze all state hashes before evaluator truth or test observations exist.
     snapshots={key:content_hash(state) for key,(_,state) in prepared.items()}
-    geometry={}; verification=[]
+    geometry={}; verification=[]; failed_geometry=[]
     for row in result['candidate_records']:
-        captured=row.get('prepared_state',{}).get('solver_diagnostics') or row.get('preparation_diagnostics')
+        captured=(row.get('prepared_state') or {}).get('solver_diagnostics') or row.get('preparation_diagnostics')
         verification.extend(certificate_records(captured,row['candidate_id'],row['method_id'],outer))
+        if row.get('geometry_record'): failed_geometry.append({**row['geometry_record'],'outer_replication':outer,'method_id':row['candidate_id']})
         if row.get('fit'):
             fit=row['fit']; verification.extend(certificate_records({fit['branch']:fit},row['candidate_id'],row['method_id'],outer))
+    for row in result.get('restoration_failures',[]):
+        verification.extend(certificate_records(row['preparation_diagnostics'],row['configuration_key'],row['method_id'],outer))
+        if row.get('geometry_record'): failed_geometry.append({**row['geometry_record'],'outer_replication':outer})
     for key,(_,state) in prepared.items():
         verification.extend(certificate_records(state.solver_diagnostics,'prepared:'+key,state.method_id,outer))
         geometry[key]=geometry_record(state,key,outer)
@@ -206,7 +236,7 @@ def execute_replication(config, scientific, root, outer, phases, *, task_sink=No
         verification.extend(certificate_records(result['frontier_result'],'deterministic_frontier','frontier',outer))
     result['prepared_resources']={key:{'method_id':state.method_id,'resources':to_json_record(state.resources),'information_access':state.prior.information_access,'prior_hash':state.prior.asset_hash,'metric_hash':content_hash(state.metric)} for key,(_,state) in prepared.items()}
     result['verification_records']=verification
-    result['geometry_records']=[row for row in geometry.values() if row is not None]
+    result['geometry_records']=failed_geometry+[row for row in geometry.values() if row is not None]
     for key,(_,state) in prepared.items():
         if state.initial_layers is not None:
             from .geometry import effective_coefficient

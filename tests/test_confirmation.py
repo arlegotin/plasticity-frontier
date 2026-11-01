@@ -458,3 +458,114 @@ class ReviewResourceRecoveryTests(unittest.TestCase):
         draft['scientific']['config']['sample_plan']['outer_replicates']=10**9
         with self.assertRaisesRegex(ValueError,'working sets'):
             validate_execution_envelope(draft['scientific'],evidence['resources'])
+
+class RoundTwoEvidenceTests(unittest.TestCase):
+    def test_restoration_failures_retain_actual_payload_in_raw_certificates(self):
+        from unittest.mock import patch
+        from prepared_learning import execution,confirmation
+        from prepared_learning.methods import Method,PreparationError
+        from prepared_learning.records import to_json_record
+        c,s=tiny(); c=replace(c,methods=('B01','B03','B04')); s['config']=to_json_record(c)
+        s['selectors']={'baseline':['B01'],'joint':['B04']}
+        phases={'training_phase':101,'test_phase':103}; original=Method.prepare
+        payloads=[]
+        restore=execution._restore_candidate
+        def restored(row):
+            method,prior=restore(row); method.review_restoration=True; return method,prior
+        def prepare(method,*args):
+            state=original(method,*args)
+            if getattr(method,'review_restoration',False) and method.method_id=='B04':
+                payload=to_json_record(state.solver_diagnostics)
+                payload['review_actual_attempt']=len(payloads); payloads.append(payload)
+                raise PreparationError('actual restoration failure',payload)
+            return state
+        with patch.object(execution,'_restore_candidate',restored),patch.object(Method,'prepare',prepare):
+            result,_=execution.execute_replication(c,s,300,0,phases)
+        records=result.get('restoration_failures',[])
+        self.assertEqual(len(records),len(payloads)); self.assertGreater(len(records),1)
+        self.assertEqual([r['preparation_diagnostics']['review_actual_attempt'] for r in records],list(range(len(payloads))))
+        self.assertTrue(all(r['prepared_state'] is None and 'geometry' in r['unavailable_reasons'] for r in records))
+        certificates=[r for r in result['verification_records'] if r['configuration_key'].startswith('restoration:')]
+        self.assertEqual(len(certificates),2*len(payloads))
+        manifest=execution_manifest(); manifest['scientific']=dict(manifest['scientific'],**s)
+        raw=confirmation._rows(result,manifest,'fixture')
+        self.assertEqual(sum(r['kind']=='certificates' and r['configuration_key'].startswith('restoration:') for r in raw),len(certificates))
+
+class RoundTwoAnalysisGuardTests(unittest.TestCase):
+    def test_analysis_bounds_existing_inventory_before_open(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.runner import RunStore
+        from prepared_learning.execution import ExecutionResourceLimit
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'):
+            path=Path(root); (path/'journal').mkdir(); (path/'blocks').mkdir()
+            for i in range(40): (path/'journal'/str(i)).write_text('not parsed before guard')
+            def check(size=0):
+                if size>=1024*1024+40*4096: raise ExecutionResourceLimit('actual old inventory')
+            with patch.object(RunStore,'open',side_effect=AssertionError('open before inventory guard')):
+                with self.assertRaisesRegex(ExecutionResourceLimit,'actual old inventory'):
+                    confirmation.analyze_run(path,execution_manifest(),resource_check=check)
+
+class RoundTwoEntryAndFailureTests(unittest.TestCase):
+    def test_failed_validation_has_raw_branch_and_measured_geometry_records(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.methods import Method
+        from prepared_learning.runner import RunStore
+        manifest=execution_manifest(); manifest['scientific']['config']['methods']=['B01','B03','B04']
+        manifest['scientific']['selectors']={'baseline':['B01'],'joint':['B04']}
+        adapt=Method.adapt
+        def failed(method,*args):
+            if method.method_id=='B03': raise RuntimeError('validation after real preparation')
+            return adapt(method,*args)
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'),patch.object(Method,'adapt',failed):
+            decision=confirmation.run_confirmation(manifest,Path(root))
+            store=RunStore(Path(decision.evidence['run_path']))
+            ledger=store.read_records('execution')[0]['result']
+            candidates=[r for r in ledger['candidate_records'] if r['method_id']=='B03']
+            self.assertTrue(candidates); self.assertTrue(all(r['status']=='failed' for r in candidates))
+            certificates=store.read_records('certificates'); geometry=store.read_records('geometry')
+            for row in candidates:
+                self.assertEqual({r['branch'] for r in certificates if r['configuration_key']==row['candidate_id']},{'F','Z'})
+                actual=next(r for r in geometry if r['method_id']==row['candidate_id'])
+                self.assertEqual(actual['initial_norm'],row['geometry_record']['initial_norm'])
+                self.assertIsNotNone(actual['kernel_absolute_error'])
+
+    def test_checkpoint_time_adjustment_includes_frozen_execution_cost(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from tests.test_protocol import evidence_fixture,draft_fixture
+        manifest=execution_manifest('fixed_prior_task_simulation')
+        manifest['scientific']['config']['sample_plan']['tasks_per_replicate']=33
+        resources=evidence_fixture(draft_fixture())['resources']
+        resources['execution_envelope']['checkpoint_seconds']=1.
+        resources.update(estimated_total_seconds=200.,max_seconds=210.)
+        manifest['evidence']['resources']=resources
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'),patch.object(confirmation,'evaluate_replication',side_effect=AssertionError('unbudgeted execution')):
+            result=confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=1)
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertIn('runtime',result.evidence['reason'])
+
+    def test_confirmation_guards_recovered_inventory_before_open(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from prepared_learning import confirmation
+        from prepared_learning.runner import RunStore
+        from prepared_learning.execution import ExecutionResourceLimit
+        manifest=execution_manifest(); run=confirmation.run_record(manifest)
+        with tempfile.TemporaryDirectory() as root,patch.object(confirmation,'_live_identity'):
+            path=Path(root)/run['run_id']; (path/'journal').mkdir(parents=True); (path/'blocks').mkdir()
+            for i in range(40): (path/'journal'/str(i)).write_text('do not parse')
+            def check(size=0):
+                if size>=1024*1024+40*4096: raise ExecutionResourceLimit('existing inventory')
+            with patch('prepared_learning.execution.ResourceBudget',return_value=check),patch.object(RunStore,'open',side_effect=AssertionError('unguarded open')):
+                result=confirmation.run_confirmation(manifest,Path(root),checkpoint_tasks=1024)
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertFalse((path/'terminal.json').exists())

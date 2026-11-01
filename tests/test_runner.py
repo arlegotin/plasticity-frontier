@@ -328,3 +328,29 @@ class LifecycleTests(unittest.TestCase):
                     (store.path/'terminal.json').unlink(); (store.path/'initial_run.json').unlink()
                 else: (store.path/'journal'/'unexpected').write_text('{}')
                 with self.assertRaises(ValueError): RunStore.open(store.path,IDENTITY)
+
+class AllocationGuardTests(unittest.TestCase):
+    def test_open_and_iteration_guard_before_reading_raw_blocks(self):
+        from unittest.mock import patch
+        from prepared_learning.execution import ExecutionResourceLimit
+        with tempfile.TemporaryDirectory() as root:
+            store=RunStore.create(Path(root),RUN)
+            store.commit_block('large',[],{'map':np.ones(5)})
+            raw=next(store.path.glob('blocks/*/records.json'))
+            raw.write_text(' '*1000000)  # Guard must reject before parsing/hashing corrupt payload.
+            def check(size=0):
+                if size>4*1024*1024: raise ExecutionResourceLimit('bounded before allocation')
+            with self.assertRaisesRegex(ExecutionResourceLimit,'before allocation'):
+                RunStore.open(store.path,IDENTITY,resource_check=check)
+            store.resource_check=check
+            with self.assertRaises(ExecutionResourceLimit): list(store.iter_records('execution_task'))
+
+    def test_actual_inventory_is_counted_without_loading_receipts(self):
+        from prepared_learning.execution import ExecutionResourceLimit
+        with tempfile.TemporaryDirectory() as root:
+            store=RunStore.create(Path(root),RUN)
+            for index in range(30): (store.path/'journal'/str(index)).write_text('invalid receipt')
+            def check(size=0):
+                if size>=1024*1024+30*4096: raise ExecutionResourceLimit('inventory reserve')
+            with self.assertRaisesRegex(ExecutionResourceLimit,'inventory reserve'):
+                RunStore.guard_existing(store.path,check)

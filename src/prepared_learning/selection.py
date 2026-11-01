@@ -173,7 +173,7 @@ def fit_method(method,train,validation,config):
         for kind,value_option,rank in ((kind,value_option,rank) for kind,value_option in choices for rank in ranks):
             reg=value_option if kind=='reg' else None
             candidate_start=time.perf_counter_ns(); options=dict(method.options); name=f'{method.method_id}:base={base.asset_hash}:gamma={gamma}:{kind}={value_option}:rank={rank}'
-            fit=None
+            fit=None; state=None
             try:
                 if kind=='scalar': options['fitted_metric']=metric_from_gains(np.eye(prep.input_dimension),np.full(prep.input_dimension,value_option))
                 if rank is not None: options['rank']=int(rank)
@@ -195,7 +195,9 @@ def fit_method(method,train,validation,config):
                 if family=='B11': row['fit']=to_json_record(fit)
                 rows.append(row); prepared.append((value,trial,prior,name))
             except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
-                rows.append({'candidate_id':name,'method_id':method.method_id,'status':'failed','error':str(exc),'preparation_diagnostics':getattr(exc,'preparation_diagnostics',None),'asset_hash':prior.asset_hash,'asset_fit_id':asset_fit_id,'asset_fit_elapsed_ns':asset_fit_elapsed,'base_fit_id':base_fit_id,'base_fit_elapsed_ns':base_elapsed,'shrink_fit_id':asset_fit_id,'shrink_fit_elapsed_ns':shrink_fit_elapsed,'noise_fit_id':noise_fit_id,'noise_fit_elapsed_ns':noise_elapsed,'asset':to_json_record(prior),'options':to_json_record(options),'regularization':reg,'unique_labels':labels,'training_labels':training_labels,'validation_labels':validation_labels,'fit':to_json_record(fit) if fit is not None else None,'elapsed_ns':time.perf_counter_ns()-candidate_start})
+                from .execution import failure_evidence
+                evidence=failure_evidence(exc,state,name)
+                rows.append({'candidate_id':name,'method_id':method.method_id,'status':'failed',**evidence,'asset_hash':prior.asset_hash,'asset_fit_id':asset_fit_id,'asset_fit_elapsed_ns':asset_fit_elapsed,'base_fit_id':base_fit_id,'base_fit_elapsed_ns':base_elapsed,'shrink_fit_id':asset_fit_id,'shrink_fit_elapsed_ns':shrink_fit_elapsed,'noise_fit_id':noise_fit_id,'noise_fit_elapsed_ns':noise_elapsed,'asset':to_json_record(prior),'options':to_json_record(options),'regularization':reg,'unique_labels':labels,'training_labels':training_labels,'validation_labels':validation_labels,'fit':to_json_record(fit) if fit is not None else None,'elapsed_ns':time.perf_counter_ns()-candidate_start})
     if not prepared: raise CandidateFitError(rows)
     _,best,prior,name=min(prepared,key=lambda x:x[0])
     return SelectionResult(name,tuple(rows),prior)

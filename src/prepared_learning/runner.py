@@ -21,7 +21,10 @@ def _bytes(value):
 
 
 def _hash(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    digest=hashlib.sha256()
+    with path.open('rb') as file:
+        for chunk in iter(lambda:file.read(64*1024),b''): digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _syncdir(path):
@@ -41,28 +44,70 @@ def _name(key):
 
 
 class RunStore:
-    def __init__(self, path):
+    def __init__(self, path, resource_check=None):
         self.path = Path(path)
         self._append_index = None
+        self.resource_check = resource_check
+        self._inventory_bytes = 0
+
+    @staticmethod
+    def guard_existing(path, resource_check):
+        """Bound inventory/JSON before reading it; directory scans retain no list.
+
+        Allow 4 KiB per receipt and 16 times the largest JSON file for parsed
+        objects and concurrent verification/serialization copies, plus a hash
+        buffer. This also covers terminal receipts and interrupted raw blocks.
+        """
+        path=Path(path); count=0; largest=0
+        if path.exists():
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    if entry.is_file() and entry.name.endswith('.json'): largest=max(largest,entry.stat().st_size)
+            if (path/'journal').exists():
+                with os.scandir(path/'journal') as entries:
+                    for entry in entries:
+                        count+=1; largest=max(largest,entry.stat().st_size)
+                        if count%1024==0: resource_check()
+            if (path/'blocks').exists():
+                with os.scandir(path/'blocks') as blocks:
+                    for block in blocks:
+                        if not block.is_dir(): continue
+                        with os.scandir(block.path) as entries:
+                            for entry in entries:
+                                if entry.is_file() and entry.name.endswith('.json'): largest=max(largest,entry.stat().st_size)
+        bound=count*4096+16*largest+1024*1024
+        resource_check(bound)
+        return {'existing_blocks':count,'additional_peak_bytes':bound}
+
+    def _guard_allocations(self):
+        if self.resource_check is not None:
+            bounds=self.guard_existing(self.path,self.resource_check)
+            self._inventory_bytes=4096*bounds['existing_blocks']
+
+    def _read_json(self, path):
+        if self.resource_check is not None:
+            self.resource_check(self._inventory_bytes+16*path.stat().st_size+1024*1024)
+        return json.loads(path.read_text())
 
     @classmethod
-    def create(cls, root: Path, run: JsonRecord) -> "RunStore":
+    def create(cls, root: Path, run: JsonRecord, *, resource_check=None) -> "RunStore":
         run={**run,'lifecycle_version':1}
         validate_run_record(run)
         if not isinstance(run['run_id'], str) or not run['run_id'] or Path(run['run_id']).name != run['run_id'] or run['run_id'] in ('.', '..'): raise ValueError('invalid run id')
         path = Path(root) / run['run_id']; path.mkdir(parents=True, exist_ok=False)
         (path / 'blocks').mkdir(); (path / 'journal').mkdir(); _write(path / 'run.json', _bytes(run)); _write(path / 'run.sha256', _hash(path / 'run.json').encode());
         _write(path / 'initial_run.json', _bytes({'run':run,'sha256':_hash(path / 'run.json')})); _syncdir(path)
-        return cls(path)
+        return cls(path,resource_check)
 
     @classmethod
-    def open(cls, path: Path, expected_identity: JsonRecord) -> "RunStore":
+    def open(cls, path: Path, expected_identity: JsonRecord, *, resource_check=None) -> "RunStore":
         path = Path(path)
-        obj = cls(path)
+        obj = cls(path,resource_check)
         with obj._lock():
+            obj._guard_allocations()
             obj._recover_lifecycle()
             if _hash(path/'run.json')!=(path/'run.sha256').read_text(): raise ValueError('run metadata corrupt')
-            run = json.loads((path / 'run.json').read_text())
+            run = obj._read_json((path / 'run.json'))
             if any(k not in expected_identity or expected_identity[k] != run.get(k) for k in IDENTITY_FIELDS): raise ValueError('run identity mismatch')
             if expected_identity.get('operational_config_sha256', run['operational_config_sha256']) != run['operational_config_sha256'] and any(k not in run or k not in expected_identity for k in ('thread_policy', 'blas_policy')):
                 raise ValueError('operational changes require declared thread policy')
@@ -106,7 +151,7 @@ class RunStore:
             index.execute('CREATE TABLE units (kind TEXT, unit BLOB, PRIMARY KEY(kind,unit))')
             try:
                 for block in (self.path/'blocks').iterdir():
-                    rows=json.loads((block/'records.json').read_text())
+                    rows=self._read_json((block/'records.json'))
                     index.executemany('INSERT INTO units VALUES (?,?)',self._validate_rows(rows))
                 self._append_index=index
                 yield self
@@ -130,18 +175,18 @@ class RunStore:
         """Replay only a verified terminal receipt, never repair arbitrary metadata."""
         initial_path=self.path/'initial_run.json'; terminal_path=self.path/'terminal.json'
         if not initial_path.exists():
-            if terminal_path.exists() or json.loads((self.path/'run.json').read_text()).get('lifecycle_version') is not None:
+            if terminal_path.exists() or self._read_json((self.path/'run.json')).get('lifecycle_version') is not None:
                 raise ValueError('lifecycle initial identity is missing')
             return  # Read-only compatibility with pre-lifecycle stores.
         try:
-            initial=json.loads(initial_path.read_text()); initial_bytes=_bytes(initial['run'])
+            initial=self._read_json(initial_path); initial_bytes=_bytes(initial['run'])
             if hashlib.sha256(initial_bytes).hexdigest()!=initial['sha256']: raise ValueError('initial metadata corrupt')
             validate_run_record(initial['run'])
             current=(self.path/'run.json').read_bytes(); checksum=(self.path/'run.sha256').read_text()
             if not terminal_path.exists():
                 if current!=initial_bytes or checksum!=initial['sha256']: raise ValueError('run metadata changed without lifecycle receipt')
                 return
-            receipt=json.loads(terminal_path.read_text()); payload=receipt['payload']
+            receipt=self._read_json(terminal_path); payload=receipt['payload']
             if hashlib.sha256(_bytes(payload)).hexdigest()!=receipt['sha256'] or payload['initial_sha256']!=initial['sha256']: raise ValueError('terminal receipt corrupt')
             terminal=payload['run']; validate_run_record(terminal)
             if terminal['status'] not in ('completed','incomplete','failed','invalid','interrupted') or {**terminal,'status':initial['run']['status']}!=initial['run']: raise ValueError('terminal receipt changes scientific metadata')
@@ -163,11 +208,12 @@ class RunStore:
         if status not in ('completed','incomplete','failed','invalid','interrupted'): raise ValueError('invalid terminal status')
         with self._lock():
             self._reconcile()
-            run=json.loads((self.path/'run.json').read_text())
+            run=self._read_json((self.path/'run.json'))
             if (self.path/'terminal.json').exists():
                 if run['status']!=status: raise ValueError('terminal status is immutable')
                 return
             if not (self.path/'initial_run.json').exists(): raise ValueError('legacy store has no lifecycle identity; retain unchanged')
+            self._guard_allocations()
             payload={'initial_sha256':_hash(self.path/'run.json'),'run':{**run,'status':status},
                      'block_receipts':{p.name:_hash(p) for p in (self.path/'journal').iterdir()}}
             receipt={'payload':payload,'sha256':hashlib.sha256(_bytes(payload)).hexdigest()}
@@ -176,19 +222,20 @@ class RunStore:
 
     def _verify(self, block, marker=None):
         try:
-            if marker is None: marker = json.loads((block / 'commit.json').read_text())
+            if marker is None: marker = self._read_json((block / 'commit.json'))
             if _name(marker['key']) != block.name: raise ValueError('block key mismatch')
-            manifest = json.loads((block / 'manifest.json').read_text())
+            manifest = self._read_json((block / 'manifest.json'))
             if _hash(block / 'manifest.json') != marker['manifest_sha256']: raise ValueError('manifest hash mismatch')
             for name, digest in manifest['files'].items():
                 if Path(name).is_absolute() or '..' in Path(name).parts or _hash(block / name) != digest: raise ValueError('block hash mismatch')
-            rows = json.loads((block / 'records.json').read_text())
+            rows = self._read_json((block / 'records.json'))
             if not isinstance(rows, list) or len(rows) != manifest['count']: raise ValueError('block count mismatch')
             return marker['key']
         except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc: raise ValueError('corrupt committed block') from exc
 
     def _reconcile(self):
         if self._append_index is not None: return
+        self._guard_allocations()
         self._recover_lifecycle()
         if _hash(self.path / 'run.json') != (self.path / 'run.sha256').read_text(): raise ValueError('run metadata corrupt')
         blocks = self.path / 'blocks'; journal = self.path / 'journal'
@@ -197,7 +244,7 @@ class RunStore:
                 entry.unlink(); continue
             block = blocks / entry.name
             if not block.is_dir(): raise ValueError('committed block missing')
-            try: marker = json.loads(entry.read_text())
+            try: marker = self._read_json(entry)
             except (OSError, json.JSONDecodeError) as exc: raise ValueError('corrupt journal receipt') from exc
             self._verify(block, marker)
             marker_path = block / 'commit.json'
@@ -215,7 +262,7 @@ class RunStore:
         _syncdir(blocks); _syncdir(journal)
 
     def _validate_rows(self, records):
-        run = json.loads((self.path / 'run.json').read_text())
+        run = self._read_json((self.path / 'run.json'))
         specs = run.get('pairing_spec', {})
         grouped = {}
         shared_keys = {}
@@ -246,8 +293,9 @@ class RunStore:
     def committed_keys(self) -> set[str]:
         with self._lock():
             self._reconcile()
+            self._guard_allocations()
             if self._append_index is not None:
-                return {json.loads(p.read_text())['key'] for p in (self.path/'journal').iterdir()}
+                return {self._read_json(p)['key'] for p in (self.path/'journal').iterdir()}
             return {self._verify(p) for p in (self.path / 'blocks').iterdir()}
 
     def iter_records(self, kind: str, *, block_prefix=None):
@@ -258,12 +306,13 @@ class RunStore:
         """
         with self._lock():
             self._reconcile()
-            inventory=sorted((json.loads(p.read_text())['key'],p.name) for p in (self.path/'journal').iterdir())
+            self._guard_allocations()
+            inventory=sorted((self._read_json(p)['key'],p.name) for p in (self.path/'journal').iterdir())
         for key,name in inventory:
             if block_prefix is not None and not key.startswith(block_prefix): continue
             block=self.path/'blocks'/name
             self._verify(block)
-            for row in json.loads((block/'records.json').read_text()):
+            for row in self._read_json((block/'records.json')):
                 if row.get('kind')==kind: yield row
 
     def read_records(self, kind: str) -> list[JsonRecord]:
@@ -272,7 +321,7 @@ class RunStore:
             rows = []
             for block in sorted((self.path / 'blocks').iterdir()):
                 self._verify(block)
-                rows.extend(r for r in json.loads((block / 'records.json').read_text()) if r.get('kind') == kind)
+                rows.extend(r for r in self._read_json((block / 'records.json')) if r.get('kind') == kind)
             return rows
 
     def commit_block(self, block_key: str, records: Sequence[JsonRecord], assets: Mapping[str, Array]) -> None:
@@ -282,16 +331,19 @@ class RunStore:
             self._commit_block(block_key, list(records), assets)
 
     def _commit_block(self, block_key, records, assets):
+        if self.resource_check is not None:
+            self.resource_check(self._inventory_bytes+4096)
         units = self._validate_rows(records)
         if self._append_index is not None:
             if any(self._append_index.execute('SELECT 1 FROM units WHERE kind=? AND unit=?',unit).fetchone() for unit in units):
                 raise ValueError('paired unit already committed')
         else:
             for old in (self.path/'blocks').iterdir():
-                existing=json.loads((old/'records.json').read_text())
+                existing=self._read_json((old/'records.json'))
                 if units & self._validate_rows(existing): raise ValueError('paired unit already committed')
         blocks = self.path / 'blocks'; name = _name(block_key); final = blocks / name
         if final.exists(): raise ValueError('block already exists')
+        self._inventory_bytes+=4096
         temp = Path(tempfile.mkdtemp(prefix='.tmp-', dir=blocks))
         try:
             _write(temp / 'records.json', _bytes(list(records)))

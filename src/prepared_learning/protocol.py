@@ -470,13 +470,15 @@ def _validate_mode_draft(draft,evidence):
     except (KeyError,TypeError,AttributeError) as exc: raise ValueError(f'incomplete mode evidence: {exc}') from exc
 
 
-def execution_overhead(scientific, resources):
+def execution_overhead(scientific, resources, *, checkpoint_tasks=16, existing_blocks=0, completed_tasks=None):
     """Final-count memory and I/O/analysis allowance for the streaming driver.
 
     Bounds account for bounded JSON copies, scalar inference, bootstrap draws,
     and the small per-block journal inventory, rather than extrapolating pilot
     peak RSS as if the final N were unchanged.
     """
+    if type(checkpoint_tasks)!=int or not 1<=checkpoint_tasks<=1024: raise ValueError('invalid checkpoint size')
+    if type(existing_blocks)!=int or existing_blocks<0: raise ValueError('invalid existing inventory')
     p=scientific['config']['sample_plan']; j=p['outer_replicates'] or 1
     tasks=j*(p['tasks_per_replicate'] or 0)+sum(len(scientific.get(key,{}).get('outer_replications',[]))*scientific.get(key,{}).get('tasks_per_replication',0) for key in ('update_check_schedule','simulation_schedule'))
     units=p['tasks_per_replicate'] if p['analysis_mode']=='fixed_prior_task_simulation' else j
@@ -485,9 +487,24 @@ def execution_overhead(scientific, resources):
     for key in ('max_preparation_record_bytes','max_task_record_bytes','serialization_seconds_per_byte','checkpoint_seconds','analysis_seconds_per_unit'):
         _finite(measured[key],key)
         if measured[key]<=0: raise ValueError('measured serialization/analysis envelope required')
-    blocks=16*j+2*math.ceil(tasks/16)+4
+    # Chunks close separately at each replication and endpoint. Existing blocks
+    # may come from smaller checkpoints; retain them and add only remaining
+    # task chunks. Preparation/finalization overhead stays conservative.
+    def chunk_count(count): return (count+checkpoint_tasks-1)//checkpoint_tasks
+    chunks=j*chunk_count(p['tasks_per_replicate'] or 0)
+    chunks+=sum(len(scientific.get(key,{}).get('outer_replications',[]))*chunk_count(scientific.get(key,{}).get('tasks_per_replication',0)) for key in ('update_check_schedule','simulation_schedule'))
+    for (outer,endpoint),completed in (completed_tasks or {}).items():
+        if type(outer)!=int or not 0<=outer<j or type(completed)!=int or completed<0: raise ValueError('invalid completed task count')
+        if endpoint=='primary': expected=p['tasks_per_replicate'] or 0
+        elif endpoint in ('update_check','secondary'):
+            schedule=scientific.get('update_check_schedule' if endpoint=='update_check' else 'simulation_schedule',{})
+            expected=schedule.get('tasks_per_replication',0) if outer in schedule.get('outer_replications',[]) else 0
+        else: raise ValueError('unknown completed endpoint')
+        if completed>expected: raise ValueError('completed tasks exceed schedule')
+        chunks-=chunk_count(expected)-chunk_count(expected-completed)
+    blocks=existing_blocks+16*j+2*chunks+4
     analysis=16*units+32*j*len(scientific['secondary_family']['contrasts'])+250000
-    memory=8*measured['max_preparation_record_bytes']+8*16*measured['max_task_record_bytes']+analysis+4096*blocks
+    memory=8*measured['max_preparation_record_bytes']+8*checkpoint_tasks*measured['max_task_record_bytes']+analysis+4096*blocks
     # Two passes cover publication and subsequent verified raw-record analysis.
     seconds=2*(j*measured['max_preparation_record_bytes']+tasks*measured['max_task_record_bytes'])*measured['serialization_seconds_per_byte']+blocks*measured['checkpoint_seconds']+units*measured['analysis_seconds_per_unit']
     return {'additional_peak_bytes':memory,'analysis_working_bytes':analysis,'projected_block_inventory':blocks,'seconds':seconds}

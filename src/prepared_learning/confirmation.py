@@ -102,7 +102,7 @@ def evaluate_replication(replication_id: int, manifest: JsonRecord, store: RunSt
     """Freeze preparation once, then publish bounded atomic paired task chunks."""
     check=resource_check or (lambda size=0:None)
     s=manifest['scientific']; c=config_from_record(s['config']); keys=manifest['protected_keys']
-    run=json.loads((store.path/'run.json').read_text()); committed=store.committed_keys()
+    run=store._read_json(store.path/'run.json'); committed=store.committed_keys()
     completed={}; prior=None
     for row in store.iter_records('execution',block_prefix=f'preparation-{replication_id:020d}'):
         if row['outer_replication']==replication_id: prior=row['result']
@@ -230,9 +230,11 @@ def analyze_run(run_path: Path, manifest: JsonRecord, *, manifest_path=None, res
     _live_identity(manifest, manifest_path)
     from .execution import ResourceBudget
     from .pilot import _available_memory
-    store=_store if _store is not None else RunStore.open(Path(run_path),run_record(manifest))
     check=resource_check or ResourceBudget(_available_memory()*(1-manifest['operational']['reserve_memory_fraction']),manifest['evidence']['resources']['max_seconds'])
-    run=json.loads((store.path/'run.json').read_text())
+    RunStore.guard_existing(Path(run_path),check)
+    store=_store if _store is not None else RunStore.open(Path(run_path),run_record(manifest),resource_check=check)
+    store.resource_check=check
+    run=store._read_json(store.path/'run.json')
     if run['status'] not in ('running','completed'): raise ValueError('run stopped before a valid complete schedule')
     s=manifest['scientific']; p=s['config']['sample_plan']; mode=p['analysis_mode']
     j=p['outer_replicates'] or 1; n=p['tasks_per_replicate'] if mode=='fixed_prior_task_simulation' else j
@@ -318,32 +320,43 @@ def run_confirmation(manifest: JsonRecord, output: Path, *, manifest_path=None, 
     manifest=json.loads(json.dumps(to_json_record(manifest),allow_nan=False))
     _live_identity(manifest, manifest_path)  # Before generating any observations or creating a run.
     run=run_record(manifest); path=Path(output)/run['run_id']
-    store=RunStore.open(path,run) if path.exists() else RunStore.create(Path(output),run)
-    (path/'hardware.json').write_text(json.dumps(manifest['evidence']['runtime_identity'],indent=2)+'\n')
-    existing=json.loads((path/'run.json').read_text())
-    decisions=store.read_records('decisions')
-    if decisions:
-        row=decisions[-1]
-        store.finalize(row['terminal_status'])
-        return classify_gate({**row['gate_evidence'],'code':row['decision']})
-    if existing['status']=='completed': return classify_gate({**analyze_run(path,manifest,manifest_path=manifest_path),'run_path':str(path)})
-    if existing['status']!='running':
-        return classify_gate({'status':'invalid','run_path':str(path),'reason':'terminal failed or resource-limited run is sealed'})
-    from .pilot import _available_memory, _rss_bytes
+    from .pilot import _available_memory
+    from .execution import ResourceBudget, ExecutionResourceLimit
     count=manifest['scientific']['config']['sample_plan']['outer_replicates'] or 1
     memory=_available_memory()*(1-manifest['operational']['reserve_memory_fraction'])
-    from .execution import ResourceBudget, ExecutionResourceLimit
-    max_seconds=manifest['evidence']['resources']['max_seconds']; started=time.perf_counter()
-    budget=ResourceBudget(memory,max_seconds)
-    with (path/'checkpoint_policy.jsonl').open('a') as file:
-        file.write(json.dumps({'checkpoint_tasks':checkpoint_tasks,'scientific_counts':'unchanged'})+'\n')
+    max_seconds=manifest['evidence']['resources']['max_seconds']
+    budget=ResourceBudget(memory,max_seconds); store=None
     try:
+        inventory=RunStore.guard_existing(path,budget)
+        store=RunStore.open(path,run,resource_check=budget) if path.exists() else RunStore.create(Path(output),run,resource_check=budget)
+        (path/'hardware.json').write_text(json.dumps(manifest['evidence']['runtime_identity'],indent=2)+'\n')
+        existing=store._read_json(path/'run.json')
+        decisions=list(store.iter_records('decisions'))
+        if decisions:
+            row=decisions[-1]
+            store.finalize(row['terminal_status'])
+            return classify_gate({**row['gate_evidence'],'code':row['decision']})
+        if existing['status']=='completed': return classify_gate({**analyze_run(path,manifest,manifest_path=manifest_path,resource_check=budget,_store=store),'run_path':str(path)})
+        if existing['status']!='running':
+            return classify_gate({'status':'invalid','run_path':str(path),'reason':'terminal failed or resource-limited run is sealed'})
+        if 'execution_envelope' in manifest['evidence']['resources']:
+            from .protocol import execution_overhead
+            completed_tasks={}
+            for row in store.iter_records('execution_task'):
+                task=row['result']; key=(task['outer_replication'],task['endpoint'])
+                if task['task_id']!=completed_tasks.get(key,0): raise ValueError('noncontiguous saved task schedule')
+                completed_tasks[key]=task['task_id']+1
+            resources=manifest['evidence']['resources']
+            bounds=execution_overhead(manifest['scientific'],resources,checkpoint_tasks=checkpoint_tasks,
+                existing_blocks=inventory['existing_blocks'],completed_tasks=completed_tasks)
+            budget(bounds['additional_peak_bytes']+inventory['additional_peak_bytes'])
+            frozen_overhead=execution_overhead(manifest['scientific'],resources)['seconds']
+            projected=resources.get('estimated_total_seconds',frozen_overhead)+max(0.,bounds['seconds']-frozen_overhead)
+            if projected>max_seconds:
+                raise ExecutionResourceLimit('requested checkpoint schedule exceeds runtime budget')
+        with (path/'checkpoint_policy.jsonl').open('a') as file:
+            file.write(json.dumps({'checkpoint_tasks':checkpoint_tasks,'scientific_counts':'unchanged'})+'\n')
         with store.append_session():
-            if 'execution_envelope' in manifest['evidence']['resources']:
-                from .protocol import execution_overhead
-                envelope=manifest['evidence']['resources']['execution_envelope']
-                bound=execution_overhead(manifest['scientific'],manifest['evidence']['resources'])['additional_peak_bytes']
-                budget(bound+max(0,checkpoint_tasks-16)*8*envelope['max_task_record_bytes'])
             committed=store.committed_keys()
             for outer in range(count):
                 if f'replication-{outer}' in committed: continue
@@ -356,9 +369,10 @@ def run_confirmation(manifest: JsonRecord, output: Path, *, manifest_path=None, 
             return _finish(store,analysis,'completed')
     except ExecutionResourceLimit as exc:
         decision=classify_gate({'code':'LOCAL_RESOURCE_LIMIT','run_path':str(path),'reason':str(exc),'recovery':'resume identical manifest; only checkpoint size may change'})
-        (path/'resource_stop.json').write_text(json.dumps(to_json_record(decision),indent=2)+'\n')
+        if path.exists(): (path/'resource_stop.json').write_text(json.dumps(to_json_record(decision),indent=2)+'\n')
         return decision
     except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
+        if store is None: raise
         return _finish(store,{'status':'invalid','reason':str(exc)},'invalid')
     # Process interruption leaves running metadata and only committed pairs;
     # replay verifies every block and recomputes only uncommitted replications.

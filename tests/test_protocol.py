@@ -209,3 +209,29 @@ class ProtocolTests(unittest.TestCase):
             env={**os.environ,'PYTHONPATH':source}
             actual=json.loads(subprocess.check_output([str(python),'-c','import json; from prepared_learning.protocol import runtime_identity; print(json.dumps(runtime_identity()))'],cwd=other_cwd,env=env,text=True))
             self.assertEqual(actual,expected)
+
+class OperationalCheckpointBoundTests(unittest.TestCase):
+    def test_requested_chunks_and_endpoint_rounding_bound_inventory(self):
+        from prepared_learning.protocol import execution_overhead
+        from tests.test_confirmation import tiny
+        _,s=tiny('fixed_prior_task_simulation')
+        s['config']['sample_plan']['tasks_per_replicate']=1000000
+        resources=evidence_fixture(draft_fixture())['resources']
+        small=execution_overhead(s,resources,checkpoint_tasks=1,existing_blocks=37)
+        self.assertGreaterEqual(small['projected_block_inventory'],2000002+37)
+        self.assertGreater(small['seconds'],execution_overhead(s,resources)['seconds'])
+        s['config']['sample_plan'].update(analysis_mode='nested_task_simulation',outer_replicates=3,tasks_per_replicate=1)
+        s['update_check_schedule']={'outer_replications':[0,1,2],'tasks_per_replication':1}
+        bounds=execution_overhead(s,resources,checkpoint_tasks=16)
+        # Each replication and endpoint closes its own chunk: six chunks.
+        self.assertGreaterEqual(bounds['projected_block_inventory'],16*3+2*6+4)
+
+    def test_recovery_bounds_remaining_chunks_plus_actual_old_inventory(self):
+        from prepared_learning.protocol import execution_overhead
+        from tests.test_confirmation import tiny
+        _,s=tiny('fixed_prior_task_simulation')
+        s['config']['sample_plan']['tasks_per_replicate']=1000000
+        resources=evidence_fixture(draft_fixture())['resources']
+        bounds=execution_overhead(s,resources,checkpoint_tasks=1024,existing_blocks=1999998,
+            completed_tasks={(0,'primary'):999999})
+        self.assertEqual(bounds['projected_block_inventory'],1999998+16+4+4)
