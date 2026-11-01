@@ -40,13 +40,27 @@ def solve_qp(qp, variable_scale):
         if magnitude==0 or not np.isfinite(magnitude): raise ValueError('objective scaling not representable')
         A=qp.A; offset=qp.offset/scale
         result=minimize(lambda y:(qp.linear@(scale*y)+(scale*y)@qp.hessian@(scale*y))/magnitude, np.zeros(len(qp.linear)), jac=lambda y:scale*(qp.linear+2*qp.hessian@(scale*y))/magnitude, method='SLSQP',constraints={'type':'ineq','fun':lambda y:A@y+offset,'jac':lambda y:A},options={'ftol':1e-14,'maxiter':2000})
-        y=result.x
-        # Polish the proposed active set by solving the equality-constrained KKT system.
-        active=np.flatnonzero(A@y+offset < 1e-8)
-        H=2*qp.hessian*scale*scale/magnitude; l=qp.linear*scale/magnitude; C=A[active]
-        K=np.block([[H,-C.T],[C,np.zeros((len(active),len(active)))]])
-        candidate=np.linalg.lstsq(K,np.r_[-l,-offset[active]],rcond=None)[0][:len(y)]
-        if np.min(A@candidate+offset)>=-1e-12: y=candidate
+        y=np.asarray(result.x,dtype=float)
+        if y.shape!=qp.linear.shape or not np.all(np.isfinite(y)):
+            raise ValueError('nonfinite or invalid solver iterate: '+str(result.message))
+        # Test the diagonal unconstrained minimizer directly before treating any
+        # near-zero slack as active. This retains very weak positive directions.
+        unconstrained=-qp.linear/(2*np.diag(qp.hessian))/scale
+        polish_valid=True
+        if np.all(np.isfinite(unconstrained)) and np.all(A@unconstrained+offset>=0):
+            y=unconstrained
+        else:
+            active=np.flatnonzero(A@y+offset < 1e-8)
+            H=2*qp.hessian*scale*scale/magnitude; l=qp.linear*scale/magnitude; C=A[active]
+            K=np.block([[H,-C.T],[C,np.zeros((len(active),len(active)))]])
+            try:
+                solution=np.linalg.solve(K,np.r_[-l,-offset[active]])
+                candidate=solution[:len(y)]; multipliers=solution[len(y):]
+                polish_valid=(np.all(np.isfinite(solution)) and np.all(multipliers>=0)
+                              and np.min(A@candidate+offset)>=-1e-12)
+                if polish_valid: y=candidate
+            except np.linalg.LinAlgError:
+                polish_valid=False
         x=scale*y; before=x.copy()
         # Constraints encode either F or Z; remove rounding-scale violations.
         if len(qp.A)==len(x)+1 and np.all(qp.A[:-1]==np.eye(len(x))):
@@ -57,5 +71,5 @@ def solve_qp(qp, variable_scale):
         repair=float(np.max(np.abs(x-before),initial=0))
     diagnostic=diagnose_qp(qp,x)
     from dataclasses import replace
-    diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,'solver_success':True if result is None else bool(result.success),'solver_message':'zero budget' if result is None else str(result.message),'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,'repair_inf':repair})
+    diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,'solver_success':True if result is None else bool(result.success and polish_valid),'solver_message':'zero budget' if result is None else str(result.message),'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,'repair_inf':repair,'active_set_polish_valid':True if result is None else bool(polish_valid)})
     return x,diagnostic

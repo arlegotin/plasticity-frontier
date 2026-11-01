@@ -28,7 +28,7 @@ class FrontierTests(unittest.TestCase):
   self.assertAlmostEqual(self.solve(S,.6,1).F.metric.floor,min(.6,1/4.25))
   r=self.solve(S,1.,6); g=solve_unrestricted_gamma(S,4,1.,1.); q=1.25*S+.5
   self.assertAlmostEqual(r.F.objective,1-2*S@g+q@(g*g),delta=1e-10)
-  self.assertGreater(r.Z.metric.floor,0)
+  self.assertGreater(self.solve(S,10.,6).Z.metric.floor,0)
  def test_caps_are_monotone(self):
   values=[min(self.solve(S,k,m).F.objective,self.solve(S,k,m).Z.objective) for k,m in ((.4,2),(.6,2),(.6,3))]
   self.assertGreaterEqual(values[0],values[1]); self.assertGreaterEqual(values[1],values[2])
@@ -55,3 +55,23 @@ class FrontierTests(unittest.TestCase):
    self.assertEqual(prepared.resources.trainable_parameters,21)
    direct=make_method('B05:'+name,{'metric':prepared.metric}); dp=direct.prepare(prior,budget,task)
    np.testing.assert_allclose(method.adapt(prepared,context).coefficient,direct.adapt(dp,context).coefficient,atol=1e-12)
+ def test_inactive_budget_preserves_weak_positive_gains(self):
+  from prepared_learning.frontier import solve_frontier
+  for n,s,sigma in ((4,np.array([1.-1e-10,1e-10]),1.),(10**16,np.array([1.,1e-20]),0.)):
+   prior,budget,task=fixture(s,10.,2)
+   from dataclasses import replace
+   prior=replace(prior,noise_variance=sigma); task=replace(task,target_context_size=n)
+   r=solve_frontier(prior,budget,task); expected=s[1]/((n+1)/n*s[1]+(1+sigma)/n)
+   for branch in (r.F,r.Z):
+    if branch.status=='completed':
+     self.assertGreater(branch.variables[-1],0)
+     self.assertAlmostEqual(branch.variables[-1]/expected,1.,delta=1e-5)
+    else: self.assertEqual(r.selection_status,'unresolved')
+ def test_nonfinite_failed_iterates_are_retained(self):
+  from scipy.optimize import OptimizeResult
+  from prepared_learning.frontier import solve_frontier
+  def failed(*args,**kwargs): return OptimizeResult(success=False,x=np.full(len(args[1]),np.nan),message='nonfinite solver iterate')
+  with patch('prepared_learning.quadratic.minimize',side_effect=failed): r=solve_frontier(*fixture())
+  self.assertEqual(r.selection_status,'unresolved')
+  for branch in (r.F,r.Z):
+   self.assertEqual(branch.status,'failed'); self.assertTrue(np.all(np.isfinite(branch.variables)))

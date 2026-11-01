@@ -32,10 +32,13 @@ def solve_frontier(prior,budget,task):
         else:
             gains=np.r_[x,np.zeros(d-len(x))]; floor=float(gains.min()); inc=gains-floor; vectors=basis
             independent=solve_rank_gains(s,task.target_context_size,prior.noise_variance,k,m)
-            diag=replace(diag,kkt={**diag.kkt,'rank_oracle_max_error':float(np.max(np.abs(gains-independent)))})
+            discrepancy=np.abs(gains-independent)
+            denominators=np.maximum(np.abs(gains),np.abs(independent))
+            relative=np.divide(discrepancy,denominators,out=np.zeros_like(discrepancy),where=denominators>0)
+            diag=replace(diag,kkt={**diag.kkt,'rank_oracle_max_error':float(np.max(discrepancy)), 'rank_oracle_max_relative_error':float(np.max(relative))})
         meta=SupportMetadata('analytic',int(floor==0)*(d-int(np.count_nonzero(inc))),int(d-np.count_nonzero(inc)),tuple(np.flatnonzero(inc)))
         metric=CompactMetric(floor,vectors,inc,meta)
-        status='completed' if diag.kkt['solver_success'] and diag.feasibility['minimum_slack']>=-1e-10*max(min(k,1.),1e-300) and diag.kkt['stationarity_inf']<1e-9 and diag.kkt['complementarity_inf']<1e-9 else 'failed'
+        status='completed' if diag.kkt['solver_success'] and (branch!='Z' or diag.kkt['rank_oracle_max_relative_error']<=1e-6) and diag.feasibility['minimum_slack']>=-1e-10*max(min(k,1.),1e-300) and diag.kkt['stationarity_inf']<1e-9 and diag.kkt['complementarity_inf']<1e-9 else 'failed'
         branches.append(BranchResult(branch,x,metric,diag.dual['primal'],diag,status))
     F,Z=branches; gap=abs(F.objective-Z.objective)
     errors=max(abs(F.diagnostics.dual['gap']),abs(Z.diagnostics.dual['gap']),1e-14)
