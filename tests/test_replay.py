@@ -8,6 +8,35 @@ from tests.test_reporting import reporting, confirmation_input
 
 
 class ReplayTests(unittest.TestCase):
+    def test_learned_replay_remeasures_fit_cost_ids(self):
+        api=reporting(self)
+        from prepared_learning import confirmation
+        from tests.test_confirmation import execution_manifest
+        with tempfile.TemporaryDirectory() as tmp, patch.object(confirmation,'_live_identity'):
+            root=Path(tmp); manifest=execution_manifest()
+            a=confirmation.run_confirmation(manifest,root/'a')
+            b=confirmation.run_confirmation(manifest,root/'b')
+            result=api.compare_run_stores(Path(a.evidence['run_path']),Path(b.evidence['run_path']),rtol=1e-10,atol=1e-12)
+            self.assertEqual(result['status'],'matched')
+        left={'asset_fit_id':'B01:100','shrink_fit_id':'B01:100','asset_hash':'scientific-a'}
+        right={'asset_hash':'scientific-a','shrink_fit_id':'B01:900','asset_fit_id':'B01:900'}
+        self.assertEqual(api._scientific(left),api._scientific(right))
+        right['shrink_fit_id']='B01:901'
+        self.assertNotEqual(api._scientific(left),api._scientific(right))
+        right=dict(left,asset_hash='scientific-b')
+        self.assertNotEqual(api._scientific(left),api._scientific(right))
+        # One shared map spans every cost field, not a map per field. Both a
+        # split of a shared fit and a merge of distinct fits must be detected.
+        left={'asset_fit_id':'B01:100','shrink_fit_id':'B01:100',
+              'base_fit_id':'B01:200','noise_fit_id':'B01:200'}
+        renamed={'noise_fit_id':'B01:900','base_fit_id':'B01:900',
+                 'shrink_fit_id':'B01:800','asset_fit_id':'B01:800'}
+        self.assertEqual(api._scientific(left),api._scientific(renamed))
+        renamed['noise_fit_id']='B01:800'
+        self.assertNotEqual(api._scientific(left),api._scientific(renamed))
+        renamed['base_fit_id']='B01:800'
+        self.assertNotEqual(api._scientific(left),api._scientific(renamed))
+
     def test_replay_orders_tasks_by_scientific_key_across_many_chunks(self):
         api=reporting(self)
         from prepared_learning import confirmation

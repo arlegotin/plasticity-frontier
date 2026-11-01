@@ -546,11 +546,26 @@ def compare_scientific(left, right, *, rtol, atol, path='root'):
     elif type(left)!=type(right) or left!=right: raise ValueError('scientific identity/count differs: '+path)
 
 
-def _scientific(value):
-    """Exclude measured duration and reporting locations, never scientific IDs."""
+def _scientific(value, _measurement_ids=None):
+    """Exclude measured duration; preserve aliases of clock-derived cost IDs.
+
+    selection.py uses perf_counter_ns IDs to charge a shared source fit once.
+    Their sharing topology must replay, but the clock suffix cannot. Scientific
+    asset hashes, candidate identifiers, data keys and counts remain untouched.
+    """
+    if _measurement_ids is None: _measurement_ids={}
     if isinstance(value,dict):
-        return {k:_scientific(v) for k,v in value.items() if not k.endswith('_ns') and k not in ('timing','timing_records','timestamp','run_path','attempt_path','elapsed_seconds','wall_time_seconds')}
-    if isinstance(value,list): return [_scientific(v) for v in value]
+        result={}
+        for key in sorted(value):
+            if key.endswith('_ns') or key in ('timing','timing_records','timestamp','run_path','attempt_path','elapsed_seconds','wall_time_seconds','peak_rss_bytes'): continue
+            item=value[key]
+            if key in ('asset_fit_id','base_fit_id','shrink_fit_id','noise_fit_id') and isinstance(item,str):
+                if item not in _measurement_ids:
+                    _measurement_ids[item]=item.rsplit(':',1)[0]+':measurement-'+str(len(_measurement_ids))
+                result[key]=_measurement_ids[item]
+            else: result[key]=_scientific(item,_measurement_ids)
+        return result
+    if isinstance(value,list): return [_scientific(v,_measurement_ids) for v in value]
     return value
 
 
