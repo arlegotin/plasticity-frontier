@@ -3,6 +3,240 @@ from fractions import Fraction
 
 from prepared_learning.pilot import plan_sample_sizes, INITIAL_HALF_WIDTH
 
+
+class _PilotPayload(dict):
+    """A JSON-compatible graph whose lifetime can be observed without owning it."""
+
+
+def _pilot_preparation(config, root, outer, phase, methods, *, missing_joint=False):
+    import numpy as np
+    level = (phase-10)//2 if phase < 70 else 2
+    replication = outer % 3
+    payload = _PilotPayload(candidate_detail='x'*(128*1024), probe={'eligible': False})
+    parent = np.full(100000, 1.+replication/10)
+    selected = {}
+    for role, loss in (('baseline', 1.+replication/10), ('joint', 1.2+replication/10)):
+        if missing_joint and role == 'joint':
+            continue
+        selected[role] = _PilotPayload(
+            candidate_id=role, method_id='B02' if role == 'baseline' else 'B04',
+            asset_hash='a'*64, metric_hash='b'*64, validation_loss=loss,
+            validation_task_losses=parent[:config.sample_plan.source_validation_tasks],
+            prepared_state=payload, numerical_error_assessment={'level': 'float64_diagnostic'})
+    risks = {'baseline': 1.+(replication+1)/100, 'joint': 1.}
+    if missing_joint:
+        risks.pop('joint')
+    result = _PilotPayload(
+        selected=selected, risks=risks, failures={'joint': 'missing candidate'} if missing_joint else {},
+        candidate_records=[payload, {'status': 'failed', 'failure_reason': 'retained failure'}],
+        selection_records=[payload], restoration_failures=[], family_risks={'baseline': payload},
+        source_keys=[f'{root}/{phase}/{outer}/train', f'{root}/{phase}/{outer}/validation'],
+        source_key='c'*64, training_observation_hash='d'*64, validation_observation_hash='e'*64,
+        relative_covariance_error=.9 if level == 0 else .2, eigenspace_projection_error=.1,
+        tuning_resolution='resolved', generation_ns=1000000, preparation_ns=2000000*(level+1),
+        diagnostic_generation_ns=100, diagnostic_adaptation_ns=200, diagnostic_prediction_ns=300,
+        simulation_task_seconds=.00001, method_order=list(methods),
+        truth_second_moment_hash='f'*64, truth_noise_hash='0'*64, peak_rss_bytes=1000,
+        tasks=[{'values': {'baseline': payload}}], diagnostic_values={'baseline': payload})
+    return result, {'baseline_metric': np.arange(16, dtype=float)}, (payload, parent, *selected.values())
+
+
+class CompactPilotTests(unittest.TestCase):
+    def test_compact_record_detaches_validation_views_and_missing_roles(self):
+        import gc
+        import weakref
+        import prepared_learning.pilot as pilot
+        result, assets, graphs = _pilot_preparation(PilotIntegrationTests.config(), 123, 0, 10, ['B02'], missing_joint=True)
+        result.update(level=0, block_id=0, replication=0, outer_replication=0, difference=None, serialization_ns=42)
+        refs = [weakref.ref(graph) for graph in (*graphs, result)]
+        compact = pilot._compact_pilot_replication(result)
+        self.assertEqual(compact['selected'], {'baseline': {'validation_loss': 1., 'validation_task_losses': [1., 1.]}})
+        self.assertEqual(compact['risks'], {'baseline': 1.01})
+        self.assertIsNone(compact['difference'])
+        self.assertEqual(compact['failures'], {'joint': 'missing candidate'})
+        self.assertEqual(compact['source_keys'], ['123/10/0/train', '123/10/0/validation'])
+        self.assertEqual(set(compact), set(('level', 'block_id', 'replication', 'outer_replication', 'source_keys', 'risks', 'difference', 'tuning_resolution', 'failures', 'relative_covariance_error', 'eigenspace_projection_error', 'selected', 'generation_ns', 'preparation_ns', 'serialization_ns', 'diagnostic_generation_ns', 'diagnostic_adaptation_ns', 'diagnostic_prediction_ns', 'simulation_task_seconds')))
+        result['source_keys'].append('mutation')
+        result['failures']['baseline'] = 'mutation'
+        del result, assets, graphs
+        gc.collect()
+        self.assertTrue(all(ref() is None for ref in refs))
+        self.assertEqual(len(compact['source_keys']), 2)
+        self.assertEqual(compact['failures'], {'joint': 'missing candidate'})
+
+    def test_envelope_folds_full_record_maxima_and_preserves_empty_contract(self):
+        import json
+        from prepared_learning.records import to_json_record
+        import prepared_learning.pilot as pilot
+        envelopes = []
+        for outer, elapsed in ((0, 1000), (1, 900000)):
+            full, _, _ = _pilot_preparation(PilotIntegrationTests.config(), 123, outer, 10, ['B02'])
+            full['serialization_ns'] = elapsed
+            envelope = pilot.measure_execution_envelope([full], [])
+            prep = len(json.dumps(to_json_record({**full, 'tasks': []}), allow_nan=False).encode())
+            task = 4*len(json.dumps(to_json_record(full['tasks'][0]), allow_nan=False).encode())
+            self.assertEqual(envelope['max_preparation_record_bytes'], prep)
+            self.assertEqual(envelope['max_task_record_bytes'], task)
+            self.assertEqual(envelope['serialization_seconds_per_byte'], elapsed/1e9/(prep+task))
+            envelopes.append(envelope)
+        merged = pilot._merge_pilot_envelopes(envelopes)
+        for key in ('max_preparation_record_bytes', 'max_task_record_bytes', 'serialization_seconds_per_byte', 'checkpoint_seconds', 'analysis_seconds_per_unit'):
+            self.assertEqual(merged[key], max(e[key] for e in envelopes))
+        self.assertEqual(merged['policy'], 'paired_chunks_v1')
+        empty = pilot._merge_pilot_envelopes([])
+        self.assertEqual(empty['max_preparation_record_bytes'], 1)
+        self.assertEqual(empty['max_task_record_bytes'], 1)
+
+    def test_primary_releases_every_graph_before_next_preparation_including_scaling(self):
+        import gc
+        import tempfile
+        import weakref
+        from dataclasses import replace
+        from pathlib import Path
+        from unittest.mock import patch
+        import prepared_learning.pilot as pilot
+        config = PilotIntegrationTests.config()
+        config = replace(config, numerics={**config.numerics, 'pilot': {**config.numerics['pilot'], 'workloads': ['W0', 'W1', 'W2']}})
+        refs = []
+        phases = []
+        def prepare(*args):
+            gc.collect()
+            self.assertTrue(all(ref() is None for ref in refs), f'previous graph retained before phase {args[3]}')
+            full, assets, graphs = _pilot_preparation(*args)
+            refs[:] = [weakref.ref(graph) for graph in (*graphs, full, *assets.values())]
+            phases.append(args[3])
+            return full, assets
+        with tempfile.TemporaryDirectory() as root, patch.object(pilot, '_preparation_replication', side_effect=prepare):
+            pilot.run_pilot(config, Path(root))
+        gc.collect()
+        self.assertTrue(all(ref() is None for ref in refs))
+        self.assertEqual(phases, [10]*6+[12]*6+[70, 72])
+
+    def test_primary_preserves_full_publication_science_and_selected_level_envelope(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import numpy as np
+        import prepared_learning.pilot as pilot
+        from prepared_learning.runner import RunStore
+        from prepared_learning.records import to_json_record
+        expected_raw = {}
+        envelopes = {0: [], 1: []}
+        measure = pilot.measure_execution_envelope
+        compact = pilot._compact_pilot_replication
+        def prepare(*args):
+            full, assets, _ = _pilot_preparation(*args)
+            expected_raw[args[2]] = to_json_record(full)
+            return full, assets
+        def measured(results, blocks):
+            observed = measure(results, blocks)
+            for full in results:
+                self.assertIn('candidate_records', full)
+                envelopes[full['level']].append(observed)
+            return observed
+        def compact_after_publication(full):
+            path = next(Path(root).glob('pilot-*'))
+            outer = full['outer_replication']
+            self.assertTrue((path/f'preparation-{outer}.json').is_file())
+            self.assertEqual(len(list((path/'blocks').glob('*/assets/baseline_metric.npy'))), outer+1)
+            self.assertEqual(len(RunStore(path).read_records('preparation_risks')), 2*(outer+1))
+            self.assertEqual(len(RunStore(path).read_records('timing_blocks')), outer+1)
+            return compact(full)
+        with tempfile.TemporaryDirectory() as root, patch.object(pilot, '_preparation_replication', side_effect=prepare), patch.object(pilot, 'measure_execution_envelope', side_effect=measured), patch.object(pilot, '_compact_pilot_replication', side_effect=compact_after_publication):
+            result = pilot.run_pilot(PilotIntegrationTests.config(), Path(root))
+            path = Path(result['run_path'])
+            for outer, raw in expected_raw.items():
+                raw.update(level=outer//6, block_id=(outer%6)//3, replication=outer%3, outer_replication=outer,
+                           difference=raw['risks']['baseline']-raw['risks']['joint'])
+                self.assertEqual(json.loads((path/f'preparation-{outer}.json').read_text()), raw)
+            rows = RunStore(path).read_records('preparation_risks')
+            self.assertEqual(len(rows), 24)
+            self.assertTrue(all(row['numerical_error_assessment'] == {'level': 'float64_diagnostic'} for row in rows))
+            assets = list((path/'blocks').glob('*/assets/baseline_metric.npy'))
+            self.assertEqual(len(assets), 12)
+            for asset in assets:
+                np.testing.assert_array_equal(np.load(asset), np.arange(16))
+            self.assertEqual(len(RunStore(path).read_records('timing_blocks')), 12)
+            self.assertEqual(result['source_count_decision']['source_training_tasks'], 6)
+            self.assertEqual(result['source_count_decision']['source_validation_tasks'], 4)
+            self.assertEqual([curve['relative_covariance_error_mean'] for curve in result['source_curve']], [.9, .19999999999999998])
+            self.assertEqual([curve['validation_stability'] for curve in result['source_curve']], ['stable', 'stable'])
+            self.assertEqual([curve['validation_mean_variance'] for curve in result['source_curve']], [0., 0.])
+            self.assertEqual([block['differences'] for block in result['blocks']], [[.010000000000000009, .020000000000000018, .030000000000000027]]*2)
+            self.assertEqual(result['blocks'][0]['source_keys'], [f'{PilotIntegrationTests.config().keys["exploration"]}/12/{outer}/{kind}' for outer in (6, 7, 8) for kind in ('train', 'validation')])
+            self.assertEqual(result['precision_diagnostics']['status'], 'extend_pilot')
+            self.assertEqual(result['calibration']['status'], 'insufficient')
+            draft = json.loads((path/'protocol_draft.json').read_text())['draft']['scientific']
+            self.assertEqual(draft['config']['sample_plan']['source_training_tasks'], 6)
+            self.assertEqual(draft['config']['sample_plan']['source_validation_tasks'], 4)
+            self.assertEqual(draft['config']['keys'], {})
+            # Fixed eager-run reference captured before the retention change;
+            # only measured resources and checkout/runtime identity are excluded.
+            from prepared_learning.records import content_hash
+            draft.pop('versions')
+            science = ('blocks', 'uncertainty', 'source_curve', 'source_count_decision', 'precision_diagnostics', 'calibration', 'tuning_resolution', 'failures', 'all_pilot_source_keys', 'planning_policy')
+            self.assertEqual(content_hash({'result': {key: result[key] for key in science}, 'draft': draft}),
+                             'd88cf1f5964525f21c789ffce4ddac519235fdb630a5859324856333c413b20d')
+            for key in ('max_preparation_record_bytes', 'max_task_record_bytes', 'serialization_seconds_per_byte', 'checkpoint_seconds', 'analysis_seconds_per_unit'):
+                self.assertEqual(result['resources']['execution_envelope'][key], max(e[key] for e in envelopes[1]))
+            self.assertEqual([len(envelopes[level]) for level in (0, 1)], [6, 6])
+
+    def test_missing_role_retains_null_pairs_failures_and_full_raw_evidence(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import prepared_learning.pilot as pilot
+        from prepared_learning.runner import RunStore
+        def prepare(*args):
+            full, assets, _ = _pilot_preparation(*args, missing_joint=True)
+            return full, assets
+        with tempfile.TemporaryDirectory() as root, patch.object(pilot, '_preparation_replication', side_effect=prepare):
+            result = pilot.run_pilot(PilotIntegrationTests.config(), Path(root))
+            path = Path(result['run_path'])
+            rows = RunStore(path).read_records('preparation_risks')
+            self.assertEqual(len(rows), 24)
+            self.assertTrue(all(row['paired_risk_difference'] is None for row in rows))
+            joint = [row for row in rows if row['method_id'] == 'joint']
+            self.assertTrue(all(row['status'] == 'failed' and row['conditional_risk'] is None and row['failure_reason'] == 'missing candidate' for row in joint))
+            self.assertEqual(result['status'], 'failed')
+            self.assertEqual(result['failures'], ['missing candidate']*12)
+            self.assertEqual(result['resources']['update_check_seconds'], [])
+            self.assertEqual([block['differences'] for block in result['blocks']], [[], []])
+            for raw_path in path.glob('preparation-*.json'):
+                raw = json.loads(raw_path.read_text())
+                self.assertIsNone(raw['difference'])
+                self.assertEqual(set(raw['selected']), {'baseline'})
+                self.assertEqual(raw['candidate_records'][1]['failure_reason'], 'retained failure')
+
+    def test_full_payload_envelope_preserves_resource_rejection_and_simulation_costs(self):
+        import json
+        import tempfile
+        from dataclasses import replace
+        from pathlib import Path
+        from unittest.mock import patch
+        import prepared_learning.pilot as pilot
+        from prepared_learning.protocol import validate_execution_envelope
+        config = PilotIntegrationTests.config()
+        config = replace(config, methods=(*config.methods, 'B00'))
+        def prepare(*args):
+            full, assets, _ = _pilot_preparation(*args)
+            return full, assets
+        with tempfile.TemporaryDirectory() as root, patch.object(pilot, '_preparation_replication', side_effect=prepare), patch.object(pilot, '_available_memory', return_value=16*1024**2), patch.object(pilot, '_rss_bytes', return_value=1000):
+            result = pilot.run_pilot(config, Path(root))
+            science = json.loads((Path(result['run_path'])/'protocol_draft.json').read_text())['draft']['scientific']
+            self.assertEqual(science['simulation_schedule'], {'outer_replications': [0], 'tasks_per_replication': 2, 'method_ids': ['B00'], 'inference': 'descriptive_only'})
+            self.assertEqual(result['resources']['simulation_task_seconds'], [.00001]*6)
+            self.assertEqual(result['resources']['update_check_seconds'], [.0000006]*6)
+            with self.assertRaisesRegex(ValueError, 'working sets'):
+                validate_execution_envelope(science, result['resources'])
+            # A compact-record byte substitute would wrongly admit this same run.
+            full, _, _ = _pilot_preparation(config, 42, 6, 12, config.methods)
+            full.update(level=1, block_id=0, replication=0, outer_replication=6, difference=.01, serialization_ns=1)
+            underestimated = {**result['resources'], 'execution_envelope': pilot.measure_execution_envelope([pilot._compact_pilot_replication(full)], [])}
+            validate_execution_envelope(science, underestimated)
+
 class PilotPlanningTests(unittest.TestCase):
     def test_precision_uses_headroom_not_success_threshold(self):
         self.assertEqual(INITIAL_HALF_WIDTH, Fraction(1266883, 39703750) / 4)

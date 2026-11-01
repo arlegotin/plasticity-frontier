@@ -239,6 +239,32 @@ def _validation_stability(blocks):
     maximum=max(diagnostics)
     return ('stable' if maximum<=3 else 'unstable'),maximum
 
+def _compact_pilot_replication(result: dict) -> dict:
+    """Detach the primary pilot's planning inputs after complete publication."""
+    compact={key:result[key] for key in (
+        'level','block_id','replication','outer_replication','difference',
+        'tuning_resolution','relative_covariance_error','eigenspace_projection_error',
+        'generation_ns','preparation_ns','serialization_ns','diagnostic_generation_ns',
+        'diagnostic_adaptation_ns','diagnostic_prediction_ns','simulation_task_seconds')}
+    compact['source_keys']=list(result['source_keys'])
+    compact['risks']={role:value for role,value in result['risks'].items() if role in ('baseline','joint')}
+    compact['failures']=dict(result['failures'])
+    compact['selected']={role:{'validation_loss':float(row['validation_loss']),
+        'validation_task_losses':[float(value) for value in row['validation_task_losses']]}
+        for role,row in result['selected'].items() if role in ('baseline','joint')}
+    return compact
+
+
+def _merge_pilot_envelopes(envelopes: list[dict]) -> dict:
+    """Fold live full-record measurements, including a conservative scalar max."""
+    if not envelopes: return measure_execution_envelope([],[])
+    merged=dict(envelopes[0])
+    for key in ('max_preparation_record_bytes','max_task_record_bytes',
+                'serialization_seconds_per_byte','checkpoint_seconds','analysis_seconds_per_unit'):
+        merged[key]=max(envelope[key] for envelope in envelopes)
+    return merged
+
+
 def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     from .tasks import resolve_population
     config=resolve_population(config,config.keys.get('exploration',0))
@@ -306,7 +332,7 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
                              'numpy_module':str(Path(np.__file__).resolve()),'scipy_module':str(Path(scipy.__file__).resolve())},
         'runtime_identity':runtime,'runtime_sha256':versions['runtime_sha256'],
         'thread_policy':runtime['thread_environment'],'blas_policy':content_hash(runtime['builds'])})
-    all_results=[]; curves=[]; block_rows={}; failures=[]; stop=None; outer=0
+    all_results=[]; curves=[]; block_rows={}; failures=[]; stop=None; outer=0; level_envelopes={}
     for level,(training,validation) in enumerate(zip(levels,validations)):
         local=replace(config,sample_plan=replace(sample,source_training_tasks=training,source_validation_tasks=validation))
         level_results=[]
@@ -352,8 +378,13 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
                     'diagnostic_adaptation_ns':result['diagnostic_adaptation_ns'],'diagnostic_prediction_ns':result['diagnostic_prediction_ns'],'diagnostic_generation_ns':result['diagnostic_generation_ns']}
                 store.commit_block(f'timing-{outer}',[timing],{})
                 result['serialization_ns']=serialization_ns
-                all_results.append(result); level_results.append(result); block_rows[level,block].append(result)
-                failures.extend(result['failures'].values()); outer+=1
+                envelope=measure_execution_envelope([result],[])
+                level_envelopes[level]=_merge_pilot_envelopes(([level_envelopes[level]] if level in level_envelopes else [])+[envelope])
+                compact=_compact_pilot_replication(result)
+                all_results.append(compact); level_results.append(compact); block_rows[level,block].append(compact)
+                failures.extend(compact['failures'].values()); outer+=1
+                # Drop aliases before the next executor RHS allocates a new graph.
+                del result,assets,chosen,rows,timing
             if stop: break
         if level_results:
             errors=[r['relative_covariance_error'] for r in level_results]
@@ -410,8 +441,9 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
             measured,assets=_preparation_replication(local,root,outer,70+2*index,config.methods)
             _write_json(store.path/f'calibration-{name}.json',measured)
             scaling.append({'workload':name,'preparation_seconds':measured['preparation_ns']/1e9,'generation_seconds':measured['generation_ns']/1e9,
-                'peak_rss_bytes':measured['peak_rss_bytes'],'tuning_resolution':measured['tuning_resolution'],'failures':measured['failures']})
+                'peak_rss_bytes':measured['peak_rss_bytes'],'tuning_resolution':measured['tuning_resolution'],'failures':dict(measured['failures'])})
             outer+=1
+            del measured,assets
     resource={'status':'feasible' if estimate is not None and estimate<=max_seconds and _rss_bytes()<=budget and not stop else 'unresolved',
         'preparation_seconds':chosen['preparation_seconds'] if chosen else None,'estimated_total_seconds':estimate,
         'replication_seconds':cost_values,'update_check_seconds':check_costs,'simulation_task_seconds':simulation_costs,
@@ -428,7 +460,7 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
         'failures':failures,'resource_stop':stop,'all_pilot_source_keys':[k for r in all_results for k in r['source_keys']],
         'planning_policy':{'minimum_independent_replications_per_block':MIN_BLOCK_REPLICATES,'variance_ratio_limit':4.,'source_relative_error_target':threshold,'coverage_diagnostic_minimum':.90}}
     draft=_draft_for_pilot(config,result,versions)
-    resource['execution_envelope']=measure_execution_envelope([r for r in all_results if r['level']==selected_level],[])
+    resource['execution_envelope']=level_envelopes[selected_level] if selected_level in level_envelopes else _merge_pilot_envelopes([])
     from .protocol import execution_overhead
     if resource['estimated_total_seconds'] is not None:
         resource['estimated_total_seconds']+=execution_overhead(draft['scientific'],resource)['seconds']
