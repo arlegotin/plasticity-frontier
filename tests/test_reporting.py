@@ -28,7 +28,125 @@ def confirmation_input(root, mode='fixed_prior_task_simulation'):
     return descriptor, Path(gate.evidence['run_path'])
 
 
+def scoped_report_case(root, api):
+    """Gate unit test only: the receipt is synthetic, never campaign evidence."""
+    import hashlib
+    descriptors=[]
+    for name,kind,raw in (
+        ('historical','source',{'status':'failed','error':'retained unsuccessful source attempt'}),
+        ('scoped','diagnostic',{'status':'pass','difference':-.4,'interval':[-.5,-.3]}),
+        ('historical-diagnostic','diagnostic',{'status':'failed','error':'retained unsuccessful diagnostic attempt'})):
+        path=root/(name+'.json');path.write_text(json.dumps(raw))
+        descriptor=root/(name+'-input.json');descriptors.append(descriptor)
+        descriptor.write_text(json.dumps({'kind':kind,'label':name,'raw_path':str(path)}))
+    manifest=api.build_report_inputs(descriptors)
+    contract=dict(architecture='declared diagnostic',population='declared toy',baseline='declared control',
+                  metric='coefficient squared error',resource_contract='declared tiny shape')
+    manifest['claims']=[{'claim_id':'scoped-negative','statement':'negative diagnostic in declared scope',
+                        'input_ids':[1],'evidence_level':'numerical_diagnostic',**contract}]
+    receipt=root/'unit-test-receipt.json'
+    receipt.write_text(json.dumps({'status':'matched','clean_environment':True,'fixture':False,
+                                  'input_order_sha256':manifest['input_order_sha256']}))
+    manifest['replay']['receipt']={'path':str(receipt),'sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()}
+    return manifest
+
+
 class ReportingTests(unittest.TestCase):
+    def test_plot_cache_notice_filter_preserves_real_warnings_and_errors(self):
+        api=reporting(self)
+        import logging
+        logger=logging.getLogger('matplotlib.font_manager');filters=list(logger.filters)
+        original=api._csv
+        def write_with_notices(path,rows):
+            logger.warning('Matplotlib is building the font cache; this may take a moment.')
+            logger.warning('distinct font warning remains visible')
+            logger.error('font rendering error remains visible')
+            return original(path,rows)
+        with tempfile.TemporaryDirectory() as tmp, self.assertLogs(logger,level='WARNING') as captured:
+            with patch.object(api,'_csv',side_effect=write_with_notices):
+                api._figures(Path(tmp),[],[],[])
+        self.assertFalse(any('building the font cache' in message for message in captured.output))
+        self.assertTrue(any('distinct font warning' in message for message in captured.output))
+        self.assertTrue(any('font rendering error' in message for message in captured.output))
+        self.assertEqual(logger.filters,filters)
+
+    def test_retained_failed_source_does_not_veto_unrelated_scoped_completion(self):
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);manifest=scoped_report_case(root,api)
+            result=api.write_report(manifest,root/'report')
+            self.assertEqual(result.code,'SUPPORTED_IN_SCOPE')
+            self.assertFalse(result.evidence['blocked_claims'])
+            self.assertIn('retained unsuccessful source attempt',(root/'report/results.md').read_text())
+            self.assertIn('retained unsuccessful diagnostic attempt',(root/'report/results.md').read_text())
+            self.assertIn('-0.4',(root/'report/diagnostics.json').read_text())
+            tables=json.loads((root/'report/tables.json').read_text())
+            self.assertEqual(tables['statuses'][0]['status'],'failed')
+            self.assertEqual(tables['statuses'][2]['status'],'failed')
+
+    def test_failed_support_cannot_establish_a_numerical_claim(self):
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);manifest=scoped_report_case(root,api)
+            manifest['claims'][0]['input_ids']=[0]
+            with self.assertRaisesRegex(ValueError,'supporting evidence'):
+                api.write_report(manifest,root/'report')
+
+    def test_invalid_reconstructed_comparison_blocks_only_its_claim(self):
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);descriptor,_=confirmation_input(root)
+            manifest=api.build_report_inputs([descriptor]);tables=api.regenerate_tables(manifest,root/'tables')
+            comparison=tables['comparisons'][0]
+            # A completed store is insufficient if its raw inference is invalid.
+            comparison.update(status='invalid_or_incomplete',mean=None,interval=None,outcome='unavailable')
+            ledger=api._claims(manifest,tables)
+            self.assertEqual(ledger[0]['support_status'],'unavailable')
+            self.assertEqual(ledger[0]['unavailable_input_ids'],[0])
+            manifest['claims']=[{**ledger[0],'claim_id':'overclaim','evidence_level':'protected'}]
+            with self.assertRaisesRegex(ValueError,'supporting evidence|protected evidence'):
+                api._claims(manifest,tables)
+
+    def test_frontier_cli_records_envelope_preserves_branches_and_failures(self):
+        api=reporting(self)
+        import contextlib,csv,io
+        from prepared_learning.cli import main
+        from prepared_learning import frontier
+        original=frontier.solve_frontier
+        def fail_one_endpoint(prior,budget,task):
+            if budget.initialization_norm_cap==.2 and budget.trainable_parameter_cap==3:
+                raise RuntimeError('retained endpoint failure')
+            return original(prior,budget,task)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); config=root/'grid.json'
+            config.write_text(json.dumps({'schema_version':1,'spectrum':[.6,.4],'n':3,'sigma2':1.,
+                'depth':2,'initialization_norm_cap':.2,'trainable_parameter_cap':6,
+                'grid':{'widths':[1,2],'norm_caps':[0.,.2],'risk_tolerance':1.,'budget_tolerance':1.,'output':str(root/'grid')}}))
+            stdout=io.StringIO()
+            with contextlib.redirect_stdout(stdout), patch.object(frontier,'solve_frontier',side_effect=fail_one_endpoint):
+                self.assertEqual(main(['frontier','--config',str(config)]),1)
+            raw_path=Path(json.loads(stdout.getvalue())['attempt_path'])/'frontier.json'
+            raw=json.loads(raw_path.read_text())
+            descriptor=root/'input.json';descriptor.write_text(json.dumps({'kind':'diagnostic','raw_path':str(raw_path),'label':'actual grid','fixture':True}))
+            result=api.regenerate_tables(api.build_report_inputs([descriptor]),root/'report')
+            with (root/'report/frontier.csv').open() as stream: rows=list(csv.DictReader(stream))
+            points=[r for r in raw['records'] if r['kind']=='point']
+            self.assertTrue(rows,'executed frontier envelope was rendered as an empty panel')
+            for point in points:
+                for branch in ('F','Z'):
+                    row=next(r for r in rows if r['record_kind']=='point' and r['branch']==branch and int(r['width'])==point['width'] and float(r['budget'])==point['norm_cap'])
+                    self.assertEqual(json.loads(row['grid_metadata']),raw['metadata'])
+                    self.assertEqual(row['point_status'],point['status'])
+                    if point[branch] is None:
+                        self.assertEqual(row['value'],'');self.assertIn('retained endpoint failure',row['error'])
+                    else:
+                        self.assertEqual(float(row['value']),point[branch]['objective'])
+                        self.assertEqual(row['branch_status'],point[branch]['status'])
+                        self.assertEqual(json.loads(row['actual_resources']),point[branch]['actual_resources'])
+            self.assertEqual(sum(r['record_kind']=='interval' for r in rows),sum(r['kind']=='interval' for r in raw['records']))
+            self.assertNotIn('not_run',(root/'report/frontier.svg').read_text())
+            self.assertEqual(next(f for f in result['figures'] if f['csv']=='frontier.csv')['evaluation'],'analytic')
+
     def test_native_json_admission_does_not_charge_raw_analysis_workspaces(self):
         api=reporting(self)
         import os

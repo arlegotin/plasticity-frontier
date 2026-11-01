@@ -541,8 +541,14 @@ class _RecordStream:
 
 def _figures(output, comparisons, benchmarks, diagnostics):
     # No implicit ~/.matplotlib write, including when a caller set MPLCONFIGDIR.
+    import logging
     with tempfile.TemporaryDirectory(prefix='prepared-plots-') as config:
         prior=os.environ.get('MPLCONFIGDIR'); os.environ['MPLCONFIGDIR']=config
+        logger=logging.getLogger('matplotlib.font_manager')
+        def expected_cache_notice(record):
+            return not (record.levelno==logging.WARNING and record.getMessage()==
+                        'Matplotlib is building the font cache; this may take a moment.')
+        logger.addFilter(expected_cache_notice)
         try:
             import matplotlib
             matplotlib.use('Agg', force=True)
@@ -557,15 +563,29 @@ def _figures(output, comparisons, benchmarks, diagnostics):
             frontier=[]; resources=[]; pareto=[]
             for item in diagnostics:
                 raw=item['raw']; points=raw if isinstance(raw,list) else [raw]
-                if isinstance(raw,dict) and 'rows' in raw: points=raw['rows']
+                metadata=raw.get('metadata',{}) if isinstance(raw,dict) else {}
+                if isinstance(raw,dict): points=raw.get('records',raw.get('rows',points))
                 for point in points:
                     if not isinstance(point,dict): continue
+                    if not any(branch in point for branch in ('F','Z')) and not (metadata and point.get('kind')=='interval'): continue
+                    common={'input_id':item['input_id'],'record_kind':point.get('kind','point'),
+                        'width':point.get('width'),'budget':point.get('norm_cap',point.get('caps',{}).get('initialization_norm_cap')),
+                        'point_status':point.get('status','unresolved' if point.get('kind')=='interval' else 'recorded'),
+                        'error':point.get('error',point.get('reason')),'selection_status':point.get('selection_status'),
+                        'selected_branches':point.get('selected_branches'),'grid_metadata':metadata,
+                        'interval_lower':point.get('lower'),'interval_upper':point.get('upper'),
+                        'evaluation':'analytic','independent_n':None,'evidence_level':'float64_diagnostic'}
+                    if point.get('kind')=='interval':
+                        frontier.append({**common,'label':item['label']+'/unresolved interval','branch':None,'value':None,
+                                         'branch_status':None,'actual_resources':None,'diagnostics':point})
+                        continue
                     for branch in ('F','Z'):
                         row=point.get(branch)
-                        if isinstance(row,dict) and row.get('objective') is not None:
-                            frontier.append({'label':item['label']+'/'+branch,'value':row['objective'],
-                                'budget':point.get('norm_cap',point.get('caps',{}).get('initialization_norm_cap')),
-                                'evaluation':'analytic','independent_n':None,'evidence_level':'float64_diagnostic'})
+                        frontier.append({**common,'label':f"{item['label']}/{branch}, width={common['width']}, cap={common['budget']}",
+                            'branch':branch,'value':row.get('objective') if isinstance(row,dict) else None,
+                            'branch_status':row.get('status') if isinstance(row,dict) else 'unavailable',
+                            'actual_resources':row.get('actual_resources') if isinstance(row,dict) else None,
+                            'diagnostics':row.get('diagnostics') if isinstance(row,dict) else None})
             specifications.append(('frontier','Branch [declared norm cap]','Expected risk [coefficient²]','branch/norm cap','coefficient^2',frontier))
             for benchmark in benchmarks:
                 for r in benchmark['resources']:
@@ -587,15 +607,20 @@ def _figures(output, comparisons, benchmarks, diagnostics):
             for name,xlabel,ylabel,xunit,yunit,rows in specifications:
                 _csv(output/(name+'.csv'), rows)
                 fig,ax=plt.subplots(figsize=(8,4.5),layout='constrained')
-                if rows:
-                    x=[r.get('x',i) for i,r in enumerate(rows)]; y=[r['value'] for r in rows]
+                plotted=[r for r in rows if r['value'] is not None]
+                if plotted:
+                    x=[r.get('x',i) for i,r in enumerate(plotted)]; y=[r['value'] for r in plotted]
                     ax.scatter(x,y)
-                    if name!='pareto': ax.set_xticks(x,[r['label'] for r in rows],rotation=25,ha='right')
-                    for xx,row in zip(x,rows):
+                    if name!='pareto': ax.set_xticks(x,[r['label'] for r in plotted],rotation=25,ha='right')
+                    for xx,row in zip(x,plotted):
                         if row.get('low') is not None: ax.plot([xx,xx],[row['low'],row['high']],color='black')
                     ax.set_title('; '.join(f"{r['evaluation']}, independent n={r['independent_n']}" for r in rows[:4]))
                     ax.axhline(0,color='grey',linewidth=.7)
+                elif rows: ax.text(.5,.5,'Executed records; objectives unavailable (see CSV)',ha='center',transform=ax.transAxes)
                 else: ax.text(.5,.5,'not_run / no applicable verified observations',ha='center',transform=ax.transAxes)
+                if rows and len(plotted)<len(rows):
+                    ax.text(.01,.99,f'{len(rows)-len(plotted)} unavailable branch/interval records retained in CSV',
+                            va='top',fontsize=8,transform=ax.transAxes)
                 ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
                 fig.savefig(output/(name+'.svg')); fig.savefig(output/(name+'.pdf')); plt.close(fig)
                 labels={r['evaluation'] for r in rows}
@@ -604,6 +629,7 @@ def _figures(output, comparisons, benchmarks, diagnostics):
                     'independent_n':[r['independent_n'] for r in rows], 'renderer':'matplotlib'})
             return figures
         finally:
+            logger.removeFilter(expected_cache_notice)
             if prior is None: os.environ.pop('MPLCONFIGDIR',None)
             else: os.environ['MPLCONFIGDIR']=prior
 
@@ -654,6 +680,12 @@ def regenerate_tables(manifest: JsonRecord, output: Path) -> JsonRecord:
 def _claims(manifest, tables):
     comparisons={r['input_id']:r for r in tables['comparisons']}
     benchmarks={r['input_id']:r for r in tables['benchmarks']}
+    unavailable={r['input_id'] for r in tables.get('statuses',[]) if r['status'] in
+        ('failed','invalid','incomplete','running','interrupted','failed_or_incomplete',
+         'invalid_or_incomplete','unavailable','unsupported','not_run','unsuccessful_source_diagnostic')}
+    unavailable.update(i for i,r in comparisons.items() if r['run_status']!='completed' or r['mean'] is None
+                       or r['status']=='invalid_or_incomplete')
+    unavailable.update(i for i,r in benchmarks.items() if r.get('status')!='completed')
     ledger=[]
     for row in comparisons.values():
         ledger.append({'claim_id':f"comparison-{row['input_id']}", 'statement':row['outcome'],
@@ -679,6 +711,8 @@ def _claims(manifest, tables):
         ids=claim.get('input_ids',[])
         if not ids or any(type(i)!=int or not 0<=i<len(manifest['inputs']) for i in ids): raise ValueError('claim requires actual evidence input ids')
         level=claim['evidence_level']; entries=[manifest['inputs'][i] for i in ids]
+        if level not in ('source_record','forecast') and unavailable.intersection(ids):
+            raise ValueError('claim lacks valid supporting evidence: '+str(sorted(unavailable.intersection(ids))))
         if level=='rigorous_certificate':
             # A source text or float report cannot certify itself. Exact fixture
             # claims have an independently evaluated rational input and verifier.
@@ -713,6 +747,13 @@ def _claims(manifest, tables):
         elif level not in ('exploratory','numerical_diagnostic','source_record','forecast'):
             raise ValueError('unknown claim evidence level')
         ledger.append({**claim,'evidence_paths':[p for e in entries for p in e['inventory']]})
+    for claim in ledger:
+        # Historical records and forecasts disclose provenance, not successful
+        # execution. Their failures cannot invalidate another scoped claim.
+        descriptive=claim['evidence_level'] in ('source_record','forecast')
+        blocked=[] if descriptive else sorted(unavailable.intersection(claim['input_ids']))
+        claim['unavailable_input_ids']=blocked
+        claim['support_status']='historical_or_forecast_only' if descriptive else ('unavailable' if blocked else 'available')
     return ledger
 
 
@@ -749,14 +790,16 @@ def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
         replay=_read(path)
         if replay.get('input_order_sha256')!=manifest['input_order_sha256'] or replay.get('status')!='matched' or not replay.get('clean_environment'):
             raise ValueError('replay evidence does not match these report inputs')
+    blocked_claims=[{'claim_id':c['claim_id'],'input_ids':c['unavailable_input_ids']} for c in ledger if c['support_status']=='unavailable']
     completed=(bool(replay) and not replay.get('fixture') and not any(e.get('fixture') for e in manifest['inputs'])
-               and all(s['status'] not in ('failed','invalid','incomplete','running','interrupted','failed_or_incomplete') for s in tables['statuses']))
+               and not blocked_claims)
     decision=GateDecision(GateCode.SUPPORTED_IN_SCOPE if completed else GateCode.INSENSITIVE_OR_UNSUITABLE,
         {'gate':'G10','report':str(output/'results.md'),'claim_ledger':str(output/'claim_ledger.csv'),
          'clean_replay':'matched' if replay else 'not_run','input_order_sha256':manifest['input_order_sha256'],
+         'blocked_claims':blocked_claims,
          'scientific_conclusions':[r['outcome'] for r in tables['comparisons']]},
-        'Report reconstruction and clean replay completed in the recorded scope.' if completed else 'Reconstruction retained all outcomes; G10 remains incomplete without matching clean replay or with failed inputs.',
-        'Retain scoped negative and positive conclusions alike.' if completed else 'Complete missing replay or inspect failed evidence; do not infer a positive scientific result.')
+        'Report reconstruction and clean replay completed in the recorded scope.' if completed else 'Reconstruction retained all outcomes; G10 requires matching nonfixture replay and valid support for its scoped claims.',
+        'Retain scoped negative and positive conclusions and unsuccessful history alike.' if completed else 'Complete missing replay or resolve only affected claims; fixtures cannot establish production completion.')
     lines.extend(['','## G10 decision','',json.dumps(to_json_record(decision),indent=2),''])
     import shutil
     with (output/'results.md').open('w') as stream:
