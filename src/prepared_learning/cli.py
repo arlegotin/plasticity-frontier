@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     theory = sub.add_parser('check-theory'); theory.add_argument('--config', required=True); theory.set_defaults(handler=command_check_theory)
     geometry = sub.add_parser('check-geometry'); geometry.add_argument('--suite', choices=['adversarial'], required=True); geometry.set_defaults(handler=command_check_geometry)
     reproduce = sub.add_parser('reproduce'); reproduce.add_argument('--suite', choices=['source_and_baselines'], required=True); reproduce.add_argument('--run-source', action='store_true'); reproduce.add_argument('--full-matrix', action='store_true'); reproduce.add_argument('--output', default='runs/source_reproduction'); reproduce.set_defaults(handler=command_reproduce)
-    frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.set_defaults(handler=command_frontier)
+    frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.add_argument('--certify', action='store_true'); frontier.set_defaults(handler=command_frontier)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -184,11 +184,54 @@ def command_frontier(args: argparse.Namespace) -> int:
         prior=PriorAsset(np.diag(s),np.eye(d),s,cfg['sigma2'],'oracle',{},'exploration-oracle')
         budget=BudgetSpec(cfg['depth'],cfg['initialization_norm_cap'],cfg['trainable_parameter_cap'],1.)
         task=PreparationSpec(cfg['n'],d,'gaussian','1/(2n)',1.)
+        if 'grid' in cfg:
+            import csv
+            from .frontier import evaluate_frontier_grid
+            grid=cfg['grid']
+            rows=evaluate_frontier_grid(prior,budget,task,grid['widths'],grid['norm_caps'],grid['risk_tolerance'],grid['budget_tolerance'])
+            output=Path(grid.get('output','runs/frontier')); output.mkdir(parents=True,exist_ok=True)
+            attempt=Path(tempfile.mkdtemp(prefix='attempt-',dir=output))
+            (attempt/'frontier.json').write_text(json.dumps(rows,indent=2,allow_nan=False)+'\n')
+            with (attempt/'frontier.csv').open('w',newline='') as stream:
+                writer=csv.DictWriter(stream,fieldnames=['width','norm_cap','branch','objective','branch_status','selection_status','selected_branches','trainable_parameters','initialization_norm','diagnostics'])
+                writer.writeheader()
+                for row in rows:
+                    if row['kind']!='point': continue
+                    for branch in ('F','Z'):
+                        item=row[branch]; res=item['actual_resources']
+                        writer.writerow({'width':row['width'],'norm_cap':row['norm_cap'],'branch':branch,'objective':item['objective'],'branch_status':item['status'],'selection_status':row['selection_status'],'selected_branches':json.dumps(row['selected_branches']),'trainable_parameters':res['trainable_parameters'],'initialization_norm':res['initialization_norm'],'diagnostics':json.dumps(item['diagnostics'],allow_nan=False)})
+            print(json.dumps({'status':'pass','attempt_path':str(attempt),'points':sum(r['kind']=='point' for r in rows),'unresolved_intervals':sum(r['kind']=='interval' for r in rows),'certificate_level':'float64_diagnostic','qualification':'sampled interpolation diagnostics are not rigorous enclosures'})); return 0
         frontier=solve_frontier(prior,budget,task)
         result=to_json_record(frontier)
         for branch in ('F','Z'):
             result[branch]['actual_resources']=to_json_record(metric_resources(getattr(frontier,branch).metric,budget.depth))
         result.update({'status':'pass' if all(b.status=='completed' for b in (frontier.F,frontier.Z)) else 'failed','caps':to_json_record(budget)})
+        result['certificate_level']='float64_diagnostic'
+        if args.certify:
+            from fractions import Fraction
+            from decimal import Decimal
+            from checks.exact_reference import load_exact_cases, frac, primary_rational_qp, verify_rational_kkt
+            from .quadratic import build_oracle_qp
+            raw=json.loads(Path(args.config).read_text(),parse_float=Decimal)
+            try:
+                fixture=load_exact_cases(Path(raw['exact_fixture_path']))[raw['exact_fixture_id']]
+                matches=(raw['exact_fixture_id']=='primary_richer_k_3_5' and raw['depth']==2 and raw['trainable_parameter_cap']==21 and raw['n']==fixture['n'] and Fraction(raw['initialization_norm_cap'])==frac(fixture['budget']) and Fraction(raw['sigma2'])==frac(fixture['sigma2']) and [Fraction(x) for x in raw['spectrum']]==list(map(frac,fixture['spectrum'])))
+                if not matches: raise ValueError('configuration differs from rational fixture')
+                certs={}
+                for branch in ('F','Z'):
+                    rational=primary_rational_qp(fixture,branch)
+                    numerical=build_oracle_qp(s,task.target_context_size,prior.noise_variance,budget.initialization_norm_cap,3,branch)
+                    for name in ('constant','linear','hessian','A','offset'):
+                        exact=rational[name]
+                        def as_float(value):
+                            if isinstance(value,list) and len(value)==2 and all(type(v)==int for v in value): return float(frac(value))
+                            return [as_float(v) for v in value]
+                        if not np.array_equal(np.asarray(as_float(exact)),np.asarray(getattr(numerical,name))): raise ValueError('rational and float QP coefficients differ')
+                    certs[branch]=verify_rational_kkt(rational,(3,))
+                result['exact_certificates']=certs
+                result['certificate_level']='exact_rational' if all(c['verified'] for c in certs.values()) else 'float64_diagnostic'
+            except (OSError,ValueError,KeyError,TypeError,ZeroDivisionError) as exc:
+                result['exact_certificate_status']={'status':'unavailable','reason':str(exc)}
         print(json.dumps(result,allow_nan=False)); return 0 if result['status']=='pass' else 1
     except (ValueError,TypeError,KeyError,OSError,OverflowError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1

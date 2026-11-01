@@ -97,3 +97,56 @@ def check_exact_cases(cases: dict[str, JsonRecord]) -> list[JsonRecord]:
         ('noncanonical_update', counterexample_coefficient(F(1)) == 4 and counterexample_coefficient(F(2)) == 10, 'blueprint §4.7'),
         ('zero_and_scalar', zero_parameter_count(6, 3) == 8 and scalar_optimum(F(3, 5), F(5, 4), F(1, 2)) == F(4, 7), 'blueprint §§4.1, 4.6')]
     return [{'check': name, 'status': 'pass' if ok else 'failed', 'evidence': evidence} for name, ok, evidence in checks]
+
+
+def _pair(x):
+    return [x.numerator, x.denominator]
+
+
+def primary_rational_qp(case, branch):
+    """Construct fixture coefficients directly from rational source data."""
+    s=list(map(frac,case['spectrum'])); n=case['n']; k=frac(case['budget'])
+    q=[F(n+1,n)*v+(1+frac(case['sigma2']))/n for v in s]
+    if branch=='F':
+        ss=s[:2]+[sum(s[2:])]; qq=q[:2]+[sum(q[2:])]
+        a=[[1,0,-1],[0,1,-1],[0,0,1],[-1,-1,1]]
+    elif branch=='Z':
+        ss=s[:3]; qq=q[:3]; a=[[1,0,0],[0,1,0],[0,0,1],[-1,-1,-1]]
+    else: raise ValueError('unknown branch')
+    return {'constant':_pair(F(1)), 'linear':[_pair(-2*v) for v in ss],
+            'hessian':[[_pair(qq[i] if i==j else F(0)) for j in range(3)] for i in range(3)],
+            'A':[[_pair(F(v)) for v in row] for row in a], 'offset':[_pair(F(0))]*3+[_pair(k)]}
+
+
+def verify_rational_kkt(qp: JsonRecord, active_set: tuple[int, ...]) -> JsonRecord:
+    """Solve and verify a rational KKT system; fractions are integer pairs."""
+    c=frac(qp['constant']); l=list(map(frac,qp['linear'])); H=[list(map(frac,row)) for row in qp['hessian']]
+    A=[list(map(frac,row)) for row in qp['A']]; o=list(map(frac,qp['offset'])); n=len(l); m=len(A)
+    if len(H)!=n or any(len(row)!=n for row in H) or any(len(row)!=n for row in A) or len(o)!=m or len(set(active_set))!=len(active_set) or any(type(i)!=int or i<0 or i>=m for i in active_set): raise ValueError('invalid rational QP dimensions or active set')
+    # Sylvester criterion, using exact elimination, proves convexity strictly.
+    M=[row[:] for row in H]; positive=True
+    if any(H[i][j]!=H[j][i] for i in range(n) for j in range(n)): positive=False
+    for i in range(n):
+        if M[i][i]<=0: positive=False; break
+        for j in range(i+1,n):
+            t=M[j][i]/M[i][i]
+            for z in range(i+1,n): M[j][z]-=t*M[i][z]
+    K=[[2*H[i][j] for j in range(n)]+[-A[a][i] for a in active_set]+[-l[i]] for i in range(n)]
+    K += [[*A[a], *([F(0)]*len(active_set)), -o[a]] for a in active_set]
+    size=len(K)
+    for i in range(size):
+        pivot=next((j for j in range(i,size) if K[j][i]),None)
+        if pivot is None: return {'verified':False,'certificate_level':'unresolved','reason':'singular KKT system'}
+        K[i],K[pivot]=K[pivot],K[i]; t=K[i][i]; K[i]=[v/t for v in K[i]]
+        for j in range(size):
+            if j!=i:
+                t=K[j][i]; K[j]=[v-t*w for v,w in zip(K[j],K[i])]
+    x=[K[i][-1] for i in range(n)]; mu=[F(0)]*m
+    for j,a in enumerate(active_set): mu[a]=K[n+j][-1]
+    slack=[sum(a*b for a,b in zip(row,x))+off for row,off in zip(A,o)]
+    station=[l[i]+2*sum(H[i][j]*x[j] for j in range(n))-sum(A[j][i]*mu[j] for j in range(m)) for i in range(n)]
+    primal=c+sum(a*b for a,b in zip(l,x))+sum(x[i]*H[i][j]*x[j] for i in range(n) for j in range(n))
+    # Under stationarity, minimizing the Lagrangian gives this dual value.
+    dual=primal-sum(a*b for a,b in zip(mu,slack))
+    ok=positive and all(v>=0 for v in slack+mu) and all(v==0 for v in station) and all(a*b==0 for a,b in zip(mu,slack)) and primal==dual
+    return {'verified':ok,'certificate_level':'exact_rational' if ok else 'unresolved','primal':_pair(primal),'dual':_pair(dual),'x':list(map(_pair,x)),'slack':list(map(_pair,slack)),'multipliers':list(map(_pair,mu)),'stationarity':list(map(_pair,station)),'positive_definite':positive}

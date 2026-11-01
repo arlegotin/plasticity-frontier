@@ -47,3 +47,39 @@ def solve_frontier(prior,budget,task):
     else:
         selected=('F',) if F.objective<Z.objective else ('Z',); status='selected'
     return FrontierResult(F,Z,selected,status)
+
+
+def evaluate_frontier_grid(prior, budget, task, widths, norm_caps, risk_tolerance, budget_tolerance):
+    """Adaptive sampled diagnostics; interpolation errors are not enclosures."""
+    from .records import to_json_record
+    if not widths or len(norm_caps)<2 or risk_tolerance<=0 or budget_tolerance<=0: raise ValueError('invalid grid')
+    caps=sorted(set(float(x) for x in norm_caps))
+    if len(caps)<2 or not np.all(np.isfinite(caps)) or caps[0]<0: raise ValueError('invalid grid caps')
+    if any(type(w)!=int or w<1 or w>task.input_dimension for w in widths) or len(set(widths))!=len(widths): raise ValueError('invalid grid widths')
+    rows=[]
+    for width in widths:
+        cache={}; unresolved=[]
+        def solve(cap):
+            if cap not in cache:
+                b=replace(budget,initialization_norm_cap=cap,trainable_parameter_cap=(task.input_dimension+1)*width+budget.depth-2)
+                f=solve_frontier(prior,b,task); rec=to_json_record(f)
+                for name in ('F','Z'):
+                    rec[name]['actual_resources']=to_json_record(metric_resources(getattr(f,name).metric,b.depth))
+                rec.update({'kind':'point','width':width,'norm_cap':cap,'certificate_level':'float64_diagnostic'})
+                cache[cap]=rec
+            return cache[cap]
+        def refine(a,b,level=0):
+            left,right=solve(a),solve(b); mid=(a+b)/2
+            if mid==a or mid==b:
+                unresolved.append({'kind':'interval','width':width,'lower':a,'upper':b,'reason':'floating-point resolution'}); return
+            center=solve(mid)
+            invalid=any(p['selection_status']=='unresolved' for p in (left,center,right))
+            curve=max(abs(center[t]['objective']-(left[t]['objective']+right[t]['objective'])/2) for t in ('F','Z'))
+            switch=left['selected_branches']!=right['selected_branches'] or left['selected_branches']!=center['selected_branches']
+            if (curve>risk_tolerance or switch or invalid) and b-a>budget_tolerance and level<40:
+                refine(a,mid,level+1); refine(mid,b,level+1)
+            elif invalid or (curve>risk_tolerance and b-a<=budget_tolerance) or level>=40:
+                unresolved.append({'kind':'interval','width':width,'lower':a,'upper':b,'reason':'unresolved numerical selection' if invalid else 'refinement limit','midpoint_error':curve})
+        for a,b in zip(caps,caps[1:]): refine(a,b)
+        rows.extend(cache[c] for c in sorted(cache)); rows.extend(unresolved)
+    return rows
