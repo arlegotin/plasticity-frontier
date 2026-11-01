@@ -15,3 +15,56 @@ python3 -m venv .venv
 ```
 
 Verify the downloaded wheels against `wheel_manifest.json`; the wheel files themselves are local and ignored. `installer-report.json` records initial installation, and `licenses/` retains wheel notices. Lock and wheel hashes describe this machine's bootstrap; a different Python/platform needs a newly resolved, recorded environment. Hardware discovery records non-identifying command outcomes; unavailable fields remain unknown. The read-only scalar commands `sysctl -n hw.memsize`, `hw.logicalcpu`, and `hw.physicalcpu` may require sandbox escalation. No serial number or hardware UUID is queried. The doctor checks required CPU operations and emits a nonzero status on failure. Each doctor invocation creates a unique attempt directory beneath the requested output root; the JSON response includes `attempt_path` for its reports, gate decision, and source manifest. Earlier attempts and existing evidence are preserved. Protected scientific runs require committed code and a separately frozen scientific identity; these smoke tests are not a scientific campaign.
+
+Report reconstruction consumes explicit, ordered input descriptors. It does not discover a favorable subset of `runs/`, reuse `gate_decision.json`, or read benchmark coordinator summaries as measurements. Each confirmation descriptor names the original frozen protocol and its immutable RunStore. Paths inside a descriptor resolve relative to that descriptor. For example, save this structure as `runs/campaign/confirmation-input.json`, substituting the **actual** run directory printed by `confirm`:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "confirmation",
+  "label": "declared primary comparison",
+  "run_path": "../confirmation/ACTUAL_RUN_ID",
+  "protocol_path": "../../protocol/confirmation.json"
+}
+```
+
+Other descriptor kinds are `benchmark` (`run_path` containing `inputs.json`, `requests/` and `blocks/`), `diagnostic`, `exact`, `source`, `forecast` (each with `raw_path`), and `not_run` (with `reason`). A diagnostic records its exact CLI argument list in `command`, for example `["frontier", "--config", "configs/exploration/frontier.json", "--certify"]`, and lists all additional input files in `assets`. Use the configuration actually executed; the example filename is not an instruction to invent a result. Record command stdout as the raw JSON, and list auxiliary raw outputs as separate descriptors. Include every failed source attempt, every family/shift arm, both F/Z branches, and unsuccessful controls. An unperformed natural arm must explicitly state that no official data/acquisition receipt exists. Source records and forecasts are retained but are not re-executed or promoted into evidence. `fixture: true` permanently prevents a test descriptor or replay receipt from satisfying production G10. A fixture can test clean replay only when its actual frozen protocol, committed source, runtime and assets pass the same strict checks.
+
+For a finalized benchmark the frozen configuration in raw `inputs.json` supplies the executed source identity and calibration location. Preserve the calibration directory and its original JSON as well as all campaign raw worker blocks. Timing summaries and Pareto comparisons are rebuilt from workers; calibration schedules are checked against the raw pilot blocks. Supplied resident-input and exploratory benchmarks remain exploratory. Repeated timing blocks measure fixed selected assets; they do not add independent risk tasks or preparations.
+
+After all implementation/dependency commits, execute the reviewed campaign's actual commands. G6/G7/G9 have not been established merely by installing this package or running its tests. The final checkpoint commands are:
+
+```sh
+.venv/bin/python -m prepared_learning analyze --manifest protocol/confirmation.json
+.venv/bin/python -m prepared_learning report --manifest protocol/report_inputs.json --inputs runs/campaign/confirmation-input.json runs/campaign/benchmark-input.json runs/campaign/natural-not-run.json --output reports
+```
+
+The `--inputs` order is preserved and hashed. Add the actual diagnostic/source/family descriptors to that argument list; missing files fail instead of being silently omitted. Duplicate confirmation identities are rejected, including relocated technical replays. Reconstructing a report does not pool separate inputs into a larger sample. Omit `--inputs` on later reconstructions to use the frozen inventory. Input/raw corruption or a changed scientific identity must be investigated; never rehash an altered protected run to make it pass. Descriptor JSON, small manifests and report artifacts may be committed after protected execution finishes. Preserve the earlier **executed** commit in every run; the later evidence commit is not the execution revision.
+
+Prepare the replay manifest from the same ordered inputs, then recover and re-execute on this laptop:
+
+```sh
+cp protocol/report_inputs.json protocol/replay.json
+.venv/bin/python -m prepared_learning replay --manifest protocol/replay.json --output runs/clean_replay
+```
+
+`replay` verifies the recorded revision's code and lock hashes, checks every wheel against that revision's `wheel_manifest.json`, creates a temporary local clone at the recorded commit, restores explicitly listed assets byte for byte at their repository-relative paths, and reconstructs `source_bundle/` from the preserved ZIP and `source_manifest.json`. It creates a fresh venv using the recorded Python executable, installs only verified local wheels, installs the project editable with `--no-build-isolation --no-deps`, and runs `pip check`. It restores recorded thread environment values before numerical imports. The primary branch remains unchanged; no second machine, remote fetch or development worktree is needed. Source, runtime, lock, population and prior checks remain strict. Mixed executed revisions require separate replay manifests and receipts, never an identity rewrite.
+
+Keep `wheelhouse/`, the original Python installation, original raw run directories and all explicit assets locally. To restore missing wheels, use the download command above with the recorded source's lock, then verify hashes before replay. Preserve the supplied PDF, blueprint, ZIP and source-manifest bytes; never edit the read-only snapshot. Replay refuses uncommitted scientific source, missing assets, fixture promotion, unresolved operational schedules and identity changes. A restored source must already contain the replay implementation. All plotting uses Matplotlib's Agg backend with a temporary configuration directory. Plotting wheel versions, PyPI SHA-256 checks and license files are recorded in `licenses/plotting-wheel-verification.json`; core NumPy/SciPy builds remain unchanged.
+
+Replay compares exact keys, counts and frozen asset hashes plus float arrays/metrics with the manifest's default `rtol=1e-10`, `atol=1e-12`. Durations and memory measurements are freshly recorded, not required to match bitwise, and never pooled with original observations. The temporary environment is deleted after execution; commands, installation logs, replayed runs and `runs/clean_replay/replay.json` remain. Attach that receipt to the report manifest using its actual hash:
+
+```sh
+.venv/bin/python - <<'PY'
+import hashlib, json
+from pathlib import Path
+path = Path('protocol/report_inputs.json')
+manifest = json.loads(path.read_text())
+receipt = Path('runs/clean_replay/replay.json').resolve()
+manifest['replay']['receipt'] = {'path': str(receipt), 'sha256': hashlib.sha256(receipt.read_bytes()).hexdigest()}
+path.write_text(json.dumps(manifest, indent=2) + '\n')
+PY
+.venv/bin/python -m prepared_learning report --manifest protocol/report_inputs.json --output reports
+```
+
+`reports/results.md`, `claim_ledger.csv`, raw/family/adverse-outcome tables, and standalone SVG/PDF figures are rebuilt together. Every figure has its underlying CSV, units, analytic/sample labels and independent sample counts. Empty panels say `not_run`. Exact rational fixture claims require rechecking the raw rational QP and naming its full contract; float64 diagnostics cannot become certificates. Protected and practical claims require their corresponding executed evidence and exact architecture/population/baseline/metric/resource contract. Direct-map equality, ridge/EB wins, ties, negative or zero-crossing intervals, failed candidates and unsupported moments remain visible. The G10 decision records whether matching clean replay exists; it is distinct from the sign of any scientific comparison. The report revisits all twenty blueprint §11.2 challenges and explicitly limits unresolved claims.

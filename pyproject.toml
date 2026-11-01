@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "prepared-learning-poc"
 version = "0.1.0"
-dependencies = ["numpy", "scipy"]
+dependencies = ["numpy", "scipy", "matplotlib"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

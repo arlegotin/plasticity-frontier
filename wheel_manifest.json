@@ -1,5 +1,15 @@
 {
   "numpy-2.5.4-cp314-cp314-macosx_14_0_arm64.whl": "956555e0603a4d38019ae6925711cb9dc43195c076a928accf7ea5d50bddfe53",
   "scipy-1.18.1-cp314-cp314-macosx_14_0_arm64.whl": "011413b7426b75012840e35649e00fe0a2c3bae89fed433876e3a99251572efc",
-  "setuptools-84.2.1-py3-none-any.whl": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2"
+  "setuptools-84.2.1-py3-none-any.whl": "ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2",
+  "contourpy-1.4.0-cp314-cp314-macosx_11_0_arm64.whl": "072a702e2e178f4fcf96f04775d0c059e4c917925abf0d3208ebb6865df3c23d",
+  "cycler-0.12.1-py3-none-any.whl": "85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30",
+  "fonttools-4.68.0-cp314-cp314-macosx_10_15_universal2.whl": "b2ee7b9c1a5e1d637073c39b0978956febad7e862a1269719f527934c65535a4",
+  "kiwisolver-1.5.1-cp314-cp314-macosx_11_0_arm64.whl": "c2306e8bb53601979fcb3fa09cc65e031876d9ae01eff2fcbcd7a84ef94d5bc1",
+  "matplotlib-3.11.2-cp314-cp314-macosx_11_0_arm64.whl": "1a3040b209f3968b4e84161df7b174f07a9fad33b0f2d7e48ea3bbd3075e2863",
+  "packaging-26.3-py3-none-any.whl": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+  "pillow-13.0.0-cp314-cp314-macosx_11_0_arm64.whl": "d9b0a2bee3f3e03e9f29057aedb807dbf1e1d96ee1b9d0f422d9db6c8583271d",
+  "pyparsing-3.3.3-py3-none-any.whl": "ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4",
+  "python_dateutil-4.0.0-py3-none-any.whl": "a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c",
+  "tzdata-2026.6-py2.py3-none-any.whl": "0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec"
 }

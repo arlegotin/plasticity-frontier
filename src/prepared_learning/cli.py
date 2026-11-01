@@ -50,7 +50,35 @@ def main(argv=None) -> int:
     analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
     robustness = sub.add_parser('robustness'); robustness.add_argument('--manifest', required=True); robustness.add_argument('--output', default='runs/robustness'); robustness.set_defaults(handler=command_robustness)
     benchmark = sub.add_parser('benchmark'); benchmark.add_argument('--manifest', required=True); benchmark.set_defaults(handler=command_benchmark)
+    report = sub.add_parser('report'); report.add_argument('--manifest', required=True); report.add_argument('--output', default='reports'); report.add_argument('--inputs', nargs='+'); report.set_defaults(handler=command_report)
+    replay = sub.add_parser('replay'); replay.add_argument('--manifest', required=True); replay.add_argument('--output', default='runs/clean_replay'); replay.set_defaults(handler=command_replay)
     args = parser.parse_args(argv); return args.handler(args)
+
+
+def command_report(args: argparse.Namespace) -> int:
+    from .reporting import build_report_inputs, write_report
+    try:
+        path=Path(args.manifest)
+        if args.inputs:
+            if path.exists(): raise ValueError('refusing to overwrite ordered report manifest')
+            manifest=build_report_inputs([Path(p) for p in args.inputs])
+            path.parent.mkdir(parents=True,exist_ok=True)
+            path.write_text(json.dumps(manifest,indent=2,allow_nan=False)+'\n')
+        else: manifest=json.loads(path.read_text())
+        decision=write_report(manifest,Path(args.output)); print(json.dumps(to_json_record(decision),allow_nan=False))
+        return 1 if decision.code==GateCode.IMPLEMENTATION_INVALID else 0
+    except (OSError,ValueError,KeyError,TypeError) as exc:
+        print(json.dumps({'status':'failed','gate':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
+
+
+def command_replay(args: argparse.Namespace) -> int:
+    from .reporting import replay_run
+    try:
+        manifest=json.loads(Path(args.manifest).read_text())
+        decision=replay_run(manifest,Path(args.output)); print(json.dumps(to_json_record(decision),allow_nan=False))
+        return 0 if decision.code==GateCode.SUPPORTED_IN_SCOPE else 1
+    except (OSError,ValueError,KeyError,TypeError) as exc:
+        print(json.dumps({'status':'failed','gate':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
 
 
 def command_check_theory(args: argparse.Namespace) -> int:
