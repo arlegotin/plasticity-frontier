@@ -1,10 +1,9 @@
 """Oracle method lifecycle; learned fitting is supplied by the prior-fitting stage."""
-from dataclasses import replace
 import numpy as np
 from .baselines import metric_from_gains, solve_rank_gains, solve_unrestricted_gamma, ridge_coefficient, posterior_coefficient, unrestricted_fixed_metric
 from .geometry import construct_canonical, construct_head_zero, effective_coefficient, simultaneous_step
 from .metrics import apply_metric, metric_resources
-from .records import AdaptedState, PreparedState, Resources
+from .records import AdaptedState, PreparedState, Resources, to_json_record
 
 class Method:
     def __init__(self, method_id, options): self.method_id, self.options = method_id, dict(options)
@@ -15,7 +14,7 @@ class Method:
         if budget.depth<2 or budget.learning_rate!=1 or n<1 or d<1: raise ValueError('invalid preparation')
         k=(budget.initialization_norm_cap/(budget.depth-1))**(budget.depth-1)
         width=min(d,(budget.trainable_parameter_cap-(budget.depth-2))//(d+1))
-        if width<1: raise ValueError('infeasible architecture')
+        if family in ('B00','B01','B02') and width<1: raise ValueError('infeasible architecture')
         s=np.asarray(prior.eigenvalues) if prior.eigenvalues is not None else None
         basis=prior.basis
         if family=='B00': metric=metric_from_gains(np.eye(d),np.zeros(d))
@@ -32,8 +31,8 @@ class Method:
         realization=None
         if family in ('B00','B01'): realization=construct_canonical(metric,budget.depth)
         elif family=='B02': realization=construct_head_zero(metric)
-        resources=realization.resources if realization else (metric_resources(metric,budget.depth) if metric is not None and family!='B05' else Resources(None,None,0,0))
-        if family=='B05':
+        resources=realization.resources if realization else Resources(None,None,0,0)
+        if metric is not None and realization is None:
             count=1+metric.basis.size+metric.increments.size
             resources=Resources(None,None,count,8*count)
         if mid=='B08:gd': resources=Resources(0.,d,d,8*d)
@@ -57,6 +56,11 @@ class Method:
     def predict(self, adapted, X_query): return np.asarray(X_query)@adapted.coefficient
     def diagnostics(self, prepared, adapted):
         info={'method_id':prepared.method_id,'information_access':prepared.prior.information_access,'resource_class':'network' if prepared.initial_layers is not None or prepared.method_id=='B08:gd' else ('compact_direct' if prepared.metric is not None else 'software_estimator')}
+        if prepared.metric is not None and prepared.initial_layers is None:
+            reference=metric_resources(prepared.metric,prepared.budget.depth)
+            fits_norm=reference.initialization_norm <= prepared.budget.initialization_norm_cap
+            fits_parameters=reference.trainable_parameters <= prepared.budget.trainable_parameter_cap
+            info['canonical_reference']={'resources':to_json_record(reference),'fits_norm_cap':fits_norm,'fits_parameter_cap':fits_parameters,'fits_caps':fits_norm and fits_parameters}
         if prepared.method_id.startswith('B09:'): info['basis_provenance']=prepared.prior.fit_metadata.get('basis_provenance','oracle covariance directions')
         if prepared.method_id.startswith('B10:'):
             eigenvalues=np.linalg.eigvalsh(prepared.prior.covariance)

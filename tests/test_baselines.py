@@ -59,3 +59,37 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(p.resources.stored_scalars,1+p.metric.basis.size+p.metric.increments.size)
         method=make_method('B10:posterior',{}); p=method.prepare(self.prior,self.budget,self.task)
         self.assertEqual(method.diagnostics(p,method.adapt(p,self.context))['covariance_condition'],1.)
+    def test_compact_execution_resources_and_reference_cap_fit(self):
+        for mid in ('B06','B07'):
+            m=make_method(mid,{}); p=m.prepare(self.prior,self.budget,self.task)
+            self.assertIsNone(p.resources.initialization_norm)
+            self.assertIsNone(p.resources.trainable_parameters)
+            self.assertEqual((p.resources.stored_scalars,p.resources.serialized_bytes),(7,56))
+            diag=m.diagnostics(p,m.adapt(p,self.context))
+            self.assertEqual(diag['resource_class'],'compact_direct')
+            ref=diag['canonical_reference']
+            self.assertEqual(ref['resources']['trainable_parameters'],3)
+            self.assertTrue(ref['fits_caps'])
+        small=BudgetSpec(2,.1,1,1.)
+        m=make_method('B07',{}); p=m.prepare(self.prior,small,self.task)
+        ref=m.diagnostics(p,m.adapt(p,self.context))['canonical_reference']
+        self.assertFalse(ref['fits_norm_cap']); self.assertFalse(ref['fits_parameter_cap']); self.assertFalse(ref['fits_caps'])
+    def test_software_preparation_ignores_network_architecture_cap(self):
+        small=BudgetSpec(2,.6,1,1.)
+        target=make_method('B02',{}).prepare(self.prior,self.budget,self.task)
+        for mid,options in [('B05:B02',{'metric':target.metric}),('B06',{}),('B07',{}),('B08:ridge',{}),('B09:least_squares',{}),('B09:ridge',{}),('B10:posterior',{}),('B10:empirical_bayes',{})]:
+            with self.subTest(method=mid):
+                method=make_method(mid,options); p=method.prepare(self.prior,small,self.task)
+                self.assertEqual(method.adapt(p,self.context).status,'completed')
+                self.assertIsNone(p.resources.initialization_norm)
+                self.assertIsNone(p.resources.trainable_parameters)
+        for mid in ('B00','B01','B02'):
+            with self.subTest(method=mid), self.assertRaises(ValueError):
+                make_method(mid,{}).prepare(self.prior,small,self.task)
+    def test_singular_posterior_diagnostics(self):
+        prior=PriorAsset(np.diag([1.,0.]),np.eye(2),np.array([1.,0.]),0.,'oracle',{},'singular')
+        context=Context(np.eye(2),np.array([2.,0.]),'t')
+        method=make_method('B10:posterior',{}); p=method.prepare(prior,self.budget,self.task)
+        a=method.adapt(p,context); diag=method.diagnostics(p,a)
+        assert_allclose(a.coefficient,[2.,0.])
+        self.assertEqual(diag['covariance_rank'],1); self.assertEqual(diag['added_ridge'],0.)
