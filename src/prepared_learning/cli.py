@@ -49,6 +49,7 @@ def main(argv=None) -> int:
     confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.add_argument('--checkpoint-tasks',type=int,default=16); confirm.set_defaults(handler=command_confirm)
     analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
     robustness = sub.add_parser('robustness'); robustness.add_argument('--manifest', required=True); robustness.add_argument('--output', default='runs/robustness'); robustness.set_defaults(handler=command_robustness)
+    benchmark = sub.add_parser('benchmark'); benchmark.add_argument('--manifest', required=True); benchmark.set_defaults(handler=command_benchmark)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -343,3 +344,30 @@ def command_robustness(args: argparse.Namespace) -> int:
         return 1 if decision.code == GateCode.IMPLEMENTATION_INVALID else 0
     except (ValueError, KeyError, TypeError, OSError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)}, allow_nan=False)); return 1
+
+
+def command_benchmark(args: argparse.Namespace) -> int:
+    import time
+    import numpy as np
+    from .benchmark import benchmark_methods
+    from .methods import make_method
+    from .records import BudgetSpec, PreparationSpec, PriorAsset, Context
+    try:
+        manifest=json.loads(Path(args.manifest).read_text())
+        if manifest.get('schema_version') != 1 or manifest.get('phase') != 'exploratory': raise ValueError('only exploratory benchmark manifests are enabled')
+        d=int(manifest['dimension']); n=int(manifest['context_size'])
+        if d < 1 or n < 1: raise ValueError('invalid dimensions')
+        prior=PriorAsset(np.eye(d)/d,np.eye(d),np.full(d,1/d),float(manifest.get('noise_variance',.1)),'oracle',{},'exploratory-isotropic')
+        budget=BudgetSpec(2,float(manifest.get('norm_cap',1.)),int(manifest.get('parameter_cap',2*d*d+2*d+1)),1.)
+        prep=PreparationSpec(n,d,'gaussian_isotropic','1/(2n)',1.)
+        start=time.perf_counter_ns()
+        rng=np.random.default_rng(int(manifest['seed']))
+        contexts=[Context(rng.normal(size=(n,d)),rng.normal(size=n),f'exploratory-{i}') for i in range(int(manifest.get('context_count',1)))]
+        generation_ns=time.perf_counter_ns()-start
+        methods=[make_method(mid, {'penalty':float(manifest.get('ridge_penalty',1.))} if mid.endswith(':ridge') else {}) for mid in manifest['methods']]
+        config=dict(manifest,prior=prior,budget=budget,preparation=prep,context_generation={'elapsed_ns':generation_ns,'scope':'fixture X and y generation including immutable context construction','count':len(contexts)})
+        result=benchmark_methods(methods,contexts,config,Path(manifest.get('output','runs/benchmark')))
+        print(json.dumps({'status':result['status'],'output':str(manifest.get('output','runs/benchmark'))}))
+        return 0
+    except (ValueError, KeyError, OSError, TypeError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)})); return 1

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "phase": "exploratory",
+  "note": "Calibration only; production schedule must be finalized after all implementation dependencies are committed.",
+  "dimension": 8,
+  "context_size": 4,
+  "context_count": 4,
+  "seed": 713,
+  "methods": ["B01", "B05:B01", "B08:ridge", "B10:posterior"],
+  "pilot_blocks": 4,
+  "blocks": 8,
+  "max_repetitions": 100,
+  "future_tasks": [1, 10, 100],
+  "thread_policy": "environment as observed",
+  "power": "unknown",
+  "thermal": "unknown",
+  "measure_memory": true,
+  "output": "runs/benchmark"
+}
