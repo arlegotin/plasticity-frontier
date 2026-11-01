@@ -1,7 +1,7 @@
 # Prepared learning joint frontier: design specification
 
 **Date:** 1 November 2026.
-**Status:** proposed design for review; this document authorizes no experimental result or implementation claim.
+**Status:** approved by the user on 1 November 2026 for implementation planning; experimental execution has not started.
 **Scope chosen by the user:** the full blueprint program, staged by decision gates, working on the current branch.
 **Scientific source:** [blueprint](../../blueprint.md), particularly §§2, 4–11.
 **Original mathematics:** [research PDF](../../prepared_learning_research.pdf) and [research bundle](../../prepared_learning_research_bundle.zip).
