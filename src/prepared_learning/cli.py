@@ -347,27 +347,18 @@ def command_robustness(args: argparse.Namespace) -> int:
 
 
 def command_benchmark(args: argparse.Namespace) -> int:
-    import time
-    import numpy as np
+    import subprocess
     from .benchmark import benchmark_methods
     from .methods import make_method
-    from .records import BudgetSpec, PreparationSpec, PriorAsset, Context
+    from ._benchmark_worker import generated_config
     try:
         manifest=json.loads(Path(args.manifest).read_text())
-        if manifest.get('schema_version') != 1 or manifest.get('phase') != 'exploratory': raise ValueError('only exploratory benchmark manifests are enabled')
-        d=int(manifest['dimension']); n=int(manifest['context_size'])
-        if d < 1 or n < 1: raise ValueError('invalid dimensions')
-        prior=PriorAsset(np.eye(d)/d,np.eye(d),np.full(d,1/d),float(manifest.get('noise_variance',.1)),'oracle',{},'exploratory-isotropic')
-        budget=BudgetSpec(2,float(manifest.get('norm_cap',1.)),int(manifest.get('parameter_cap',2*d*d+2*d+1)),1.)
-        prep=PreparationSpec(n,d,'gaussian_isotropic','1/(2n)',1.)
-        start=time.perf_counter_ns()
-        rng=np.random.default_rng(int(manifest['seed']))
-        contexts=[Context(rng.normal(size=(n,d)),rng.normal(size=n),f'exploratory-{i}') for i in range(int(manifest.get('context_count',1)))]
-        generation_ns=time.perf_counter_ns()-start
-        methods=[make_method(mid, {'penalty':float(manifest.get('ridge_penalty',1.))} if mid.endswith(':ridge') else {}) for mid in manifest['methods']]
-        config=dict(manifest,prior=prior,budget=budget,preparation=prep,context_generation={'elapsed_ns':generation_ns,'scope':'fixture X and y generation including immutable context construction','count':len(contexts)})
-        result=benchmark_methods(methods,contexts,config,Path(manifest.get('output','runs/benchmark')))
+        if manifest.get('schema_version') != 1 or manifest.get('phase') not in ('exploratory','finalized'):
+            raise ValueError('benchmark phase must be exploratory or finalized')
+        generated_config(manifest)
+        methods=[make_method(mid,manifest.get('method_options',{}).get(mid,{})) for mid in manifest['methods']]
+        result=benchmark_methods(methods,[],dict(manifest,workflow='generated',_manifest_path=args.manifest),Path(manifest.get('output','runs/benchmark')))
         print(json.dumps({'status':result['status'],'output':str(manifest.get('output','runs/benchmark'))}))
         return 0
-    except (ValueError, KeyError, OSError, TypeError) as exc:
+    except (ValueError, KeyError, OSError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1
