@@ -1,7 +1,7 @@
 """Inference on independent paired units, with explicit moment assumptions."""
 import numpy as np
 from scipy import stats
-from .records import GateDecision, GateCode
+from .records import GateDecision, GateCode, validate_unit_id
 
 
 def paired_interval(differences, alpha, procedure, seed):
@@ -35,7 +35,7 @@ def nested_replication_means(rows):
         if row.get('status', 'completed') != 'completed': raise ValueError('failed or incomplete paired population')
         value = float(row['difference'])
         if not np.isfinite(value): raise ValueError('nonfinite difference')
-        groups.setdefault(row['outer_replication'], []).append(value)
+        groups.setdefault(validate_unit_id(row['outer_replication']), []).append(value)
     if not groups: raise ValueError('no replications')
     return np.array([np.mean(groups[k]) for k in sorted(groups)], dtype=float)
 
@@ -71,7 +71,7 @@ def nested_variance_components(rows):
         if row.get('status', 'completed') != 'completed': raise ValueError('incomplete population')
         x = float(row['difference'])
         if not np.isfinite(x): raise ValueError('nonfinite difference')
-        groups.setdefault(row['outer_replication'], []).append(x)
+        groups.setdefault(validate_unit_id(row['outer_replication']), []).append(x)
     sizes = {len(v) for v in groups.values()}
     if len(groups) < 2 or len(sizes) != 1 or next(iter(sizes), 0) < 2:
         raise ValueError('balanced nested design with at least two outer and inner units required')
@@ -98,7 +98,7 @@ def paired_differences(rows, unit_fields, baseline_id, joint_id, value_field):
     for row in rows:
         role = row['method_id']
         if role not in (baseline_id, joint_id): continue
-        unit = tuple(row[k] for k in unit_fields)
+        unit = tuple(validate_unit_id(row[k]) for k in unit_fields)
         if any(x is None for x in unit): raise ValueError('missing unit')
         if row.get('status') != 'completed': raise ValueError('incomplete paired comparison')
         value = row.get(value_field)

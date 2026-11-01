@@ -9,7 +9,8 @@ from pathlib import Path
 import shutil
 import tempfile
 import numpy as np
-from .records import to_json_record, RAW_RECORD_FIELDS
+from .records import to_json_record, validate_run_record, validate_raw_record, validate_unit_id, JsonRecord, Array
+from collections.abc import Sequence, Mapping
 
 IDENTITY_FIELDS = ('git_commit', 'dirty_diff_sha256', 'scientific_config_sha256', 'protocol_sha256', 'dependency_lock_sha256', 'prior_asset_sha256', 'data_manifest_sha256')
 RUN_FIELDS = IDENTITY_FIELDS + ('schema_version', 'run_id', 'phase', 'operational_config_sha256', 'analysis_mode', 'hardware_record', 'information_access', 'timing_boundaries', 'status', 'pairing_spec')
@@ -43,26 +44,15 @@ class RunStore:
     def __init__(self, path): self.path = Path(path)
 
     @classmethod
-    def create(cls, root, run):
-        if any(k not in run for k in RUN_FIELDS) or run['schema_version'] != 1: raise ValueError('incomplete run record')
-        for key in ('scientific_config_sha256', 'operational_config_sha256', 'protocol_sha256', 'dependency_lock_sha256'):
-            if not isinstance(run[key], str) or not re.fullmatch(r'[0-9a-f]{64}', run[key]): raise ValueError('invalid hash')
-        for key in ('dirty_diff_sha256', 'data_manifest_sha256', 'prior_asset_sha256'):
-            if run[key] is not None and (not isinstance(run[key], str) or not re.fullmatch(r'[0-9a-f]{64}', run[key])): raise ValueError('invalid optional hash')
-        if not isinstance(run['git_commit'], str) or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', run['git_commit']): raise ValueError('invalid git revision')
-        if run['status'] not in ('running', 'completed', 'interrupted', 'invalid', 'failed') or run['information_access'] not in ('oracle', 'estimated', 'none') or run['phase'] not in ('exploration', 'confirmation') or run['analysis_mode'] not in ('deterministic_frontier', 'conditional_risk_over_preparations', 'fixed_prior_task_simulation', 'nested_task_simulation'): raise ValueError('invalid run metadata')
-        specs = run['pairing_spec']
-        if not isinstance(specs, dict): raise ValueError('pairing spec required')
-        for kind, spec in specs.items():
-            expected = {'task_metrics': ['outer_replication', 'task_id'], 'preparation_risks': ['outer_replication']}
-            if kind not in expected or spec.get('unit_fields') != expected[kind] or not isinstance(spec.get('method_ids'), list) or len(spec['method_ids']) < 2 or len(set(spec['method_ids'])) != len(spec['method_ids']) or any(not isinstance(x, str) or not x for x in spec['method_ids']): raise ValueError('invalid pairing spec')
+    def create(cls, root: Path, run: JsonRecord) -> "RunStore":
+        validate_run_record(run)
         if not isinstance(run['run_id'], str) or not run['run_id'] or Path(run['run_id']).name != run['run_id'] or run['run_id'] in ('.', '..'): raise ValueError('invalid run id')
         path = Path(root) / run['run_id']; path.mkdir(parents=True, exist_ok=False)
         (path / 'blocks').mkdir(); (path / 'journal').mkdir(); _write(path / 'run.json', _bytes(run)); _write(path / 'run.sha256', _hash(path / 'run.json').encode()); _syncdir(path)
         return cls(path)
 
     @classmethod
-    def open(cls, path, expected_identity):
+    def open(cls, path: Path, expected_identity: JsonRecord) -> "RunStore":
         path = Path(path)
         if _hash(path / 'run.json') != (path / 'run.sha256').read_text(): raise ValueError('run metadata corrupt')
         run = json.loads((path / 'run.json').read_text())
@@ -117,7 +107,9 @@ class RunStore:
             self._verify(block)
         for block in blocks.iterdir():
             if not block.is_dir(): raise ValueError('unexpected block entry')
-            if not (journal / block.name).exists(): shutil.rmtree(block)
+            if not (journal / block.name).exists():
+                if (block / 'commit.json').exists(): raise ValueError('finalized block missing journal entry')
+                shutil.rmtree(block)
         _syncdir(blocks); _syncdir(journal)
 
     def _validate_rows(self, records):
@@ -126,26 +118,12 @@ class RunStore:
         grouped = {}
         shared_keys = {}
         for row in records:
-            kind = row.get('kind')
-            if kind not in RAW_RECORD_FIELDS or not RAW_RECORD_FIELDS[kind].issubset(row): raise ValueError('incomplete raw record schema')
-            core = {
-                'task_metrics': ('run_id', 'outer_replication', 'task_id', 'task_key', 'method_id', 'information_access', 'n', 'd', 'depth', 'norm_cap', 'parameter_cap', 'eta', 'status'),
-                'preparation_risks': ('run_id', 'outer_replication', 'source_key', 'method_id', 'selection_procedure_hash', 'metric_hash', 'analysis_mode', 'source_training_tasks', 'source_validation_tasks', 'total_source_labels', 'paired_contrast_id', 'risk_evaluator_version', 'true_S_evaluator_hash', 'noise_truth_evaluator_hash', 'status'),
-                'geometry': ('target_hash', 'realized_hash', 'spectral_scale', 'support_policy', 'minimum_eigenvalue', 'initial_norm', 'actual_trainable_count', 'stored_scalars', 'serialized_bytes', 'null_residual', 'kernel_absolute_error', 'kernel_relative_error_status', 'direct_step_error', 'numerical_repairs'),
-                'certificates': ('configuration_key', 'branch', 'solver_status', 'solver_version', 'solver_options', 'certificate_level', 'roundoff_treatment'),
-                'timing_blocks': ('method_order', 'cold_warm', 'block_size', 'generation_boundary', 'preparation_boundary', 'adaptation_boundary', 'prediction_boundary', 'serialization_boundary', 'repetitions', 'wall_time_ns', 'peak_rss', 'peak_rss_unit', 'power_thermal_condition', 'timing_stratum'),
-                'decisions': ('timestamp', 'work_package', 'observation', 'evidence_paths', 'evidence_hashes', 'decision', 'rationale', 'affected_claim_ids', 'next_action', 'methodological_amendment_required', 'fresh_confirmation_required'),
-            }
-            if any(row[k] is None for k in core[kind]): raise ValueError('missing core evidence')
-            if kind == 'task_metrics' and (any(not isinstance(row[k], int) or isinstance(row[k], bool) or row[k] < 1 for k in ('n', 'd', 'depth')) or not isinstance(row['parameter_cap'], int) or isinstance(row['parameter_cap'], bool) or row['parameter_cap'] < 0 or any(not isinstance(row[k], (int, float)) or not np.isfinite(row[k]) or row[k] < 0 for k in ('norm_cap', 'eta')) or row['information_access'] not in ('oracle', 'estimated', 'none') or (row['status'] == 'completed' and (not isinstance(row['loss_parameter_mse'], (int, float)) or not np.isfinite(row['loss_parameter_mse']) or row['loss_parameter_mse'] < 0))): raise ValueError('invalid task measurements')
-            if kind == 'task_metrics' and (not isinstance(row['task_key'], str) or not row['task_key'] or not isinstance(row['method_id'], str) or not row['method_id'] or row['status'] not in ('completed', 'failed', 'invalid')): raise ValueError('invalid task record')
-            if kind == 'preparation_risks' and (not row['source_key'] or not row['method_id'] or row['status'] not in ('completed', 'failed', 'invalid')): raise ValueError('invalid preparation record')
-            if row.get('run_id', run['run_id']) != run['run_id']: raise ValueError('row run identity mismatch')
-            if row.get('status') in ('failed', 'invalid') and not row.get('failure_reason'): raise ValueError('failure reason required')
+            validate_raw_record(row, run)
+            kind = row['kind']
             if kind in ('task_metrics', 'preparation_risks') and kind not in specs: raise ValueError('missing pairing declaration')
             if kind in specs:
                 spec = specs[kind]; unit = tuple(row[f] for f in spec['unit_fields'])
-                if any(x is None for x in unit): raise ValueError('missing unit key')
+                for value in unit: validate_unit_id(value)
                 key = (kind, _bytes(unit)); roles = grouped.setdefault(key, set()); role = row['method_id']
                 shared = row['task_key'] if kind == 'task_metrics' else row['source_key']
                 if key in shared_keys and shared_keys[key] != shared: raise ValueError('paired data keys differ')
@@ -156,12 +134,12 @@ class RunStore:
             if roles != set(specs[kind]['method_ids']): raise ValueError('incomplete paired unit')
         return set(grouped)
 
-    def committed_keys(self):
+    def committed_keys(self) -> set[str]:
         with self._lock():
             self._reconcile()
             return {self._verify(p) for p in (self.path / 'blocks').iterdir()}
 
-    def read_records(self, kind):
+    def read_records(self, kind: str) -> list[JsonRecord]:
         with self._lock():
             self._reconcile()
             rows = []
@@ -170,7 +148,7 @@ class RunStore:
                 rows.extend(r for r in json.loads((block / 'records.json').read_text()) if r.get('kind') == kind)
             return rows
 
-    def commit_block(self, block_key, records, assets):
+    def commit_block(self, block_key: str, records: Sequence[JsonRecord], assets: Mapping[str, Array]) -> None:
         with self._lock():
             self._reconcile()
             self._commit_block(block_key, list(records), assets)

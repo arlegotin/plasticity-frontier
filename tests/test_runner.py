@@ -8,10 +8,11 @@ from prepared_learning.records import RAW_RECORD_FIELDS
 def task_row(method, status='completed'):
     row = {field: None for field in RAW_RECORD_FIELDS['task_metrics']}
     row.update(kind='task_metrics', run_id='r', outer_replication=0, task_id=1, task_key='x', method_id=method, status=status, failure_reason='boom' if status == 'failed' else None, information_access='estimated', n=2, d=3, depth=2, norm_cap=1., parameter_cap=10, eta=1., loss_parameter_mse=1. if status == 'completed' else None)
+    row['null_reasons'] = {key: 'not measured' for key in RAW_RECORD_FIELDS['task_metrics'] if row[key] is None and key != 'failure_reason'}
     return row
 
 IDENTITY = {'git_commit':'a'*40, 'dirty_diff_sha256':None, 'scientific_config_sha256':'1'*64, 'protocol_sha256':'2'*64, 'dependency_lock_sha256':'3'*64, 'prior_asset_sha256':None, 'data_manifest_sha256':None}
-RUN = dict(IDENTITY, schema_version=1, run_id='r', phase='exploration', operational_config_sha256='4'*64, analysis_mode='conditional_risk_over_preparations', hardware_record='hardware.json', information_access='estimated', timing_boundaries={}, status='running', pairing_spec={'task_metrics': {'unit_fields':['outer_replication','task_id'], 'method_ids':['a','b']}, 'preparation_risks': {'unit_fields':['outer_replication'], 'method_ids':['a','b']}})
+RUN = dict(IDENTITY, schema_version=1, run_id='r', phase='exploration', operational_config_sha256='4'*64, analysis_mode='conditional_risk_over_preparations', hardware_record='hardware.json', information_access='estimated', timing_boundaries={'adaptation':'elapsed nanoseconds'}, status='running', pairing_spec={'task_metrics': {'unit_fields':['outer_replication','task_id'], 'method_ids':['a','b']}, 'preparation_risks': {'unit_fields':['outer_replication'], 'method_ids':['a','b']}})
 
 class RunnerTests(unittest.TestCase):
     def test_atomic_resume_and_failure_pair(self):
@@ -86,6 +87,8 @@ class RunnerTests(unittest.TestCase):
     def test_crash_boundaries_reconcile(self):
         from unittest.mock import patch
         import prepared_learning.runner as runner
+        rows = [task_row('a'), task_row('b', 'failed')]
+        rows += [dict(task_row(role), task_id=2, task_key='y', loss_parameter_mse=value) for role, value in [('a', 2.), ('b', 1.)]]
         for boundary in ('records.json', 'manifest.json', 'commit.pending', 'journal'):
             with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as d:
                 store = RunStore.create(Path(d), RUN)
@@ -95,11 +98,21 @@ class RunnerTests(unittest.TestCase):
                         raise OSError('crash')
                     return real(path, data)
                 with patch.object(runner, '_write', side_effect=crash):
-                    with self.assertRaises(OSError): store.commit_block('x', [], {'a':np.array([1.])})
-                store = RunStore.open(store.path, IDENTITY)
-                self.assertEqual(store.committed_keys(), set())
-                store.commit_block('x', [], {'a':np.array([1.])})
-                self.assertEqual(store.committed_keys(), {'x'})
+                    with self.assertRaises(OSError): store.commit_block('x', rows, {'a':np.array([1.])})
+                if boundary == 'journal':
+                    with self.assertRaises(ValueError): RunStore.open(store.path, IDENTITY)
+                    import json
+                    persisted = next(store.path.glob('blocks/*/records.json'))
+                    self.assertEqual(json.loads(persisted.read_text()), rows)
+                else:
+                    store = RunStore.open(store.path, IDENTITY)
+                    self.assertEqual(store.committed_keys(), set())
+                    store.commit_block('x', rows, {'a':np.array([1.])})
+                    recovered = store.read_records('task_metrics')
+                    self.assertEqual(recovered, rows)
+                    from prepared_learning.analysis import paired_differences
+                    np.testing.assert_equal(paired_differences(recovered[2:], ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse'), [1.])
+                    with self.assertRaises(ValueError): paired_differences(recovered, ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse')
 
     def test_pairing_spec_required_and_fixed_units(self):
         with tempfile.TemporaryDirectory() as d:
@@ -159,8 +172,10 @@ class RunnerTests(unittest.TestCase):
                 if path.name == 'journal' and any(not p.name.startswith('.') for p in path.iterdir()): raise OSError('crash')
                 return real(path)
             with patch.object(runner, '_syncdir', side_effect=crash):
-                with self.assertRaises(OSError): store.commit_block('x', [], {})
-            self.assertEqual(RunStore.open(store.path, IDENTITY).committed_keys(), {'x'})
+                with self.assertRaises(OSError): store.commit_block('x', [task_row('a'), task_row('b', 'failed')], {})
+            reopened = RunStore.open(store.path, IDENTITY)
+            self.assertEqual(reopened.committed_keys(), {'x'})
+            self.assertEqual(reopened.read_records('task_metrics'), [task_row('a'), task_row('b', 'failed')])
 
     def test_batch_change_logged_when_thread_and_blas_unchanged(self):
         with tempfile.TemporaryDirectory() as d:
@@ -168,3 +183,63 @@ class RunnerTests(unittest.TestCase):
             store = RunStore.create(Path(d), run)
             RunStore.open(store.path, dict(IDENTITY, operational_config_sha256='5'*64, thread_policy='one', blas_policy='reference'))
             self.assertIn('5'*64, (store.path / 'operational_changes.jsonl').read_text())
+
+def prep_row(method, status='completed'):
+    row = {field: None for field in RAW_RECORD_FIELDS['preparation_risks']}
+    row.update(kind='preparation_risks', run_id='r', outer_replication=0, source_key='source', method_id=method,
+               selection_procedure_hash='a'*64, prior_asset_hash='b'*64, metric_hash='c'*64 if status == 'completed' else None,
+               analysis_mode='conditional_risk_over_preparations', source_training_tasks=3, source_validation_tasks=2,
+               total_source_labels=10, conditional_risk=2. if status == 'completed' else None,
+               paired_contrast_id='contrast', paired_risk_difference=1. if status == 'completed' else None,
+               risk_evaluator_version='v1', true_S_evaluator_hash='d'*64, noise_truth_evaluator_hash='e'*64,
+               numerical_error_assessment={'absolute_error': 0.}, status=status, failure_reason='no metric' if status == 'failed' else None)
+    row['null_reasons'] = {key: 'unavailable' for key in RAW_RECORD_FIELDS['preparation_risks'] if row[key] is None and key != 'failure_reason'}
+    return row
+
+class ReviewRegressionTests(unittest.TestCase):
+    def test_missing_journal_preserves_committed_pair(self):
+        with tempfile.TemporaryDirectory() as d:
+            store = RunStore.create(Path(d), RUN)
+            rows = [task_row('a'), task_row('b', 'failed')]
+            store.commit_block('x', rows, {})
+            journal = next(store.path.joinpath('journal').iterdir()); journal.unlink()
+            with self.assertRaises(ValueError): RunStore.open(store.path, IDENTITY)
+            self.assertEqual(len(list(store.path.glob('blocks/*/records.json'))), 1)
+
+    def test_failed_preparation_without_metric_is_retained(self):
+        with tempfile.TemporaryDirectory() as d:
+            store = RunStore.create(Path(d), RUN)
+            rows = [prep_row('a'), prep_row('b', 'failed')]
+            store.commit_block('x', rows, {})
+            self.assertEqual(RunStore.open(store.path, IDENTITY).read_records('preparation_risks'), rows)
+
+    def test_bad_success_preparation_fields_rejected(self):
+        for field, value in [('conditional_risk', None), ('paired_risk_difference', None), ('metric_hash', 'fake'), ('analysis_mode', 'bad'), ('source_training_tasks', -1), ('source_validation_tasks', '2'), ('total_source_labels', True)]:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as d:
+                store = RunStore.create(Path(d), RUN); bad = prep_row('a'); bad[field] = value
+                with self.assertRaises(ValueError): store.commit_block('x', [bad, prep_row('b')], {})
+
+    def test_invalid_unit_identifiers_rejected(self):
+        for value in [0.0, True, '0', -1]:
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as d:
+                store = RunStore.create(Path(d), RUN)
+                rows = [task_row('a'), task_row('b')]
+                for row in rows: row['outer_replication'] = value
+                with self.assertRaises(ValueError): store.commit_block('x', rows, {})
+
+    def test_nonprimary_schema_types_and_units(self):
+        from prepared_learning.records import validate_raw_record
+        row = {key: None for key in RAW_RECORD_FIELDS['timing_blocks']}
+        row.update(kind='timing_blocks', method_order=['a','b'], cold_warm='warm', block_size=2,
+                   generation_boundary='ns', preparation_boundary='ns', adaptation_boundary='ns',
+                   prediction_boundary='ns', serialization_boundary='ns', repetitions=3, wall_time_ns=10,
+                   peak_rss=100, peak_rss_unit='bytes', power_thermal_condition='normal', timing_stratum='cpu',
+                   null_reasons={'gpu_metadata':'not applicable'})
+        validate_raw_record(row, RUN)
+        for field, value in [('repetitions', True), ('wall_time_ns', -1), ('peak_rss_unit','watts'), ('method_order', 'a')]:
+            with self.subTest(field=field), self.assertRaises(ValueError): validate_raw_record(dict(row, **{field:value}), RUN)
+
+    def test_run_timing_and_hardware_metadata_are_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            for changes in ({'hardware_record': None}, {'timing_boundaries': {}}, {'timing_boundaries': {'adaptation': 5}}):
+                with self.subTest(changes=changes), self.assertRaises(ValueError): RunStore.create(Path(d), dict(RUN, **changes))

@@ -38,3 +38,12 @@ class AnalysisTests(unittest.TestCase):
         with self.assertRaises(ValueError): paired_differences(rows, ['outer_replication'], 'a', 'b', 'conditional_risk')
         rows[1].update(status='completed', conditional_risk=1.)
         np.testing.assert_allclose(paired_differences(rows, ['outer_replication'], 'a', 'b', 'conditional_risk'), [1.])
+
+    def test_unit_identity_is_nonnegative_integer(self):
+        from prepared_learning.analysis import paired_differences, nested_variance_components
+        for bad in [0.0, True, '0', -1]:
+            rows = [{'outer_replication':bad, 'method_id':role, 'status':'completed', 'conditional_risk':1., 'difference':1.} for role in ('a', 'b')]
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError): paired_differences(rows, ['outer_replication'], 'a', 'b', 'conditional_risk')
+                with self.assertRaises(ValueError): nested_replication_means(rows)
+                with self.assertRaises(ValueError): nested_variance_components(rows)

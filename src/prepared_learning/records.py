@@ -134,3 +134,130 @@ RAW_RECORD_FIELDS = {
     'timing_blocks': frozenset('method_order cold_warm block_size generation_boundary preparation_boundary adaptation_boundary prediction_boundary serialization_boundary repetitions wall_time_ns peak_rss peak_rss_unit power_thermal_condition gpu_metadata timing_stratum'.split()),
     'decisions': frozenset('timestamp work_package observation evidence_paths evidence_hashes decision rationale affected_claim_ids next_action methodological_amendment_required fresh_confirmation_required'.split()),
 }
+
+
+def validate_unit_id(value: object) -> int:
+    """Validate the canonical integer representation used in keys and inference."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError('unit IDs must be nonnegative integers')
+    return value
+
+
+def _count(value, name, minimum=0):
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise ValueError(f'{name} must be an integer >= {minimum}')
+
+
+def _number(value, name, minimum=None):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not np.isfinite(value) or (minimum is not None and value < minimum):
+        raise ValueError(f'{name} must be a finite number')
+
+
+def _text(value, name):
+    if not isinstance(value, str) or not value.strip(): raise ValueError(f'{name} must be nonempty text')
+
+
+def _sha(value, name):
+    import re
+    if not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value): raise ValueError(f'{name} must be a SHA-256 hash')
+
+
+def validate_run_record(run: JsonRecord) -> None:
+    """Validate the persisted run identity and its declared measurement policy."""
+    required = ('schema_version', 'run_id', 'phase', 'git_commit', 'dirty_diff_sha256', 'scientific_config_sha256', 'operational_config_sha256', 'analysis_mode', 'protocol_sha256', 'dependency_lock_sha256', 'hardware_record', 'data_manifest_sha256', 'prior_asset_sha256', 'information_access', 'timing_boundaries', 'status', 'pairing_spec')
+    if not isinstance(run, dict) or any(k not in run for k in required) or run['schema_version'] != 1 or isinstance(run['schema_version'], bool): raise ValueError('incomplete run schema')
+    import re
+    if not isinstance(run['git_commit'], str) or not re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}', run['git_commit']): raise ValueError('invalid revision')
+    for name in ('scientific_config_sha256', 'operational_config_sha256', 'protocol_sha256', 'dependency_lock_sha256'): _sha(run[name], name)
+    for name in ('dirty_diff_sha256', 'data_manifest_sha256', 'prior_asset_sha256'):
+        if run[name] is not None: _sha(run[name], name)
+    for name in ('run_id', 'hardware_record'): _text(run[name], name)
+    if not isinstance(run['timing_boundaries'], dict) or not run['timing_boundaries']: raise ValueError('timing boundaries required')
+    if any(not isinstance(k, str) or not k or not isinstance(v, str) or not v for k,v in run['timing_boundaries'].items()): raise ValueError('invalid timing boundaries')
+    if run['phase'] not in ('exploration', 'confirmation') or run['status'] not in ('running', 'completed', 'interrupted', 'invalid', 'failed') or run['information_access'] not in ('oracle', 'estimated', 'none') or run['analysis_mode'] not in ('deterministic_frontier', 'conditional_risk_over_preparations', 'fixed_prior_task_simulation', 'nested_task_simulation'): raise ValueError('invalid run enum')
+    specs = run['pairing_spec']; expected = {'task_metrics':['outer_replication','task_id'], 'preparation_risks':['outer_replication']}
+    if not isinstance(specs, dict): raise ValueError('invalid pairing spec')
+    for kind, spec in specs.items():
+        if kind not in expected or not isinstance(spec, dict) or spec.get('unit_fields') != expected[kind]: raise ValueError('invalid pairing unit')
+        methods = spec.get('method_ids')
+        if not isinstance(methods, list) or len(methods) < 2 or any(not isinstance(x, str) or not x for x in methods) or len(set(methods)) != len(methods): raise ValueError('invalid pairing methods')
+
+
+def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
+    """Validate raw evidence without inventing values for unavailable measurements."""
+    if not isinstance(row, dict): raise ValueError('record must be a mapping')
+    kind = row.get('kind')
+    if kind not in RAW_RECORD_FIELDS or not RAW_RECORD_FIELDS[kind].issubset(row): raise ValueError('incomplete raw record schema')
+    to_json_record(row)  # JSON serialization is checked at the store boundary.
+    status = row.get('status')
+    if status is not None and status not in ('completed', 'failed', 'invalid'): raise ValueError('invalid record status')
+    if status in ('failed', 'invalid'): _text(row.get('failure_reason'), 'failure_reason')
+    if row.get('run_id', run['run_id']) != run['run_id']: raise ValueError('row run identity mismatch')
+    for name in ('outer_replication', 'task_id'):
+        if name in row: validate_unit_id(row[name])
+    reasons = row.get('null_reasons', {})
+    if not isinstance(reasons, dict): raise ValueError('null_reasons must be a mapping')
+    for field in RAW_RECORD_FIELDS[kind]:
+        if row[field] is None and field != 'failure_reason':
+            if status in ('failed', 'invalid'): continue
+            if not isinstance(reasons.get(field), str) or not reasons[field].strip(): raise ValueError(f'{field} requires null reason')
+    if kind in ('task_metrics', 'preparation_risks'):
+        for name in ('method_id', 'status'): _text(row[name], name)
+    if kind == 'task_metrics':
+        _text(row['task_key'], 'task_key')
+        for name in ('n','d','depth'): _count(row[name], name, 1)
+        _count(row['parameter_cap'], 'parameter_cap')
+        for name in ('norm_cap','eta'): _number(row[name], name, 0)
+        if row['information_access'] not in ('oracle','estimated','none'): raise ValueError('invalid information access')
+        if status == 'completed' or row['loss_parameter_mse'] is not None: _number(row['loss_parameter_mse'], 'loss_parameter_mse', 0)
+        if row['loss_noiseless_prediction_mse'] is not None: _number(row['loss_noiseless_prediction_mse'], 'loss_noiseless_prediction_mse', 0)
+        for name in ('adaptation_ns', 'prediction_ns'):
+            if row[name] is not None: _count(row[name], name)
+        if row['branch'] is not None and row['branch'] not in ('F', 'Z'): raise ValueError('invalid branch')
+    elif kind == 'preparation_risks':
+        for name in ('source_key','paired_contrast_id','risk_evaluator_version'): _text(row[name], name)
+        if row['analysis_mode'] not in ('conditional_risk_over_preparations', 'nested_task_simulation'): raise ValueError('invalid preparation mode')
+        if row['analysis_mode'] != run['analysis_mode']: raise ValueError('analysis mode mismatch')
+        for name in ('source_training_tasks','source_validation_tasks','total_source_labels'): _count(row[name], name)
+        for name in ('selection_procedure_hash','true_S_evaluator_hash','noise_truth_evaluator_hash'): _sha(row[name], name)
+        for name in ('prior_asset_hash','metric_hash'):
+            if row[name] is not None: _sha(row[name], name)
+        if status == 'completed': _sha(row['metric_hash'], 'metric_hash')
+        if status == 'completed' or row['conditional_risk'] is not None: _number(row['conditional_risk'], 'conditional_risk', 0)
+        if status == 'completed' or row['paired_risk_difference'] is not None: _number(row['paired_risk_difference'], 'paired_risk_difference')
+        if (status == 'completed' or row['numerical_error_assessment'] is not None) and not isinstance(row['numerical_error_assessment'], dict): raise ValueError('numerical error assessment required')
+    elif kind == 'geometry':
+        for name in ('target_hash','realized_hash'): _sha(row[name], name)
+        if row['support_policy'] not in ('analytic','approximate','exact'): raise ValueError('invalid support policy')
+        for name in ('actual_trainable_count','stored_scalars','serialized_bytes'): _count(row[name], name)
+        for name in ('spectral_scale','minimum_eigenvalue','gamma','initial_norm','post_norm','null_residual','kernel_absolute_error','kernel_relative_error','direct_step_error'):
+            if row[name] is not None: _number(row[name], name)
+        _text(row['kernel_relative_error_status'], 'kernel_relative_error_status')
+        if not isinstance(row['numerical_repairs'], (list, dict)): raise ValueError('invalid repairs')
+        if row['kernel_relative_error'] is None and row['kernel_relative_error_status'] in ('ok', 'defined'): raise ValueError('undefined relative error requires status')
+    elif kind == 'certificates':
+        for name in ('configuration_key','solver_status','solver_version','certificate_level','roundoff_treatment'): _text(row[name], name)
+        if row['branch'] not in ('F','Z'): raise ValueError('invalid branch')
+        if row['certificate_level'] not in ('float64_diagnostic','exact_rational','rigorous_enclosure'): raise ValueError('invalid certificate level')
+        if not isinstance(row['solver_options'], dict): raise ValueError('invalid solver options')
+        for name in ('roundoff_enclosures', 'rational_numerators', 'rational_denominators'):
+            if row[name] is not None and not isinstance(row[name], (dict, list)): raise ValueError(f'invalid {name}')
+        if row['certificate_level'] == 'exact_rational' and (row['rational_numerators'] is None or row['rational_denominators'] is None): raise ValueError('exact rational certificate needs fractions')
+        if row['certificate_level'] == 'rigorous_enclosure' and row['roundoff_enclosures'] is None: raise ValueError('enclosure certificate needs enclosures')
+        for name in ('objective','primal_upper','dual_lower','primal_slack','dual_feasibility','stationarity_residual','complementarity_residual','repair_size','claimed_risk_precision'):
+            if row[name] is not None: _number(row[name], name)
+    elif kind == 'timing_blocks':
+        if row['cold_warm'] not in ('cold','warm') or row['peak_rss_unit'] not in ('bytes','KiB'): raise ValueError('invalid timing units or state')
+        for name in ('block_size','repetitions'): _count(row[name], name, 1)
+        for name in ('wall_time_ns','peak_rss'): _count(row[name], name)
+        if not isinstance(row['method_order'], list) or not row['method_order'] or any(not isinstance(x, str) or not x for x in row['method_order']): raise ValueError('method order required')
+        for name in ('generation_boundary','preparation_boundary','adaptation_boundary','prediction_boundary','serialization_boundary','power_thermal_condition','timing_stratum'): _text(row[name], name)
+        if row['gpu_metadata'] is not None and not isinstance(row['gpu_metadata'], dict): raise ValueError('invalid GPU metadata')
+    else:
+        for name in ('timestamp','work_package','observation','decision','rationale','next_action'): _text(row[name], name)
+        for name in ('evidence_paths','evidence_hashes','affected_claim_ids'):
+            if not isinstance(row[name], list): raise ValueError('invalid decision evidence')
+        for digest in row['evidence_hashes']: _sha(digest, 'evidence_hash')
+        if any(not isinstance(x, str) or not x for name in ('evidence_paths','affected_claim_ids') for x in row[name]): raise ValueError('invalid evidence identifier')
+        for name in ('methodological_amendment_required','fresh_confirmation_required'):
+            if not isinstance(row[name], bool): raise ValueError('invalid decision flag')
