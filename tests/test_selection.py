@@ -205,3 +205,20 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(all(r['base_fit_id'] and r['noise_fit_id'] and r['shrink_fit_id'] for r in f.candidate_records))
         again=make_method('B11:F',{}).fit_meta([t('a')],[t('b')],c)
         self.assertEqual([r['asset_hash'] for r in f.candidate_records],[r['asset_hash'] for r in again.candidate_records])
+
+    def test_true_shrinkage_endpoint_resolves_after_interior_probe(self):
+        import numpy as np
+        from prepared_learning.records import Context, SourceTask
+        from prepared_learning.methods import make_method
+        def task(k):
+            return SourceTask(Context(np.eye(2),np.array([1.,0.]),k+'a'),Context(np.eye(2),np.array([1.,0.]),k+'b'),k)
+        config={'budget':{'depth':2,'initialization_norm_cap':1.,'trainable_parameter_cap':6,'learning_rate':1.},
+            'preparation':{'target_context_size':2,'input_dimension':2,'input_law':'isotropic_gaussian','loss_normalization':'squared_error_over_2n','task_second_moment_trace':1.},
+            'fitting_candidates':{'gammas':[0.,1.],'ranks':[1],'max_refinement_rounds':2},'information_policy':{},
+            'source_access_manifest':{'training_keys':['a'],'validation_keys':['b','c']}}
+        selection=select_method([make_method('B02',{})],[task('a')],[task('b'),task('c')],config)
+        rows=[r for r in selection.candidate_records if r.get('status')=='completed']
+        selected=next(r for r in rows if r['candidate_id']==selection.selected_id)
+        self.assertEqual(selected['gamma'],0.)
+        self.assertIn(.5,{r['gamma'] for r in rows})
+        self.assertEqual(selected['tuning_resolution'],'resolved')

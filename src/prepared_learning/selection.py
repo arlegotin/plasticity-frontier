@@ -81,9 +81,15 @@ def select_method(candidates,train,validation,config):
             if row.get('status')!='completed': continue
             asset=row['asset']; key=(row['method_id'],asset['fit_metadata']['parent_hash'],row['tuning_kind'],row['tuning_value'],row.get('rank'))
             groups.setdefault(key,[]).append(row)
-        refinements=set(); uncertainty_missing=False
+        refinements=set(); uncertainty_missing=len(validation)<2
         for group in groups.values():
             group=sorted(group,key=lambda r:r['gamma']); best=min(range(len(group)),key=lambda i:group[i]['validation_loss'])
+            # Shrinkage has true closed-domain endpoints, unlike a finite ridge grid.
+            # Probe the interior once when only endpoints were supplied, then refine
+            # adjacent candidates only around an interior validation minimum.
+            if len(group)==2 and {r['gamma'] for r in group}=={0.,1.}:
+                refinements.add(.5); continue
+            if group[best]['gamma'] in (0.,1.): continue
             for i in (best-1,best):
                 if i<0 or i+1>=len(group): continue
                 left,right=group[i:i+2]; diff=np.asarray(left['validation_task_losses'])-np.asarray(right['validation_task_losses'])
