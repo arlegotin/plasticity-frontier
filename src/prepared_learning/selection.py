@@ -6,13 +6,27 @@ class CandidateFitError(ValueError):
         super().__init__('all method candidates failed')
         self.records=tuple(records)
 
-_ALLOWED={'budget','preparation','fitting_candidates','information_policy','source_access_manifest','selection_class'}
+_ALLOWED={'budget','preparation','fitting_candidates','information_policy','source_access_manifest','selection_class','tuning_resolution_policy'}
+
+TUNING_RESOLUTION_POLICY='min_marginal_loss_se_v1'
+
+def tuning_resolution_policy():
+    """Fixed, source-versioned convention; not an optional tuning parameter."""
+    return {'version':TUNING_RESOLUTION_POLICY,'loss_units':'mean_query_squared_error',
+        'uncertainty_unit':'independent_source_validation_task',
+        'objective_resolution':'absolute_mean_gap <= min(left_marginal_se, right_marginal_se)',
+        'ranking':'minimum_validation_mean_with_paired_difference_diagnostics',
+        'shrinkage_probe':'include_endpoints_and_an_interior_candidate_before_local_checks',
+        'scope':'finite_local_objective_resolution_not_confidence_or_global_optimality',
+        'common_task_components':'may_change_stopping_without_changing_paired_rankings',
+        'validation_reuse':'adaptive_same_task_reuse_not_simultaneous_confidence'}
 
 def public_method_config(config):
-    return {'budget':to_json_record(config.budget),'preparation':to_json_record(config.preparation),'fitting_candidates':to_json_record(config.numerics.get('fitting_candidates',{})),'information_policy':{key:to_json_record(config.access[key]) for key in ('noise_access','permitted_noise_variance','selection','prior') if key in config.access},'source_access_manifest':to_json_record(config.access.get('source_access_manifest'))}
+    return {'budget':to_json_record(config.budget),'preparation':to_json_record(config.preparation),'fitting_candidates':to_json_record(config.numerics.get('fitting_candidates',{})),'information_policy':{key:to_json_record(config.access[key]) for key in ('noise_access','permitted_noise_variance','selection','prior') if key in config.access},'source_access_manifest':to_json_record(config.access.get('source_access_manifest')),'tuning_resolution_policy':tuning_resolution_policy()}
 
 def _authorize(train, validation, config):
     if not isinstance(config,dict) or set(config)-_ALLOWED: raise ValueError('nonpublic method configuration')
+    if config.get('tuning_resolution_policy',tuning_resolution_policy())!=tuning_resolution_policy(): raise ValueError('unsupported tuning resolution policy')
     settings=config.get('fitting_candidates',{})
     if not isinstance(settings,dict) or set(settings)-{'gammas','regularization','ranks','ridge_multipliers','scalar_fractions','gd_steps','max_refinement_rounds'}: raise ValueError('nonpublic fitting candidates')
     manifest=config.get('source_access_manifest')
@@ -36,6 +50,39 @@ def _validate_preparation(config):
     if (type(prep.input_dimension) is not int or prep.input_dimension<1 or type(prep.target_context_size) is not int or prep.target_context_size<1 or prep.input_law!='gaussian_isotropic' or prep.loss_normalization!='squared_error_over_2n' or prep.task_second_moment_trace!=1):
         raise ValueError('unsupported learned preparation contract')
     return prep
+
+
+def _validation_loss_se(row, task_count):
+    import numpy as np
+    try:
+        losses=np.asarray(row.get('validation_task_losses'),dtype=float)
+        if task_count<2 or losses.shape!=(task_count,) or not np.all(np.isfinite(losses)) or not np.isfinite(row['validation_loss']): return None
+        with np.errstate(over='ignore',invalid='ignore'):
+            se=float(losses.std(ddof=1)/np.sqrt(task_count))
+        return se if np.isfinite(se) else None
+    except (KeyError,TypeError,ValueError):
+        return None
+
+
+def _objective_check(left, right, dimension, inward_probe):
+    """Compare objective levels; paired ranking precision remains a diagnostic."""
+    import numpy as np
+    left_se=left['validation_loss_se']; right_se=right['validation_loss_se']
+    gap=abs(float(left['validation_loss'])-float(right['validation_loss']))
+    gap=gap if np.isfinite(gap) else None
+    tolerance=paired_se=None
+    if left_se is not None and right_se is not None:
+        tolerance=min(left_se,right_se)
+        with np.errstate(over='ignore',invalid='ignore'):
+            diff=np.asarray(left['validation_task_losses'])-np.asarray(right['validation_task_losses'])
+            paired_se=float(diff.std(ddof=1)/np.sqrt(len(diff)))
+        if not np.isfinite(paired_se): paired_se=None
+    decision='uncertainty_unavailable' if gap is None or tolerance is None or paired_se is None else ('refine_objective_gap' if gap>tolerance else 'objective_resolved')
+    coordinate='gamma' if dimension=='shrinkage' else 'tuning_value'
+    return {'dimension':dimension,'left_candidate_id':left['candidate_id'],'right_candidate_id':right['candidate_id'],
+        'interval':[left[coordinate],right[coordinate]],'left_marginal_se':left_se,'right_marginal_se':right_se,
+        'absolute_mean_gap':gap,'paired_difference_se':paired_se,'objective_tolerance':tolerance,
+        'inward_probe':inward_probe,'decision':decision}
 
 
 def select_method(candidates,train,validation,config):
@@ -78,23 +125,34 @@ def select_method(candidates,train,validation,config):
         if not fitted: return SelectionResult('',tuple(ledger),None)
         groups={}
         for row in rows:
+            row['tuning_resolution_policy']=TUNING_RESOLUTION_POLICY
             if row.get('status')!='completed': continue
+            row['validation_loss_se']=_validation_loss_se(row,len(validation))
             asset=row['asset']; key=(row['method_id'],asset['fit_metadata']['parent_hash'],row['tuning_kind'],row['tuning_value'],row.get('rank'))
             groups.setdefault(key,[]).append(row)
-        refinements=set(); uncertainty_missing=len(validation)<2
+        refinements=set(); uncertainty_missing=len(validation)<2 or any(r.get('status')=='completed' and r['validation_loss_se'] is None for r in rows)
         for group in groups.values():
             group=sorted(group,key=lambda r:r['gamma']); best=min(range(len(group)),key=lambda i:group[i]['validation_loss'])
             # Shrinkage has true closed-domain endpoints, unlike a finite ridge grid.
             # The closed domain forbids outward extension, not inward refinement.
             # Probe the interior and retain endpoint-neighbor objective checks.
-            if len(group)==2 and {r['gamma'] for r in group}=={0.,1.}:
+            interior=next((r for r in group if 0<r['gamma']<1),None)
+            if interior is None:
+                check=_objective_check(group[0],group[-1],'shrinkage','required_midpoint')
+                check.update(decision='refine_initial_interior_probe',proposed_coordinate=.5)
+                group[best].setdefault('tuning_checks',[]).append(check)
                 refinements.add(.5); continue
             for i in (best-1,best):
                 if i<0 or i+1>=len(group): continue
-                left,right=group[i:i+2]; diff=np.asarray(left['validation_task_losses'])-np.asarray(right['validation_task_losses'])
-                if len(diff)<2: uncertainty_missing=True; continue
-                se=float(diff.std(ddof=1)/np.sqrt(len(diff)))
-                if abs(float(diff.mean()))>se: refinements.add((left['gamma']+right['gamma'])/2)
+                left,right=group[i:i+2]
+                check=_objective_check(left,right,'shrinkage','interior_candidate_present')
+                check['inward_probe_candidate_id']=interior['candidate_id']
+                group[best].setdefault('tuning_checks',[]).append(check)
+                if check['decision']=='uncertainty_unavailable': uncertainty_missing=True
+                if check['decision']=='refine_objective_gap':
+                    midpoint=(left['gamma']+right['gamma'])/2
+                    check.update(proposed_coordinate=midpoint,representable_progress=left['gamma']<midpoint<right['gamma'])
+                    refinements.add(midpoint)
         # Extend finite ridge boundary minima, shared across all methods.
         extend=set(); positives=[x for x in multipliers if x>0]
         ridge_rows=[r for r in rows if r.get('status')=='completed' and r.get('tuning_kind') in ('penalty','zero')]
@@ -104,19 +162,28 @@ def select_method(candidates,train,validation,config):
             best=min(group,key=lambda r:r['validation_loss'])
             if best['tuning_kind']=='penalty' and positives:
                 scale=best['ridge_scale']; multiplier=best['tuning_value']/scale if scale else 0.
-                if np.isclose(multiplier,positives[0],rtol=1e-12,atol=0): extend.add(positives[0]/10)
-                if np.isclose(multiplier,positives[-1],rtol=1e-12,atol=0): extend.add(positives[-1]*10)
+                boundary=[]
+                if np.isclose(multiplier,positives[0],rtol=1e-12,atol=0): boundary.append(positives[0]/10)
+                if np.isclose(multiplier,positives[-1],rtol=1e-12,atol=0): boundary.append(positives[-1]*10)
+                extend.update(boundary)
+                best['ridge_boundary_check']={'best_multiplier':multiplier,'positive_grid_bounds':[positives[0],positives[-1]],
+                    'extension_multipliers':boundary,'decision':'extend_finite_boundary' if boundary else 'finite_boundaries_checked'}
                 same=sorted((r for r in group if r['tuning_kind']=='penalty' and r['asset_hash']==best['asset_hash'] and r.get('rank')==best.get('rank')),key=lambda r:r['tuning_value'])
                 index=next((i for i,r in enumerate(same) if r['candidate_id']==best['candidate_id']),None)
                 if index is not None:
                     for i in (index-1,index):
                         if i<0 or i+1>=len(same): continue
-                        left,right=same[i:i+2]; diff=np.asarray(left['validation_task_losses'])-np.asarray(right['validation_task_losses'])
-                        if len(diff)<2: uncertainty_missing=True; continue
-                        se=float(diff.std(ddof=1)/np.sqrt(len(diff)))
-                        if abs(float(diff.mean()))>se:
+                        left,right=same[i:i+2]
+                        check=_objective_check(left,right,'ridge_penalty','not_applicable')
+                        best.setdefault('tuning_checks',[]).append(check)
+                        if check['decision']=='uncertainty_unavailable': uncertainty_missing=True
+                        if check['decision']=='refine_objective_gap':
                             lo=left['tuning_value']/scale; hi=right['tuning_value']/scale
-                            extend.add(np.sqrt(lo*hi) if lo>0 else hi/2)
+                            midpoint=np.sqrt(lo*hi) if lo>0 else hi/2
+                            check.update(proposed_coordinate=float(midpoint*scale),representable_progress=lo<midpoint<hi)
+                            extend.add(midpoint)
+            elif best['tuning_kind']=='zero':
+                best['ridge_boundary_check']={'decision':'zero_estimator_limit_selected','extension_multipliers':[]}
         if not refinements and not extend:
             resolution='uncertainty_unavailable' if uncertainty_missing else 'resolved'; break
         if iteration==max_rounds: break
