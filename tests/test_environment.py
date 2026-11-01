@@ -65,17 +65,60 @@ class EnvironmentTests(unittest.TestCase):
             previous = Path.cwd()
             try:
                 os.chdir(root)
-                with contextlib.redirect_stdout(io.StringIO()):
+                stream = io.StringIO()
+                with contextlib.redirect_stdout(stream):
                     self.assertEqual(main(['doctor', '--output', 'run']), 0)
-                decision = json.loads((root/'run/gate_decision.json').read_text())
+                attempt = Path(json.loads(stream.getvalue())['attempt_path'])
+                decision = json.loads((attempt/'gate_decision.json').read_text())
                 self.assertEqual(decision['code'], 'SUPPORTED_IN_SCOPE')
                 member = root/'source_bundle/prepared_learning_research/README.txt'; member.chmod(0o644); member.write_text('changed')
-                with contextlib.redirect_stdout(io.StringIO()):
+                stream = io.StringIO()
+                with contextlib.redirect_stdout(stream):
                     self.assertEqual(main(['doctor', '--output', 'run']), 1)
-                decision = json.loads((root/'run/gate_decision.json').read_text())
+                attempt = Path(json.loads(stream.getvalue())['attempt_path'])
+                decision = json.loads((attempt/'gate_decision.json').read_text())
                 self.assertEqual(decision['code'], 'IMPLEMENTATION_INVALID')
                 (root/'docs/prepared_learning_research_bundle.zip').unlink()
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(main(['doctor', '--output', 'run']), 1)
+            finally:
+                os.chdir(previous)
+    def test_doctor_preserves_failure_and_success_attempt_evidence(self):
+        import contextlib
+        import io
+        import json
+        import os
+        import shutil
+        from prepared_learning.cli import main
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root/'docs').mkdir()
+            archive = root/'docs/prepared_learning_research_bundle.zip'
+            shutil.copyfile(ROOT/'docs/prepared_learning_research_bundle.zip', archive)
+            shutil.copyfile(ROOT/'source_manifest.json', root/'source_manifest.json')
+            previous = Path.cwd()
+            def run():
+                stream = io.StringIO()
+                with contextlib.redirect_stdout(stream): status = main(['doctor', '--output', 'run'])
+                return status, Path(json.loads(stream.getvalue())['attempt_path'])
+            def evidence(path):
+                return {p.name: (p.read_bytes(), hashlib.sha256(p.read_bytes()).hexdigest()) for p in path.iterdir() if p.is_file()}
+            try:
+                os.chdir(root)
+                status, initial = run(); self.assertEqual(status, 0)
+                initial_evidence = evidence(initial)
+                member = root/'source_bundle/prepared_learning_research/README.txt'
+                original = member.read_bytes(); member.chmod(0o644); member.write_bytes(b'first corruption')
+                status, first = run(); self.assertEqual(status, 1)
+                first_evidence = evidence(first)
+                member.write_bytes(b'second corruption')
+                status, second = run(); self.assertEqual(status, 1)
+                second_evidence = evidence(second)
+                member.write_bytes(original); member.chmod(0o444)
+                status, success = run(); self.assertEqual(status, 0)
+                self.assertEqual(len({initial, first, second, success}), 4)
+                self.assertEqual(evidence(initial), initial_evidence)
+                self.assertEqual(evidence(first), first_evidence)
+                self.assertEqual(evidence(second), second_evidence)
+                self.assertEqual(json.loads((success/'gate_decision.json').read_text())['code'], 'SUPPORTED_IN_SCOPE')
             finally:
                 os.chdir(previous)

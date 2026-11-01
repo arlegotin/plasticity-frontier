@@ -1,5 +1,6 @@
 import argparse
 import json
+import tempfile
 from pathlib import Path
 from .environment import discover_environment, stage_source_bundle
 from .records import GateCode, GateDecision, to_json_record
@@ -7,6 +8,7 @@ from .records import GateCode, GateDecision, to_json_record
 def command_doctor(args: argparse.Namespace) -> int:
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=True)
+    output = Path(tempfile.mkdtemp(prefix='attempt-', dir=output))
     try:
         result = discover_environment(output)
         archive = Path('docs/prepared_learning_research_bundle.zip'); snapshot = Path('source_bundle')
@@ -24,10 +26,11 @@ def command_doctor(args: argparse.Namespace) -> int:
             'Required local numerical operations passed.' if valid else 'Required local numerical operations failed.',
             'Proceed to WP01.' if valid else 'Repair the local environment.')
         (output/'gate_decision.json').write_text(json.dumps(to_json_record(gate), indent=2, allow_nan=False)+'\n')
+        result['attempt_path'] = str(output)
         print(json.dumps(result, allow_nan=False))
         return 0 if valid else 1
     except Exception as exc:
-        result = {'status':'failed', 'error':str(exc)}
+        result = {'status':'failed', 'error':str(exc), 'attempt_path': str(output)}
         (output/'failure.json').write_text(json.dumps(result)+'\n')
         gate = GateDecision(GateCode.IMPLEMENTATION_INVALID, {'status': 'failed', 'failure': 'failure.json'}, str(exc), 'Repair and revalidate the source and environment.')
         (output/'gate_decision.json').write_text(json.dumps(to_json_record(gate), indent=2)+'\n')
