@@ -339,7 +339,11 @@ def command_analyze(args: argparse.Namespace) -> int:
 def command_robustness(args: argparse.Namespace) -> int:
     from .robustness import run_robustness
     try:
-        decision = run_robustness(json.loads(Path(args.manifest).read_text()), Path(args.output))
+        manifest = json.loads(Path(args.manifest).read_text())
+        decision = run_robustness(manifest, Path(args.output))
+        if 'natural_inputs' in manifest:
+            from .natural_inputs import optional_result
+            (Path(args.output)/'natural_inputs.json').write_text(json.dumps(optional_result(manifest['natural_inputs']), indent=2, allow_nan=False)+'\n')
         print(json.dumps(to_json_record(decision), allow_nan=False))
         return 1 if decision.code == GateCode.IMPLEMENTATION_INVALID else 0
     except (ValueError, KeyError, TypeError, OSError) as exc:
@@ -358,6 +362,9 @@ def command_benchmark(args: argparse.Namespace) -> int:
         generated_config(manifest)
         methods=[make_method(mid,manifest.get('method_options',{}).get(mid,{})) for mid in manifest['methods']]
         result=benchmark_methods(methods,[],dict(manifest,workflow='generated',_manifest_path=args.manifest),Path(manifest.get('output','runs/benchmark')))
+        if 'natural_inputs' in manifest:
+            from .natural_inputs import optional_result
+            (Path(manifest.get('output','runs/benchmark'))/'natural_inputs.json').write_text(json.dumps(optional_result(manifest['natural_inputs']), indent=2, allow_nan=False)+'\n')
         print(json.dumps({'status':result['status'],'output':str(manifest.get('output','runs/benchmark'))}))
         return 0
     except (ValueError, KeyError, OSError, TypeError, subprocess.SubprocessError) as exc:
