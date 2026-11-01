@@ -86,10 +86,12 @@ def _rows(result, manifest, run_id):
         for role in ('baseline','joint'):
             value=task['values'].get(role,{'status':'failed','failure_reason':'missing paired procedure'})
             diagnostics=value.get('diagnostics',{})
+            metadata=diagnostics.get('execution_metadata',result.get('role_execution_metadata',{}).get(role,{}))
             rows.append({'kind':'task_metrics','run_id':run_id,'outer_replication':result['outer_replication'],
                 'task_id':task['task_id']+offset,'task_key':task['task_key'],'method_id':role,
                 'information_access':c.access['prior'],'n':c.preparation.target_context_size,'d':c.preparation.input_dimension,
-                'depth':c.budget.depth,'norm_cap':c.budget.initialization_norm_cap,'parameter_cap':c.budget.trainable_parameter_cap,
+                'depth':metadata.get('actual_depth'),'norm_cap':c.budget.initialization_norm_cap,'parameter_cap':c.budget.trainable_parameter_cap,
+                'execution_metadata':metadata,'cap_fields_scope':'comparison_reference_budget',
                 'eta':c.budget.learning_rate,'branch':None,'loss_parameter_mse':value.get('loss'),
                 'loss_noiseless_prediction_mse':value.get('loss'),'adaptation_ns':diagnostics.get('adaptation_ns'),
                 'prediction_ns':diagnostics.get('prediction_ns'),'status':value['status'],'failure_reason':value.get('failure_reason'),

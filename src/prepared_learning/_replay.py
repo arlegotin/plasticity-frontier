@@ -17,7 +17,8 @@ import tempfile
 import time
 from .records import GateDecision, GateCode, content_hash
 from .reporting import (_read, _write, _sha, _scientific, compare_scientific,
-                        compare_run_stores, _verify_inputs, ReportingResourceLimit)
+                        compare_run_stores, _verify_inputs, ReportingResourceLimit,
+                        _validate_output_artifact, _artifact_summary)
 
 
 def _run(command, *, cwd, env=None, log=None):
@@ -194,13 +195,52 @@ def worker(request):
                     except ValueError: raise ValueError('recorded command paths must be inside the source repository')
                 relocated.append(argument)
             command=relocated
+            artifact_root=None
+            if 'output_artifact' not in entry and (command[0]=='robustness' or
+                    (command[0]=='frontier' and '--config' in command and
+                     'grid' in _read(command[command.index('--config')+1]))):
+                raise ValueError('file-producing diagnostics require output_artifact for full scientific replay')
+            if 'output_artifact' in entry:
+                expected_process,expected_summary=_validate_output_artifact(entry,replay['source_root'])
+                artifact_root=destination/'generated'
+                artifact_root.mkdir(exist_ok=False)
+                # Both supported producers accept an operational output override.
+                # Never change their inventoried configuration or reuse old output.
+                command=command[:3]+['--output',str(artifact_root)]
             # A diagnostic may deliberately fail; retain its exit status and raw
             # JSON. It is not converted into a successful protected result.
             run=subprocess.run([sys.executable,'-m','prepared_learning',*command],cwd=root,capture_output=True,text=True)
             _write(destination/'process.json',{'command':command,'returncode':run.returncode,'stdout':run.stdout,'stderr':run.stderr})
-            actual=json.loads(run.stdout); expected=_read(entry['raw_path'])
-            compare_scientific(_scientific(expected),_scientific(actual),rtol=replay['rtol'],atol=replay['atol'])
-            results.append({'input_id':index,'kind':kind,'status':'matched','returncode':run.returncode})
+            result={'input_id':index,'kind':kind,'status':'matched','returncode':run.returncode}
+            if artifact_root is not None:
+                process={'returncode':run.returncode,'stdout':run.stdout,'stderr':run.stderr}
+                artifact,summary=_artifact_summary(command[0],process)
+                if not artifact.is_absolute(): artifact=root/artifact
+                artifact=artifact.absolute()
+                fresh_root=artifact_root.resolve()
+                if not artifact.resolve().is_relative_to(fresh_root):
+                    raise ValueError('output artifact escaped fresh replay directory')
+                relative=artifact.relative_to(artifact_root.absolute())
+                expected_parts=1 if command[0]=='robustness' else 2
+                if (len(relative.parts)!=expected_parts or artifact.name!=entry['output_artifact']['filename']
+                        or any(path.is_symlink() for path in (artifact,*artifact.parents))
+                        or not artifact.is_file()):
+                    raise ValueError('missing or unsafe fresh output artifact')
+                if run.returncode!=expected_process['returncode']:
+                    raise ValueError('diagnostic process returncode changed')
+                compare_scientific(expected_summary,summary,rtol=replay['rtol'],atol=replay['atol'])
+                actual=_read(artifact)
+                result.update(artifact_path=str(artifact),artifact_sha256=_sha(artifact),
+                              comparison_scope='complete scientific output artifact and process summary/status')
+            else:
+                actual=json.loads(run.stdout)
+            expected=_read(entry['raw_path'])
+            if kind=='exact':
+                compare_scientific(expected,actual,rtol=0,atol=0)
+                result['comparison_scope']='exact_rational_no_tolerance'
+            else:
+                compare_scientific(_scientific(expected),_scientific(actual),rtol=replay['rtol'],atol=replay['atol'])
+            results.append(result)
     _write(output/'replay-worker.json',results)
 
 

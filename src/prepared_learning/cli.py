@@ -1,6 +1,7 @@
 import argparse
 import json
 import tempfile
+import sys
 from pathlib import Path
 from .environment import discover_environment, stage_source_bundle
 from .records import GateCode, GateDecision, to_json_record
@@ -43,16 +44,53 @@ def main(argv=None) -> int:
     geometry = sub.add_parser('check-geometry'); geometry.add_argument('--suite', choices=['adversarial'], required=True); geometry.set_defaults(handler=command_check_geometry)
     reproduce = sub.add_parser('reproduce'); reproduce.add_argument('--suite', choices=['source_and_baselines'], required=True); reproduce.add_argument('--run-source', action='store_true'); reproduce.add_argument('--full-matrix', action='store_true'); reproduce.add_argument('--output', default='runs/source_reproduction'); reproduce.set_defaults(handler=command_reproduce)
     frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.add_argument('--certify', action='store_true'); frontier.set_defaults(handler=command_frontier)
+    frontier.add_argument('--output', help='Override the grid output directory; scientific configuration is unchanged')
+    frontier.add_argument('--process-record', help='Write a new replay sidecar with stdout, stderr, status and CLI arguments')
+    exact = sub.add_parser('export-exact')
+    exact.add_argument('--config', required=True)
+    exact.add_argument('--branch', choices=['F', 'Z'], required=True)
+    exact.set_defaults(handler=command_export_exact)
     learned = sub.add_parser('fit-priors'); learned.add_argument('--config', required=True); learned.set_defaults(handler=command_fit_priors)
     pilot = sub.add_parser('pilot'); pilot.add_argument('--config', required=True); pilot.add_argument('--output', default='runs/pilots'); pilot.set_defaults(handler=command_pilot)
     freeze = sub.add_parser('freeze'); freeze.add_argument('--protocol', required=True); freeze.add_argument('--output'); freeze.set_defaults(handler=command_freeze)
     confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.add_argument('--checkpoint-tasks',type=int,default=16); confirm.set_defaults(handler=command_confirm)
     analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
     robustness = sub.add_parser('robustness'); robustness.add_argument('--manifest', required=True); robustness.add_argument('--output', default='runs/robustness'); robustness.set_defaults(handler=command_robustness)
+    robustness.add_argument('--process-record', help='Write a new replay sidecar with stdout, stderr, status and CLI arguments')
     benchmark = sub.add_parser('benchmark'); benchmark.add_argument('--manifest', required=True); benchmark.set_defaults(handler=command_benchmark)
     report = sub.add_parser('report'); report.add_argument('--manifest', required=True); report.add_argument('--output', default='reports'); report.add_argument('--inputs', nargs='+'); report.set_defaults(handler=command_report)
     replay = sub.add_parser('replay'); replay.add_argument('--manifest', required=True); replay.add_argument('--output', default='runs/clean_replay'); replay.set_defaults(handler=command_replay)
-    args = parser.parse_args(argv); return args.handler(args)
+    arguments=list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(arguments)
+    process_path=getattr(args,'process_record',None)
+    if process_path is None:
+        return args.handler(args)
+    from contextlib import redirect_stdout, redirect_stderr
+    import io
+    command=[]
+    iterator=iter(arguments)
+    for argument in iterator:
+        if argument=='--process-record':
+            next(iterator)
+        elif not argument.startswith('--process-record='):
+            command.append(argument)
+    stdout,stderr=io.StringIO(),io.StringIO()
+    try:
+        path=Path(process_path)
+        path.parent.mkdir(parents=True,exist_ok=True)
+        # Reserve the path before scientific execution; never overwrite a receipt.
+        with path.open('x') as stream:
+            with redirect_stdout(stdout),redirect_stderr(stderr):
+                code=args.handler(args)
+            json.dump({'command':command,'returncode':code,'stdout':stdout.getvalue(),
+                       'stderr':stderr.getvalue()},stream,indent=2,allow_nan=False)
+            stream.write('\n')
+    except OSError as exc:
+        print(json.dumps({'status':'failed','error':str(exc)}))
+        return 1
+    print(stdout.getvalue(),end='')
+    print(stderr.getvalue(),end='',file=sys.stderr)
+    return code
 
 
 def command_report(args: argparse.Namespace) -> int:
@@ -211,6 +249,17 @@ def command_reproduce(args: argparse.Namespace) -> int:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1
 
 
+def command_export_exact(args: argparse.Namespace) -> int:
+    from .exact_evidence import export_exact
+    try:
+        result = export_exact(args.config, args.branch)
+        print(json.dumps(result, allow_nan=False))
+        return 0
+    except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
+        print(json.dumps({'status': 'failed', 'error': str(exc)}))
+        return 1
+
+
 def command_frontier(args: argparse.Namespace) -> int:
     import numpy as np
     from .records import PriorAsset, BudgetSpec, PreparationSpec
@@ -228,7 +277,7 @@ def command_frontier(args: argparse.Namespace) -> int:
             from .frontier import evaluate_frontier_grid
             grid=cfg['grid']
             rows=evaluate_frontier_grid(prior,budget,task,grid['widths'],grid['norm_caps'],grid['risk_tolerance'],grid['budget_tolerance'])
-            output=Path(grid.get('output','runs/frontier')); output.mkdir(parents=True,exist_ok=True)
+            output=Path(args.output or grid.get('output','runs/frontier')); output.mkdir(parents=True,exist_ok=True)
             attempt=Path(tempfile.mkdtemp(prefix='attempt-',dir=output))
             metadata={'widths':grid['widths'],'norm_caps':grid['norm_caps'],'risk_tolerance':grid['risk_tolerance'],'budget_tolerance':grid['budget_tolerance'],'certificate_level':'float64_diagnostic','qualification':'sampled interpolation diagnostics are not rigorous enclosures'}
             (attempt/'frontier.json').write_text(json.dumps({'metadata':metadata,'records':rows},indent=2,allow_nan=False)+'\n')
@@ -337,7 +386,7 @@ def command_freeze(args: argparse.Namespace) -> int:
             raise ValueError('protocol already frozen; immutable manifests cannot be overwritten')
         draft=record['draft']; evidence=json.loads((path.parent/record['evidence_path']).read_text())
         scientific=draft['scientific']
-        current,dirty=checkout_identity(scientific['selectors'],scientific['config']['numerics']['fitting_candidates'])
+        current,dirty=checkout_identity(scientific['selectors'],scientific['config']['numerics'].get('fitting_candidates',{}))
         if dirty or current!=scientific['versions']: raise ValueError('freeze requires the clean committed revision and dependencies used for the pilot')
         output=Path(args.output) if args.output else path.with_name(path.stem+'.frozen.json')
         result=freeze_protocol(draft,evidence,output)

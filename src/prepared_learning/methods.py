@@ -11,6 +11,24 @@ class PreparationError(RuntimeError):
         self.preparation_diagnostics=diagnostics
 
 
+def execution_metadata(prepared):
+    """Separate actual architecture from numerical fit to the comparison budget."""
+    depth = 1 if prepared.method_id=='B08:gd' else (
+        len(prepared.initial_layers) if prepared.initial_layers is not None else None)
+    fixed_depth = depth==prepared.budget.depth
+    resources = prepared.resources
+    fits_norm = (resources.initialization_norm<=prepared.budget.initialization_norm_cap
+                 if resources.initialization_norm is not None else None)
+    fits_count = (resources.trainable_parameters<=prepared.budget.trainable_parameter_cap
+                  if resources.trainable_parameters is not None else None)
+    return {'method_id':prepared.method_id, 'actual_depth':depth,
+            'scope':'main_fixed_depth_class' if fixed_depth else 'outside_main_class_operational_control',
+            'fixed_depth_eligible':fixed_depth,
+            'reference_budget':to_json_record(prepared.budget),
+            'reference_cap_fit':{'fits_norm_cap':fits_norm, 'fits_parameter_cap':fits_count,
+                                 'applies_as_eligibility':fixed_depth}}
+
+
 class Method:
     def __init__(self, method_id, options): self.method_id, self.options = method_id, dict(options)
     def fit_meta(self, train_tasks, validation_tasks, config):
@@ -82,6 +100,7 @@ class Method:
     def predict(self, adapted, X_query): return np.asarray(X_query)@adapted.coefficient
     def diagnostics(self, prepared, adapted):
         info={'method_id':prepared.method_id,'information_access':prepared.prior.information_access,'resource_class':'network' if prepared.initial_layers is not None or prepared.method_id=='B08:gd' else ('compact_direct' if prepared.metric is not None else 'software_estimator')}
+        info['execution_metadata']=execution_metadata(prepared)
         if prepared.metric is not None and prepared.initial_layers is None:
             reference=metric_resources(prepared.metric,prepared.budget.depth)
             fits_norm=reference.initialization_norm <= prepared.budget.initialization_norm_cap

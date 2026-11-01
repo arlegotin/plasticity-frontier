@@ -117,7 +117,9 @@ def adapt_fresh(method, prepared, context):
         error=float(np.linalg.norm(adapted.coefficient-direct))
         if error>1e-9*max(1.,float(np.linalg.norm(direct))):
             raise ValueError('literal update/direct-map diagnostic failed')
+    from .methods import execution_metadata
     return adapted, {'adaptation_ns':elapsed,'literal_direct_step_error':error,
+                     'execution_metadata':execution_metadata(prepared),
                      'initializer_hash':snapshot,'level':'float64_diagnostic'}
 
 
@@ -212,6 +214,9 @@ def execute_replication(config, scientific, root, outer, phases, *, task_sink=No
             for role,pair in prepared.items() if role in scientific['selectors']},
             'source_keys':[],'source_key':content_hash({'fixed_prior':scientific['assets']}),
             'tuning_resolution':'inapplicable','generation_ns':0,'preparation_ns':0}
+    from .methods import execution_metadata
+    result['role_execution_metadata']={role:execution_metadata(prepared[role][1])
+                                       for role in scientific['selectors'] if role in prepared}
     if mode=='deterministic_frontier':
         from .frontier import solve_frontier
         prior=prepared['joint'][1].prior

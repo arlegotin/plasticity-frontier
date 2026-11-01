@@ -28,7 +28,38 @@ Report reconstruction consumes explicit, ordered input descriptors. It does not 
 }
 ```
 
-Other descriptor kinds are `benchmark` (`run_path` containing `inputs.json`, `requests/` and `blocks/`), `diagnostic`, `exact`, `source`, `forecast` (each with `raw_path`), and `not_run` (with `reason`). A diagnostic records its exact CLI argument list in `command`, for example `["frontier", "--config", "configs/exploration/frontier.json", "--certify"]`, and lists all additional input files in `assets`. Use the configuration actually executed; the example filename is not an instruction to invent a result. Record command stdout as the raw JSON, and list auxiliary raw outputs as separate descriptors. Include every failed source attempt, every family/shift arm, both F/Z branches, and unsuccessful controls. An unperformed natural arm must explicitly state that no official data/acquisition receipt exists. Source records and forecasts are retained but are not re-executed or promoted into evidence. `fixture: true` permanently prevents a test descriptor or replay receipt from satisfying production G10. A fixture can test clean replay only when its actual frozen protocol, committed source, runtime and assets pass the same strict checks.
+Other descriptor kinds are `benchmark` (`run_path` containing `inputs.json`, `requests/` and `blocks/`), `diagnostic`, `exact`, `source`, `forecast` (each with `raw_path`), and `not_run` (with `reason`). A diagnostic records its CLI argument list in `command` and lists every input file in `assets`. Use the configuration actually executed. Stdout-only commands use their complete stdout JSON as `raw_path`; robustness and frontier grids use the full-artifact route below. Include every failed source attempt, every family/shift arm, both F/Z branches, and unsuccessful controls. An unperformed natural arm must explicitly state that no official data/acquisition receipt exists. Source records and forecasts are retained but are not re-executed or promoted into evidence. `fixture: true` permanently prevents a test descriptor or replay receipt from satisfying production G10. A fixture can test clean replay only when its actual frozen protocol, committed source, runtime and assets pass the same strict checks.
+
+The public exact export produces an independently verifiable rational QP, active set, executed configuration and fixture hashes, and full claim contract. Run it separately for F and Z using the committed normative fixture configuration:
+
+```sh
+.venv/bin/python -m prepared_learning export-exact --config configs/exploration/frontier.json --branch F > runs/campaign/exact-F.json
+.venv/bin/python -m prepared_learning export-exact --config configs/exploration/frontier.json --branch Z > runs/campaign/exact-Z.json
+```
+
+Each `exact` descriptor names that raw JSON, records `command: ["export-exact", "--config", "configs/exploration/frontier.json", "--branch", "F"]` (or Z), and inventories both `configs/exploration/frontier.json` and `tests/fixtures/exact_cases.json` in `assets`. Descriptor file paths are relative to its directory; command arguments are relative to the repository root. For an explicit claim, set `evidence_level` to `rigorous_certificate`, `statement` to `exact_rational_fixture_kkt_verified`, `input_ids` to the actual descriptor index, and copy the exported `contract` fields into that claim. Admission rebuilds the exact envelope from the inventoried configuration and committed normative fixture, then rechecks the received integer-pair rational KKT; altered constants, active sets, contracts, configuration, or float relabeling are rejected. Exact replay uses no arithmetic tolerance. `frontier --certify` remains a numerical frontier report with exact branch checks; `export-exact` is the complete ledger/replay envelope. Finite fixture verification establishes neither a global theorem nor production G10.
+
+For robustness and frontier grids, capture the process record with committed CLI code:
+
+```sh
+.venv/bin/python -m prepared_learning robustness --manifest runs/campaign/robustness-manifest.json --output runs/campaign/robustness --process-record runs/campaign/robustness-process.json
+.venv/bin/python -m prepared_learning frontier --config runs/campaign/grid.json --output runs/campaign/grid --process-record runs/campaign/grid-process.json
+```
+
+Use the full scientific file as `raw_path`: `robustness.json` under its output directory, or `frontier.json` under the printed `attempt_path`. A robustness descriptor saved in `runs/campaign/` has this shape:
+
+```json
+{
+  "kind": "diagnostic",
+  "raw_path": "robustness/robustness.json",
+  "process_path": "robustness-process.json",
+  "output_artifact": {"filename": "robustness.json"},
+  "command": ["robustness", "--manifest", "runs/campaign/robustness-manifest.json", "--output", "runs/campaign/robustness"],
+  "assets": ["robustness-manifest.json"]
+}
+```
+
+For a grid, use `filename: "frontier.json"`, the actual attempt's `raw_path`, its process record and configuration asset, and `command: ["frontier", "--config", "runs/campaign/grid.json", "--output", "runs/campaign/grid"]`. The recorded command excludes the operational `--process-record` option. The sidecar preserves stdout, stderr, exit status and command, and refuses overwrite before execution. Replay inventories the sidecar and full file, replaces only the output directory with a fresh isolated destination, compares the full records and summary/status, and retains freshly measured output. Missing, stale, escaped, symlinked or changed artifacts fail replay. Failed grid points and adverse/descriptive robustness rows remain included; an equal failure replays as a recorded failure, never successful scientific support.
 
 For a finalized benchmark the frozen configuration in raw `inputs.json` supplies the executed source identity and calibration location. Preserve the calibration directory and its original JSON as well as all campaign raw worker blocks. Timing summaries and Pareto comparisons are rebuilt from workers; calibration schedules are checked against the raw pilot blocks. Supplied resident-input and exploratory benchmarks remain exploratory. Repeated timing blocks measure fixed selected assets; they do not add independent risk tasks or preparations.
 

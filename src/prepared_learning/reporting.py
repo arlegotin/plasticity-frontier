@@ -139,6 +139,7 @@ def _input_paths(entry):
             yield calibration; yield calibration.parent/'inputs.json'
             for folder in ('blocks','requests'): yield from _walk_files(calibration.parent/folder)
     elif kind!='not_run': yield Path(entry['raw_path'])
+    if 'process_path' in entry: yield Path(entry['process_path'])
     for asset in entry.get('assets',[]): yield Path(asset)
 
 
@@ -252,7 +253,51 @@ def _raw_files(entry):
     elif kind != 'not_run':
         files.add(Path(entry['raw_path']))
     files.update(Path(p) for p in entry.get('assets', []))
+    if 'process_path' in entry: files.add(Path(entry['process_path']))
     return {str(p): _sha(p) for p in sorted(files)}
+
+
+def _artifact_summary(command, process):
+    """Normalize only the producer's declared output location, never raw values."""
+    summary=json.loads(process['stdout'])
+    if type(process['returncode']) is not int:
+        raise ValueError('diagnostic process returncode must be an integer')
+    if command=='robustness':
+        artifact=Path(summary['evidence']['report'])
+        summary['evidence']['report']='<output-artifact>'
+    else:
+        artifact=Path(summary['attempt_path'])/'frontier.json'
+        summary['attempt_path']='<output-directory>'
+    return artifact, summary
+
+
+def _validate_output_artifact(entry, source_root):
+    command=entry.get('command')
+    if (entry['kind']!='diagnostic' or not isinstance(command,list)
+            or not all(isinstance(arg,str) for arg in command) or len(command) not in (3,5)):
+        raise ValueError('output artifact requires a declared diagnostic CLI command')
+    routes={'robustness':('--manifest','robustness.json'), 'frontier':('--config','frontier.json')}
+    if command[0] not in routes:
+        raise ValueError('unsupported output artifact producer')
+    flag,filename=routes[command[0]]
+    if (command[1]!=flag or (len(command)==5 and command[3]!='--output')
+            or entry['output_artifact']!={'filename':filename}):
+        raise ValueError('invalid output artifact selector or producer arguments')
+    source_root=Path(source_root).resolve()
+    config=_path(command[2],source_root)
+    if not config.is_relative_to(source_root) or str(config) not in entry.get('assets',[]):
+        raise ValueError('output artifact configuration must be an inventoried repository asset')
+    if not entry.get('process_path') or entry['process_path'] not in entry['inventory']:
+        raise ValueError('output artifact requires an inventoried process record')
+    process=_read(entry['process_path'])
+    if set(process)!={'command','returncode','stdout','stderr'} or not isinstance(process['stderr'],str):
+        raise ValueError('complete diagnostic process record required')
+    if process.get('command')!=command:
+        raise ValueError('output artifact command differs from recorded producer process')
+    artifact,summary=_artifact_summary(command[0],process)
+    if _path(artifact,source_root)!=Path(entry['raw_path']):
+        raise ValueError('output artifact differs from recorded producer output')
+    return process,summary
 
 
 def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
@@ -273,7 +318,7 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
             raise ValueError('explicit supported input descriptor kind required')
         entry = {**descriptor, 'input_id': index, 'descriptor_path': str(path),
                  'label': descriptor.get('label', path.stem)}
-        for name in ('run_path','protocol_path','raw_path'):
+        for name in ('run_path','protocol_path','raw_path','process_path'):
             if name in entry: entry[name] = str(_path(entry[name], path.parent))
         entry['assets'] = [str(_path(p, path.parent)) for p in descriptor.get('assets', [])]
         if kind == 'not_run' and not entry.get('reason'): raise ValueError('not_run requires a reason')
@@ -286,6 +331,8 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
     for entry in entries:
         kind=entry['kind']
         entry['inventory'] = _raw_files(entry)
+        if 'output_artifact' in entry:
+            _validate_output_artifact(entry,root)
         if kind == 'confirmation':
             protocol = _read(entry['protocol_path']); run = _read(Path(entry['run_path'])/'run.json')
             entry['source'] = protocol['scientific']['versions']
@@ -321,6 +368,11 @@ def _verify_inputs(manifest, *, replay=False):
     for index, entry in enumerate(manifest['inputs']):
         if entry['input_id'] != index: raise ValueError('input order changed')
         if _raw_files(entry) != entry['inventory']: raise ValueError('raw inventory hash changed')
+        if 'output_artifact' in entry:
+            _validate_output_artifact(entry,manifest['replay']['source_root'])
+        if entry['kind']=='exact':
+            from .exact_evidence import verify_export
+            verify_export(_read(entry['raw_path']),entry,manifest['replay']['source_root'])
         if entry['kind']=='confirmation':
             run=_read(Path(entry['run_path'])/'run.json'); identity=tuple(run[k] for k in IDENTITY_FIELDS)
             if identity in scientific_runs: raise ValueError('duplicate scientific run cannot add independent samples')
@@ -330,7 +382,8 @@ def _verify_inputs(manifest, *, replay=False):
 
 def _contract(science):
     config = science['config']
-    return {'architecture':{'class':'all-entry deep linear, zero-output initialization', **config['budget']},
+    return {'architecture':{'class':'declared deep-linear and outside-class operational controls',
+                            'reference_budget':config['budget']},
             'population':{'workload':config['workload'], 'preparation':config['preparation'], 'access':config['access']},
             'baseline':science['selectors'], 'metric':'expected squared coefficient error [coefficient^2]',
             'resource_contract':{'budget':config['budget'], 'sample_plan':config['sample_plan'],
@@ -373,7 +426,7 @@ def _confirmation(entry, emit=lambda row:None):
         if endpoint=='primary': return primary_limit
         selected,count=schedules[endpoint]
         return count if outer in selected else 0
-    executions={}; tasks={}; completions=[]; raw_count=0
+    executions={}; tasks={}; completions=[]; raw_count=0; role_metadata={}
     for path in sorted((store.path/'blocks').iterdir()):
         store._verify(path)
         rows=_read(path/'records.json'); store._validate_rows(rows)
@@ -388,6 +441,9 @@ def _confirmation(entry, emit=lambda row:None):
                 executions[outer]['failures']={'raw_failure_recorded':True} if result['failures'] else {}
                 executions[outer]['risks']={role:{'conditional_risk':value.get('conditional_risk')} for role,value in result['risks'].items() if role in ('baseline','joint')}
                 executions[outer]['tasks']=[]
+                for role, metadata in result.get('role_execution_metadata',{}).items():
+                    if metadata not in role_metadata.setdefault(role,[]):
+                        role_metadata[role].append(metadata)
             elif row['kind']=='replication_completion' and row['status']=='completed':
                 if len(completions)>=outer_limit: raise ValueError('completion count exceeds frozen schedule')
                 completions.append(row['outer_replication'])
@@ -420,7 +476,9 @@ def _confirmation(entry, emit=lambda row:None):
         analysis = {'status':'invalid_or_incomplete', 'reason':str(exc), 'mean':None, 'interval':None,
                     'n':None, 'secondary':{}, 'independent_unit':None}
     analysis.update(input_id=entry['input_id'], label=entry['label'], outcome=_outcome(analysis),
-                    evidence_level=entry['evidence_level'], run_status=run['status'], **_contract(science))
+                    evidence_level=entry['evidence_level'], run_status=run['status'],
+                    role_execution_metadata=role_metadata, **_contract(science))
+    analysis['architecture']['executed_roles']=role_metadata
     return analysis, raw_count
 
 
@@ -434,12 +492,24 @@ def _benchmark(entry):
         for worker in _read(path):
             resource = worker['resource']; mid=resource['method_id']
             for row in worker['rows']:
-                key=(mid,row['block'],row['timing_stratum'])
+                temperature=row['cold_warm']
+                if temperature not in ('cold','warm'):
+                    raise ValueError('invalid benchmark temperature')
+                in_process=resource['memory']['isolation']=='in_process_test_or_callback'
+                stratum=content_hash({'conditions':worker['conditions'],
+                                      'cold_warm':temperature,'in_process':in_process})
+                if row['timing_stratum']!=stratum:
+                    raise ValueError('benchmark hashed timing stratum changed')
+                if any(row[field]!=resource[field] for field in
+                       ('method_id','execution_hash','selected_execution_hash')):
+                    raise ValueError('benchmark worker/row identity changed')
+                key=(mid,row['block'],temperature)
                 if key in seen: raise ValueError('duplicate benchmark worker stratum')
                 seen.add(key); rows.append(row)
             if mid in resources:
                 old=resources[mid]
-                if resource['selected_execution_hash'] != old['selected_execution_hash']: raise ValueError('benchmark selected asset changed')
+                if any(resource[field]!=old[field] for field in ('selected_execution_hash','execution_hash')):
+                    raise ValueError('benchmark selected asset or execution changed')
                 a,b=old['memory']['peak_rss_bytes'],resource['memory']['peak_rss_bytes']
                 old['memory']['peak_rss_bytes']=max(a,b) if a is not None and b is not None else None
             else: resources[mid]=json.loads(json.dumps(resource))
@@ -475,6 +545,15 @@ def _benchmark(entry):
                 raise ValueError('benchmark selected execution identity changed')
             if content_hash(worker['conditions'])!=frozen['condition_hash']:
                 raise ValueError('benchmark timing conditions changed')
+            if resource['memory']['isolation']!='fresh_interpreter':
+                raise ValueError('finalized benchmark requires fresh worker isolation')
+            for row in worker['rows']:
+                block=row['block']
+                if type(block)!=int or not 0<=block<len(orders) or row['method_order']!=orders[block]:
+                    raise ValueError('benchmark worker order changed')
+                repetitions=1 if row['cold_warm']=='cold' else frozen['repetitions'][resource['method_id']]
+                if row['repetitions']!=repetitions:
+                    raise ValueError('benchmark worker repetition schedule changed')
         expected={(mid,block,stratum) for block,order in enumerate(orders) for mid in order for stratum in ('cold','warm')}
         complete &= seen==expected
     required={'B08:ridge','B10:empirical_bayes'} | {'B05:'+mid for mid,r in resources.items() if r['trainable_parameters'] is not None and mid!='B08:gd'}
@@ -716,13 +795,12 @@ def _claims(manifest, tables):
         if level=='rigorous_certificate':
             # A source text or float report cannot certify itself. Exact fixture
             # claims have an independently evaluated rational input and verifier.
-            from checks.exact_reference import verify_rational_kkt
+            from .exact_evidence import verify_export
             if any(e['kind']!='exact' or not _read(e['raw_path']).get('rational_qp') for e in entries):
                 raise ValueError('rigorous claim requires exact rational raw evidence')
             for e in entries:
                 raw=_read(e['raw_path'])
-                if not verify_rational_kkt(raw['rational_qp'],tuple(raw['active_indices']))['verified']:
-                    raise ValueError('exact evidence verification failed')
+                verify_export(raw,e)
                 if any(claim[k]!=raw.get('contract',{}).get(k) for k in CONTRACT): raise ValueError('exact claim contract differs from raw rational fixture')
                 if claim.get('statement')!='exact_rational_fixture_kkt_verified': raise ValueError('exact fixture evidence does not establish a global theorem')
         elif level=='protected':
