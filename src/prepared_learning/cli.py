@@ -44,6 +44,8 @@ def main(argv=None) -> int:
     reproduce = sub.add_parser('reproduce'); reproduce.add_argument('--suite', choices=['source_and_baselines'], required=True); reproduce.add_argument('--run-source', action='store_true'); reproduce.add_argument('--full-matrix', action='store_true'); reproduce.add_argument('--output', default='runs/source_reproduction'); reproduce.set_defaults(handler=command_reproduce)
     frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.add_argument('--certify', action='store_true'); frontier.set_defaults(handler=command_frontier)
     learned = sub.add_parser('fit-priors'); learned.add_argument('--config', required=True); learned.set_defaults(handler=command_fit_priors)
+    pilot = sub.add_parser('pilot'); pilot.add_argument('--config', required=True); pilot.add_argument('--output', default='runs/pilots'); pilot.set_defaults(handler=command_pilot)
+    freeze = sub.add_parser('freeze'); freeze.add_argument('--protocol', required=True); freeze.add_argument('--output'); freeze.set_defaults(handler=command_freeze)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -275,5 +277,35 @@ def command_fit_priors(args: argparse.Namespace) -> int:
         result={'status':'pass','analysis':'exploratory','public_method_config':public,'tuning_resolution':selection.candidate_records[0]['tuning_resolution'],'baseline':to_json_record(baseline),'joint':to_json_record(joint),'source_training_tasks':T,'source_validation_tasks':V,'unique_labels':sum(len(t.A.y)+len(t.B.y) for t in train+val),'training_observation_hash':content_hash(train),'validation_observation_hash':content_hash(val),'truth_separation':'methods receive public config and observed source blocks only'}
         output=Path('runs/learned_prior'); output.mkdir(parents=True,exist_ok=True); attempt=Path(tempfile.mkdtemp(prefix='attempt-',dir=output)); (attempt/'fit_priors.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
         print(json.dumps({'status':'pass','attempt_path':str(attempt),'unique_labels':result['unique_labels'],'tuning_resolution':result['tuning_resolution']})); return 0
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)})); return 1
+
+
+def command_pilot(args: argparse.Namespace) -> int:
+    from .specs import load_config
+    from .pilot import run_pilot
+    try:
+        result=run_pilot(load_config(Path(args.config)),Path(args.output))
+        print(json.dumps({key:result[key] for key in ('status','run_path','gate')},allow_nan=False))
+        return 0 if result['status']=='completed' else 1
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)})); return 1
+
+
+def command_freeze(args: argparse.Namespace) -> int:
+    from .protocol import freeze_protocol, validate_frozen_protocol, checkout_identity
+    try:
+        path=Path(args.protocol); record=json.loads(path.read_text())
+        if record.get('status')=='frozen':
+            validate_frozen_protocol(record)
+            raise ValueError('protocol already frozen; immutable manifests cannot be overwritten')
+        draft=record['draft']; evidence=json.loads((path.parent/record['evidence_path']).read_text())
+        scientific=draft['scientific']
+        current,dirty=checkout_identity(scientific['selectors'],scientific['config']['numerics']['fitting_candidates'])
+        if dirty or current!=scientific['versions']: raise ValueError('freeze requires the clean committed revision and dependencies used for the pilot')
+        output=Path(args.output) if args.output else path.with_name(path.stem+'.frozen.json')
+        result=freeze_protocol(draft,evidence,output)
+        print(json.dumps({'status':'frozen','path':str(output),'protocol_sha256':result['protocol_sha256'],
+            'next_action':'execute the fixed protected schedule using this immutable manifest'})); return 0
     except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1
