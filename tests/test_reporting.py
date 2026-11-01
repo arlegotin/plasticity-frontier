@@ -142,6 +142,7 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(first['benchmarks'],second['benchmarks'])
             self.assertEqual(len(first['benchmarks'][0]['rows']),8)
             self.assertTrue(first['benchmarks'][0]['pareto']['rows'])
+            self.assertEqual(first['benchmarks'][0]['evidence_level'],'fixture')
 
     def test_fixture_replay_cannot_complete_production_g10(self):
         api=reporting(self)
@@ -155,3 +156,14 @@ class ReportingTests(unittest.TestCase):
             manifest['replay']['receipt']={'path':str(receipt),'sha256':hashlib.sha256(receipt.read_bytes()).hexdigest()}
             result=api.write_report(manifest,root/'report')
             self.assertNotEqual(result.code,'SUPPORTED_IN_SCOPE')
+
+    def test_oracle_pareto_row_remains_reference(self):
+        api=reporting(self)
+        benchmark={'input_id':0,'evidence_level':'operational','inputs':{'inputs':{'manifest':{
+            'dimension':2,'context_size':2,'seed':5,'methods':['B10:posterior']}}},
+            'raw_workers':[{'conditions':{}}], 'resources':[{'method_id':'B10:posterior',
+                'selected_asset':{'information_access':'oracle'}}],
+            'pareto':{'scope':'fixed fixture','rows':[{'method_id':'B10:posterior','comparator':'B01','status':'scoped_domination'}]}}
+        ledger=api._claims({'inputs':[{'inventory':{'raw.json':'hash'}}]},
+            {'comparisons':[],'benchmarks':[benchmark]})
+        self.assertEqual(ledger[0]['evidence_level'],'oracle_reference')

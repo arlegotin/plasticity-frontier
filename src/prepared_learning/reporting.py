@@ -278,7 +278,7 @@ def _benchmark(entry):
     # Keep the complete candidate ledgers and failures in raw output, even when
     # they were not selected, and never count warm repeats as fresh risk samples.
     return {'input_id':entry['input_id'], 'label':entry['label'], 'status':'completed' if complete else 'failed_or_incomplete',
-            'evidence_level':'operational' if campaign and complete and not missing and equal else 'exploratory',
+            'evidence_level':'fixture' if entry.get('fixture') else ('operational' if campaign and complete and not missing and equal else 'exploratory'),
             'missing_controls':missing, 'rows':rows, 'resources':list(resources.values()), 'pareto':pareto,
             'inputs':inputs, 'raw_workers':workers, 'energy':{'status':'not_run'}, 'accelerator':{'status':'not_run'}}
 
@@ -436,8 +436,11 @@ def _claims(manifest, tables):
         if 'manifest' not in benchmark['inputs']['inputs']: continue
         contract=_benchmark_contract(benchmark)
         for index,row in enumerate(benchmark['pareto']['rows']):
+            target=next(r for r in benchmark['resources'] if r['method_id']==row['method_id'])
+            level=benchmark['evidence_level']
+            if target['selected_asset']['information_access']=='oracle' and level!='fixture': level='oracle_reference'
             ledger.append({'claim_id':f"operational-{benchmark['input_id']}-{index}",
-                'statement':row['status'],'evidence_level':benchmark['evidence_level'],
+                'statement':row['status'],'evidence_level':level,
                 'input_ids':[benchmark['input_id']], **contract, 'comparison':row,
                 'evidence_paths':list(manifest['inputs'][benchmark['input_id']]['inventory']),
                 'qualification':'conditional on recorded selected assets and measured machine stratum; no energy claim'})
@@ -563,7 +566,11 @@ def compare_run_stores(left: Path, right: Path, *, rtol, atol) -> JsonRecord:
             marker=_read(block/'commit.json')
             for asset in (block/'assets').glob('*.npy'):
                 assets[marker['key']+'/'+asset.name]=asset
-        rows.append(sorted(records,key=lambda r:json.dumps({k:r.get(k) for k in ('kind','outer_replication','task_id','method_id','configuration_key','branch','endpoint')},sort_keys=True)))
+        def scientific_key(row):
+            nested=row.get('result',{})
+            return json.dumps({key:row.get(key,nested.get(key)) for key in
+                ('kind','outer_replication','task_id','task_key','method_id','configuration_key','branch','endpoint')},sort_keys=True)
+        rows.append(sorted(records,key=scientific_key))
         arrays.append(assets)
     for key in IDENTITY_FIELDS:
         if _read(left/'run.json')[key]!=_read(right/'run.json')[key]: raise ValueError('replay run identity mismatch: '+key)

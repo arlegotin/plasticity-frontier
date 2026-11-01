@@ -8,6 +8,18 @@ from tests.test_reporting import reporting, confirmation_input
 
 
 class ReplayTests(unittest.TestCase):
+    def test_replay_orders_tasks_by_scientific_key_across_many_chunks(self):
+        api=reporting(self)
+        from prepared_learning import confirmation
+        from tests.test_confirmation import execution_manifest
+        with tempfile.TemporaryDirectory() as tmp, patch.object(confirmation,'_live_identity'):
+            root=Path(tmp); manifest=execution_manifest('fixed_prior_task_simulation')
+            manifest['scientific']['config']['sample_plan']['tasks_per_replicate']=19
+            a=confirmation.run_confirmation(manifest,root/'a',checkpoint_tasks=1)
+            b=confirmation.run_confirmation(manifest,root/'b',checkpoint_tasks=16)
+            result=api.compare_run_stores(Path(a.evidence['run_path']),Path(b.evidence['run_path']),rtol=1e-10,atol=1e-12)
+            self.assertEqual(result['status'],'matched')
+
     def test_replay_interrupt_equivalence(self):
         api = reporting(self)
         from prepared_learning import confirmation
