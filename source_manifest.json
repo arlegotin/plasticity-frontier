@@ -1,0 +1,22 @@
+{
+  "archive_sha256": "cc94445ed1a15b852ee0accd32daca3de028c1c3b6e936d8d32cfd21273d6b9f",
+  "members": {
+    "prepared_learning_research/README.txt": "86f639b69bda7add031a08ba4ee09eeb89bc5656e88f8aa3176d33407f66ac77",
+    "prepared_learning_research/audit_geometry.py": "bf47a2958f0324538f6f79027cd453734e8132ec5293467bcab6a414966ac965",
+    "prepared_learning_research/audit_geometry_results.json": "a61eee75bd22db4e0cc13577bd25680c580d95beaae3e37af7b2ef8dc6ba7f86",
+    "prepared_learning_research/figures/phase_diagram.pdf": "6a1c8c830eec7a5793e94d245e3ff26461f693c33850163eb7b26bbd1eb78aab",
+    "prepared_learning_research/figures/phase_diagram.png": "a3532faf1ef61e634a8d6aa90083a3f91480d1215ff7efe0df0efe8dfd15ea8c",
+    "prepared_learning_research/figures/phase_diagram_note.pdf": "8571d068c1b18cb8a882b1c480d00398a7e6dae2661541b0c57d76802e78d25b",
+    "prepared_learning_research/geometry_section.tex": "b7d354347397d16f7f2d6c3a555acbace2541ca1bc2fd08e945d6ea8378da8b3",
+    "prepared_learning_research/literature_plasticity.txt": "254984e76a2bc0a3535c2e45a83472dfbaaa58aaec8076ceeb40901eb755bb0b",
+    "prepared_learning_research/phase_section.tex": "74ac897ef059b11a08889d2083c010f9fca63196511b70c9f39bb81cf734bd73",
+    "prepared_learning_research/phase_transition.py": "66bebf801d7bdddfe73dfabf670abb643013d2f0107c8b77e1b7d78c957909fe",
+    "prepared_learning_research/plot_phase.py": "5ca80fe672268e9486f985eae84c0fd1866c44e6f5257350ab8571c4e48581f3",
+    "prepared_learning_research/research_note.pdf": "d21569825103249a352bba5e69f951bcc163dbc748b33df9124ff637920de4f9",
+    "prepared_learning_research/research_note.tex": "8012b649d20c60821646f7fb4aa78002cc73713125e773639bd7e81a6ca8d744",
+    "prepared_learning_research/results_phase.json": "5c6b830ff97363a393513c7ccbe0782ad2ceb461e3b167a2f829d499ab114f0b",
+    "prepared_learning_research/results_plasticity.json": "8a958e014e3ab2734ff5a48077e389d7a0b9dfb20b10c47615409dd67a158741",
+    "prepared_learning_research/verification_section.tex": "67a0324d86fa14f7131da79142e143f48bdbb86a44048fe2c2779c29c74d7e35",
+    "prepared_learning_research/verify_plasticity.py": "7730367ebff69694e45b70bb53ba3862afdec331b80125239ee8329db94712a2"
+  }
+}
