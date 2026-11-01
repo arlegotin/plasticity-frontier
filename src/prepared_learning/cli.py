@@ -43,6 +43,7 @@ def main(argv=None) -> int:
     geometry = sub.add_parser('check-geometry'); geometry.add_argument('--suite', choices=['adversarial'], required=True); geometry.set_defaults(handler=command_check_geometry)
     reproduce = sub.add_parser('reproduce'); reproduce.add_argument('--suite', choices=['source_and_baselines'], required=True); reproduce.add_argument('--run-source', action='store_true'); reproduce.add_argument('--full-matrix', action='store_true'); reproduce.add_argument('--output', default='runs/source_reproduction'); reproduce.set_defaults(handler=command_reproduce)
     frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.add_argument('--certify', action='store_true'); frontier.set_defaults(handler=command_frontier)
+    learned = sub.add_parser('fit-priors'); learned.add_argument('--config', required=True); learned.set_defaults(handler=command_fit_priors)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -238,4 +239,41 @@ def command_frontier(args: argparse.Namespace) -> int:
                 result['exact_certificate_status']={'status':'unavailable','reason':str(exc)}
         print(json.dumps(result,allow_nan=False)); return 0 if result['status']=='pass' else 1
     except (ValueError,TypeError,KeyError,OSError,OverflowError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)})); return 1
+
+
+def command_fit_priors(args: argparse.Namespace) -> int:
+    from .specs import load_config, validate_config
+    from .records import TaskKey, content_hash
+    from .tasks import generate_source_task
+    from .methods import make_method
+    from .selection import public_method_config, select_method
+    try:
+        cfg=load_config(Path(args.config)); validate_config(cfg,confirmation=False)
+        sample=cfg.sample_plan; root=cfg.keys['exploration']
+        if type(root)!=int: raise ValueError('exploration seed must be integer')
+        T=sample.source_training_tasks; V=sample.source_validation_tasks
+        if not T or not V: raise ValueError('source training and validation counts required')
+        training_keys=[TaskKey(root,1,0,i,0) for i in range(T)]; validation_keys=[TaskKey(root,2,0,i,0) for i in range(V)]
+        public=public_method_config(cfg)
+        public['source_access_manifest']={'training_keys':[content_hash({'key':key}) for key in training_keys], 'validation_keys':[content_hash({'key':key}) for key in validation_keys]}
+        train=[generate_source_task(cfg,key) for key in training_keys]
+        val=[generate_source_task(cfg,key) for key in validation_keys]
+        candidates=[make_method(m,{}) for m in cfg.methods if m in ('B01','B02','B03','B04','B11:F','B11:Z')]
+        selection=select_method(candidates,train,val,{**public,'selection_class':'mechanism_all'})
+        from .records import PriorAsset, SelectionResult
+        import numpy as np
+        def subset(ids):
+            rows=tuple(row for row in selection.candidate_records if row['method_id'] in ids)
+            valid=[r for r in rows if r.get('status')=='completed']
+            if not valid: raise ValueError('no successful eligible candidates')
+            row=min(valid,key=lambda r:r['validation_loss']); asset=dict(row['asset'])
+            for key in ('covariance','basis','eigenvalues'):
+                if asset[key] is not None: asset[key]=np.asarray(asset[key],dtype=float)
+            return SelectionResult(row['candidate_id'],rows,PriorAsset(**asset))
+        baseline=subset({'B01','B02','B11:Z'}); joint=subset({'B03','B04','B11:F','B11:Z'})
+        result={'status':'pass','analysis':'exploratory','public_method_config':public,'tuning_resolution':selection.candidate_records[0]['tuning_resolution'],'baseline':to_json_record(baseline),'joint':to_json_record(joint),'source_training_tasks':T,'source_validation_tasks':V,'unique_labels':sum(len(t.A.y)+len(t.B.y) for t in train+val),'training_observation_hash':content_hash(train),'validation_observation_hash':content_hash(val),'truth_separation':'methods receive public config and observed source blocks only'}
+        output=Path('runs/learned_prior'); output.mkdir(parents=True,exist_ok=True); attempt=Path(tempfile.mkdtemp(prefix='attempt-',dir=output)); (attempt/'fit_priors.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
+        print(json.dumps({'status':'pass','attempt_path':str(attempt),'unique_labels':result['unique_labels'],'tuning_resolution':result['tuning_resolution']})); return 0
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1

@@ -8,7 +8,8 @@ from .records import AdaptedState, PreparedState, Resources, to_json_record
 class Method:
     def __init__(self, method_id, options): self.method_id, self.options = method_id, dict(options)
     def fit_meta(self, train_tasks, validation_tasks, config):
-        raise NotImplementedError('learned fitting is implemented in Task 8')
+        from .selection import fit_method
+        return fit_method(self, train_tasks, validation_tasks, config)
     def prepare(self, prior, budget, task):
         d=task.input_dimension; n=task.target_context_size; mid=self.method_id; family=mid.split(':')[0]
         if budget.depth<2 or budget.learning_rate!=1 or n<1 or d<1: raise ValueError('invalid preparation')
@@ -17,7 +18,8 @@ class Method:
         if family in ('B00','B01','B02','B03','B04') and width<1: raise ValueError('infeasible architecture')
         s=np.asarray(prior.eigenvalues) if prior.eigenvalues is not None else None
         basis=prior.basis
-        if family=='B00': metric=metric_from_gains(np.eye(d),np.zeros(d))
+        if 'fitted_metric' in self.options: metric=self.options['fitted_metric']
+        elif family=='B00': metric=metric_from_gains(np.eye(d),np.zeros(d))
         elif family=='B01': metric=metric_from_gains(np.eye(d),np.full(d,min(k,1/((n+1)/n+d*(1+prior.noise_variance)/n))))
         elif family=='B02':
             if budget.depth!=2: raise ValueError('B02 requires depth two')
@@ -44,7 +46,8 @@ class Method:
         elif family=='B07': metric=unrestricted_fixed_metric(prior,task)
         else: metric=None
         realization=None
-        if family in ('B00','B01','B03','B04'): realization=construct_canonical(metric,budget.depth)
+        if family=='B11' and mid=='B11:Z' and budget.depth==2: realization=construct_head_zero(metric)
+        elif family in ('B00','B01','B03','B04','B11'): realization=construct_canonical(metric,budget.depth)
         elif family=='B02': realization=construct_head_zero(metric)
         resources=realization.resources if realization else Resources(None,None,0,0)
         if metric is not None and realization is None:
@@ -57,12 +60,13 @@ class Method:
         if X.shape!=(p.target_context_size,p.input_dimension) or y.shape!=(p.target_context_size,) or not np.all(np.isfinite(X)) or not np.all(np.isfinite(y)): raise ValueError('context does not match preparation')
         family=prepared.method_id.split(':')[0]; variant=prepared.method_id.partition(':')[2]
         layers=None
-        if prepared.initial_layers is not None:
+        if prepared.options.get('zero_estimator',False): coefficient=np.zeros(p.input_dimension)
+        elif prepared.initial_layers is not None:
             layers=simultaneous_step(prepared.initial_layers,-X.T@y/len(X),prepared.budget.learning_rate); coefficient=effective_coefficient(layers)
         elif prepared.metric is not None: coefficient=apply_metric(prepared.metric,X.T@y/len(X))
         elif family=='B08' and variant=='gd': coefficient=float(prepared.options.get('step_size',1.))*X.T@y/len(X)
         elif family in ('B08','B09'):
-            basis=prepared.prior.basis if family=='B09' else None
+            basis=prepared.prior.basis[:,:int(prepared.options.get('rank',p.input_dimension))] if family=='B09' else None
             penalty=0. if variant=='least_squares' else float(prepared.options.get('penalty',0.))
             coefficient=ridge_coefficient(context,penalty,basis)
         elif family=='B10': coefficient=posterior_coefficient(context,prepared.prior)
@@ -87,11 +91,20 @@ class Method:
 
 def make_method(method_id, options):
     options=dict(options); family,sep,variant=method_id.partition(':')
+    from collections.abc import Mapping
+    if isinstance(options.get('fitted_metric'),Mapping):
+        from .metrics import CompactMetric
+        from .records import SupportMetadata
+        record=options['fitted_metric']; meta=record['support_metadata']
+        options['fitted_metric']=CompactMetric(record['floor'],np.asarray(record['basis'],dtype=float),np.asarray(record['increments'],dtype=float),SupportMetadata(**meta))
     if family=='B05':
         target=variant or options.get('target_method_id')
         if not target: raise ValueError('B05 requires target_method_id')
         if options.get('target_method_id',target)!=target: raise ValueError('conflicting target method ID')
         method_id='B05:'+target
+    elif family=='B11':
+        if variant not in ('F','Z'): raise ValueError('B11 requires F or Z variant')
+        method_id=family+':'+variant
     elif family in ('B08','B09','B10'):
         variant=variant or options.get('variant','')
         allowed={'B08':('gd','ridge'),'B09':('least_squares','ridge'),'B10':('posterior','empirical_bayes')}
