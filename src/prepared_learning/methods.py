@@ -14,7 +14,7 @@ class Method:
         if budget.depth<2 or budget.learning_rate!=1 or n<1 or d<1: raise ValueError('invalid preparation')
         k=(budget.initialization_norm_cap/(budget.depth-1))**(budget.depth-1)
         width=min(d,(budget.trainable_parameter_cap-(budget.depth-2))//(d+1))
-        if family in ('B00','B01','B02') and width<1: raise ValueError('infeasible architecture')
+        if family in ('B00','B01','B02','B03','B04') and width<1: raise ValueError('infeasible architecture')
         s=np.asarray(prior.eigenvalues) if prior.eigenvalues is not None else None
         basis=prior.basis
         if family=='B00': metric=metric_from_gains(np.eye(d),np.zeros(d))
@@ -22,6 +22,21 @@ class Method:
         elif family=='B02':
             if budget.depth!=2: raise ValueError('B02 requires depth two')
             metric=metric_from_gains(basis,solve_rank_gains(s,n,prior.noise_variance,k,width))
+        elif family in ('B03','B04'):
+            from .frontier import solve_frontier
+            frontier=solve_frontier(prior,budget,task)
+            if family=='B03':
+                if frontier.F.status!='completed': raise RuntimeError('F solver unresolved')
+                metric=frontier.F.metric
+            else:
+                if frontier.F.status!='completed' or frontier.Z.status!='completed': raise RuntimeError('frontier solver unresolved')
+                if frontier.selection_status=='unresolved':
+                    if frontier.F.objective != frontier.Z.objective: raise RuntimeError('frontier comparison unresolved')
+                    # Exact float ties retain both; resource use is an implementation tie-break.
+                    from .metrics import metric_resources
+                    chosen=min((frontier.F,frontier.Z),key=lambda b:metric_resources(b.metric,budget.depth).trainable_parameters)
+                else: chosen=frontier.F if frontier.selected_branches==('F',) else frontier.Z
+                metric=chosen.metric
         elif family=='B05':
             metric=self.options.get('metric')
             if metric is None: raise ValueError('B05 requires shared metric')
@@ -29,7 +44,7 @@ class Method:
         elif family=='B07': metric=unrestricted_fixed_metric(prior,task)
         else: metric=None
         realization=None
-        if family in ('B00','B01'): realization=construct_canonical(metric,budget.depth)
+        if family in ('B00','B01','B03','B04'): realization=construct_canonical(metric,budget.depth)
         elif family=='B02': realization=construct_head_zero(metric)
         resources=realization.resources if realization else Resources(None,None,0,0)
         if metric is not None and realization is None:
@@ -82,5 +97,5 @@ def make_method(method_id, options):
         allowed={'B08':('gd','ridge'),'B09':('least_squares','ridge'),'B10':('posterior','empirical_bayes')}
         if variant not in allowed[family]: raise ValueError('explicit valid variant required')
         method_id=family+':'+variant
-    elif sep or family not in ('B00','B01','B02','B06','B07'): raise ValueError('unknown method')
+    elif sep or family not in ('B00','B01','B02','B03','B04','B06','B07'): raise ValueError('unknown method')
     return Method(method_id,options)

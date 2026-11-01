@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "spectrum": [0.5, 0.25, 0.15, 0.07, 0.02, 0.01],
+  "n": 4,
+  "sigma2": 1.0,
+  "depth": 2,
+  "initialization_norm_cap": 0.6,
+  "trainable_parameter_cap": 21
+}

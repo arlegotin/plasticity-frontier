@@ -42,6 +42,7 @@ def main(argv=None) -> int:
     theory = sub.add_parser('check-theory'); theory.add_argument('--config', required=True); theory.set_defaults(handler=command_check_theory)
     geometry = sub.add_parser('check-geometry'); geometry.add_argument('--suite', choices=['adversarial'], required=True); geometry.set_defaults(handler=command_check_geometry)
     reproduce = sub.add_parser('reproduce'); reproduce.add_argument('--suite', choices=['source_and_baselines'], required=True); reproduce.add_argument('--run-source', action='store_true'); reproduce.add_argument('--full-matrix', action='store_true'); reproduce.add_argument('--output', default='runs/source_reproduction'); reproduce.set_defaults(handler=command_reproduce)
+    frontier = sub.add_parser('frontier'); frontier.add_argument('--config', required=True); frontier.set_defaults(handler=command_frontier)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -168,4 +169,26 @@ def command_reproduce(args: argparse.Namespace) -> int:
         (attempt/'reproduction.json').write_text(json.dumps(result,indent=2,allow_nan=False)+'\n')
         print(json.dumps(result,allow_nan=False)); return 0 if valid else 1
     except (ValueError, OSError, RuntimeError, KeyError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)})); return 1
+
+
+def command_frontier(args: argparse.Namespace) -> int:
+    import numpy as np
+    from .records import PriorAsset, BudgetSpec, PreparationSpec
+    from .metrics import metric_resources
+    from .frontier import solve_frontier
+    try:
+        cfg=json.loads(Path(args.config).read_text())
+        if cfg['schema_version']!=1: raise ValueError('unsupported schema version')
+        s=np.asarray(cfg['spectrum'],dtype=float); d=len(s)
+        prior=PriorAsset(np.diag(s),np.eye(d),s,cfg['sigma2'],'oracle',{},'exploration-oracle')
+        budget=BudgetSpec(cfg['depth'],cfg['initialization_norm_cap'],cfg['trainable_parameter_cap'],1.)
+        task=PreparationSpec(cfg['n'],d,'gaussian','1/(2n)',1.)
+        frontier=solve_frontier(prior,budget,task)
+        result=to_json_record(frontier)
+        for branch in ('F','Z'):
+            result[branch]['actual_resources']=to_json_record(metric_resources(getattr(frontier,branch).metric,budget.depth))
+        result.update({'status':'pass' if all(b.status=='completed' for b in (frontier.F,frontier.Z)) else 'failed','caps':to_json_record(budget)})
+        print(json.dumps(result,allow_nan=False)); return 0 if result['status']=='pass' else 1
+    except (ValueError,TypeError,KeyError,OSError,OverflowError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1
