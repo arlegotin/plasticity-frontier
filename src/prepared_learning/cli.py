@@ -40,6 +40,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(); sub = parser.add_subparsers(required=True)
     doctor = sub.add_parser('doctor'); doctor.add_argument('--output', required=True); doctor.set_defaults(handler=command_doctor)
     theory = sub.add_parser('check-theory'); theory.add_argument('--config', required=True); theory.set_defaults(handler=command_check_theory)
+    geometry = sub.add_parser('check-geometry'); geometry.add_argument('--suite', choices=['adversarial'], required=True); geometry.set_defaults(handler=command_check_geometry)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -69,5 +70,41 @@ def command_check_theory(args: argparse.Namespace) -> int:
     except (OSError, ValueError, KeyError, TypeError, ZeroDivisionError) as exc:
         result = {'status': 'failed', 'gate': 'IMPLEMENTATION_INVALID', 'error': str(exc)}
         valid = False
+    print(json.dumps(result, allow_nan=False))
+    return 0 if valid else 1
+
+
+def command_check_geometry(args: argparse.Namespace) -> int:
+    import numpy as np
+    from .geometry import construct_canonical, diagnose_geometry, effective_coefficient, simultaneous_step
+    from .metrics import CompactMetric, dense_metric
+    from .records import SupportMetadata
+    from checks.independent_reference import complex_step_jacobian
+    try:
+        rng = np.random.default_rng(731)
+        q, _ = np.linalg.qr(rng.normal(size=(4, 4)))
+        records = []; derivative_count = 0; maximum = 0.0
+        for floor, increments in [(0., [0.,0.,0.,0.]), (1., [0.,0.,0.,0.]), (0., [0.,0.,1.,2.]), (1., [0.,0.,1.,2.]), (1e-14, [0.,1e-14,0.,0.]), (0., [1.,2.,3.,4.])]:
+            m = CompactMetric(floor, q, np.array(increments), SupportMetadata('analytic', 0, increments.count(0.), tuple(i for i,x in enumerate(increments) if x)))
+            for depth in range(2, 9):
+                realization = construct_canonical(m, depth)
+                diagnostic = diagnose_geometry(m, realization)
+                jac = complex_step_jacobian(realization.layers)
+                derivative_count += jac.shape[1]
+                target = dense_metric(m)
+                ref = float(np.linalg.norm(target))
+                derivative_error = float(np.linalg.norm(jac@jac.T-target))
+                relative = derivative_error/ref if ref else derivative_error
+                z = np.array([.1, -.2, .3, -.4])
+                update_error = float(np.linalg.norm(effective_coefficient(simultaneous_step(realization.layers, -z, 1.))-target@z))
+                update_relative = update_error/ref if ref else update_error
+                maximum = max(maximum, relative, update_relative)
+                records.append({'depth':depth, 'diagnostics':to_json_record(diagnostic), 'derivative_relative_error':relative, 'update_scaled_error':update_relative})
+        layers = (np.array([[1.],[0.]]), np.array([[1.,1.],[0.,1.]]), np.array([[0.,1.]]))
+        coefficient = float(effective_coefficient(simultaneous_step(layers, np.array([-1.]), 1.))[0])
+        valid = maximum < 1e-10 and coefficient == 4.0
+        result = {'status':'pass' if valid else 'failed', 'gate':'SUPPORTED_IN_SCOPE' if valid else 'IMPLEMENTATION_INVALID', 'max_relative_error':maximum, 'target_accuracy':1e-10, 'derivative_count':derivative_count, 'records':records, 'counterexample':{'coefficient':coefficient, 'linear_prediction':3.0}}
+    except (ValueError, OverflowError, FloatingPointError) as exc:
+        valid = False; result = {'status':'failed', 'gate':'IMPLEMENTATION_INVALID', 'error':str(exc)}
     print(json.dumps(result, allow_nan=False))
     return 0 if valid else 1
