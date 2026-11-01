@@ -4,6 +4,39 @@ import math
 import numpy as np
 from .records import ImmutableArrays, SupportMetadata, Resources
 
+def scaled_norm_parts(array, ord='fro'):
+    """Return scale and norm of scaled entries, without squaring the scale."""
+    array = np.asarray(array, dtype=np.float64)
+    if not np.all(np.isfinite(array)): raise ValueError('nonfinite norm input')
+    scale = float(np.max(np.abs(array), initial=0.0))
+    if scale == 0: return 0.0, 0.0
+    normalized = array / scale
+    value = float(np.linalg.norm(normalized, ord if array.ndim == 2 else None))
+    return scale, value
+
+
+def scaled_norm(array, ord='fro'):
+    scale, value = scaled_norm_parts(array, ord)
+    result = scale * value
+    if not math.isfinite(result) or (scale and result == 0):
+        raise ValueError('norm not representable')
+    return result
+
+
+def relative_norm(error, reference, ord='fro'):
+    es, en = scaled_norm_parts(error, ord)
+    rs, rn = scaled_norm_parts(reference, ord)
+    if rs == 0: return (0.0, 'exact_zero') if es == 0 else (None, 'undefined_zero_reference')
+    if es == 0: return 0.0, 'defined'
+    # Divide scaled quantities before combining magnitudes; report impossible
+    # float64 ratios explicitly instead of serializing NaN or Infinity.
+    log_ratio = math.log(es) - math.log(rs) + math.log(en/rn)
+    try: result = math.exp(log_ratio)
+    except OverflowError: raise ValueError('relative norm not representable') from None
+    if result == 0 or not math.isfinite(result): raise ValueError('relative norm not representable')
+    return result, 'defined'
+
+
 @dataclass(frozen=True)
 class CompactMetric(ImmutableArrays):
     floor: float
@@ -61,16 +94,22 @@ def metric_from_dense(matrix):
     a = np.asarray(matrix, dtype=np.float64)
     if a.ndim != 2 or a.shape[0] != a.shape[1] or not a.shape[0] or not np.all(np.isfinite(a)):
         raise ValueError('dense metric must be finite and square')
-    scale = float(np.linalg.norm(a, 2))
+    entry_scale = float(np.max(np.abs(a)))
+    normalized = a / entry_scale if entry_scale else a.copy()
+    scale = float(np.linalg.norm(normalized, 2))
     tol = 64*np.finfo(float).eps*len(a)*scale
-    skew = float(np.linalg.norm(a-a.T, 'fro'))
+    skew = scaled_norm(normalized-normalized.T)
     if skew > tol: raise ValueError('metric is asymmetric')
-    sym = (a+a.T)*0.5
+    sym = normalized*0.5 + normalized.T*0.5
     vals, vecs = np.linalg.eigh(sym)
     if vals[0] < -tol: raise ValueError('metric is indefinite')
     repairs = []
-    if skew: repairs.append({'kind':'symmetrization', 'magnitude':skew/2})
-    if np.any(vals < 0): repairs.append({'kind':'psd_projection', 'mass':float(-sum(vals[vals<0]))})
+    if skew: repairs.append({'kind':'symmetrization', 'magnitude':(skew/2)*entry_scale})
+    if np.any(vals < 0): repairs.append({'kind':'psd_projection', 'mass':float(-sum(vals[vals<0])*entry_scale)})
+    normalized_vals = vals
+    vals = normalized_vals * entry_scale
+    if np.any((normalized_vals != 0) & (vals == 0)): raise ValueError('eigenvalues not representable')
+    if not np.all(np.isfinite(vals)): raise ValueError('eigenvalues not representable')
     vals = np.maximum(vals, 0)
     # No positive eigenvalue is discarded; algebraic rank remains approximate.
     meta = SupportMetadata('approximate', int(np.count_nonzero(vals == 0)), int(np.count_nonzero(vals == vals[0])), tuple(np.flatnonzero(vals)), tuple(repairs), ())

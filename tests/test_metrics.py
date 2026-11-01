@@ -24,3 +24,12 @@ class MetricTests(unittest.TestCase):
         m = metric_from_dense(np.diag([1., -1e-16]))
         self.assertTrue(m.support_metadata.projections)
         self.assertEqual(m.support_metadata.policy, 'approximate')
+
+class MetricScaleTests(unittest.TestCase):
+    def test_dense_asymmetry_is_checked_at_finite_extreme_scales(self):
+        for scale in (1e-200, 1e200):
+            with self.subTest(scale=scale):
+                with self.assertRaisesRegex(ValueError, 'asymmetric'):
+                    metric_from_dense(scale*np.array([[1., .1], [0., 2.]]))
+                m = metric_from_dense(scale*np.diag([1., 2.]))
+                np.testing.assert_allclose(dense_metric(m)/scale, np.diag([1., 2.]), rtol=1e-14)

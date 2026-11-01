@@ -1,13 +1,23 @@
 """Zero-output network compilation and literal simultaneous SGD."""
 import math
 import numpy as np
-from .metrics import canonical_spectrum, dense_metric, metric_resources
+from .metrics import canonical_spectrum, dense_metric, metric_resources, scaled_norm, scaled_norm_parts, relative_norm
 from .records import NetworkRealization, Resources, GeometryDiagnostics
 
 
 def _resources(layers):
     count = sum(a.size for a in layers)
-    return Resources(float(sum(np.sum(a*a) for a in layers)), count, count, sum(a.nbytes for a in layers))
+    parts = [scaled_norm_parts(a) for a in layers]
+    scale = max((scale for scale, _ in parts), default=0.0)
+    if scale == 0:
+        energy = 0.0
+    else:
+        normalized_sum = math.fsum((size * (part_scale / scale))**2 for part_scale, size in parts)
+        log_energy = 2*math.log(scale) + math.log(normalized_sum)
+        try: energy = math.exp(log_energy)
+        except OverflowError: raise ValueError('initialization norm not representable') from None
+        if energy == 0 or not math.isfinite(energy): raise ValueError('initialization norm not representable')
+    return Resources(energy, count, count, sum(a.nbytes for a in layers))
 
 
 def construct_canonical(metric, depth):
@@ -98,12 +108,21 @@ def simultaneous_step(layers, g, eta):
 def diagnose_geometry(target, realization):
     expected = dense_metric(target); actual = tangent_matrix(realization.layers)
     delta = actual-expected
-    abs_f = float(np.linalg.norm(delta, 'fro')); ref = float(np.linalg.norm(expected, 'fro'))
-    abs_op = float(np.linalg.norm(delta, 2)); op_ref = float(np.linalg.norm(expected,2))
-    def rel(a,b): return (a/b, 'defined') if b else ((0.0,'exact_zero') if not a else (None,'undefined_zero_reference'))
-    rf, sf = rel(abs_f,ref); ro, so = rel(abs_op,op_ref)
+    abs_f = scaled_norm(delta); abs_op = scaled_norm(delta, 2)
+    rf, sf = relative_norm(delta, expected); ro, so = relative_norm(delta, expected, 2)
     coefficient = effective_coefficient(realization.layers)
-    product_norm = math.prod(float(np.linalg.norm(a)) for a in realization.layers)
-    null, sn = rel(float(np.linalg.norm(coefficient)),product_norm)
-    residuals = {'absolute_frobenius':abs_f, 'relative_frobenius':rf, 'relative_frobenius_status':sf, 'absolute_operator':abs_op, 'relative_operator':ro, 'relative_operator_status':so, 'null_output':float(np.linalg.norm(coefficient)), 'normalized_null_output':null, 'normalized_null_status':sn, 'initialization_norm':realization.resources.initialization_norm, 'trainable_parameters':realization.resources.trainable_parameters}
+    null_output = scaled_norm(coefficient)
+    layer_parts = [scaled_norm_parts(a) for a in realization.layers]
+    if any(scale == 0 for scale, _ in layer_parts):
+        null, sn = ((0.0, 'exact_zero') if not np.any(coefficient) else (None, 'undefined_zero_reference'))
+    elif not np.any(coefficient):
+        null, sn = 0.0, 'defined'
+    else:
+        cs, cn = scaled_norm_parts(coefficient)
+        log_ratio = math.log(cs) + math.log(cn) - sum(math.log(scale)+math.log(value) for scale,value in layer_parts)
+        try: null = math.exp(log_ratio)
+        except OverflowError: raise ValueError('normalized null output not representable') from None
+        if not math.isfinite(null) or null == 0: raise ValueError('normalized null output not representable')
+        sn = 'defined'
+    residuals = {'absolute_frobenius':abs_f, 'relative_frobenius':rf, 'relative_frobenius_status':sf, 'absolute_operator':abs_op, 'relative_operator':ro, 'relative_operator_status':so, 'null_output':null_output, 'normalized_null_output':null, 'normalized_null_status':sn, 'initialization_norm':realization.resources.initialization_norm, 'trainable_parameters':realization.resources.trainable_parameters}
     return GeometryDiagnostics(residuals, target.support_metadata.projections + target.support_metadata.truncations)

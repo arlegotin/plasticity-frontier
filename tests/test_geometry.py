@@ -84,3 +84,29 @@ class GeometryCliTests(unittest.TestCase):
         self.assertEqual(report['counterexample']['coefficient'], 4.0)
         self.assertGreater(report['derivative_count'], 0)
         self.assertLess(report['max_relative_error'], 1e-10)
+
+class GeometryScaleTests(unittest.TestCase):
+    def test_extreme_finite_scales_have_defined_serializable_relative_errors(self):
+        import json
+        from prepared_learning.records import to_json_record
+        for scale in (1e-200, 1e200):
+            with self.subTest(scale=scale):
+                m = metric(scale, [0, scale])
+                d = diagnose_geometry(m, construct_canonical(m, 4))
+                residuals = d.residuals
+                self.assertEqual(residuals['relative_frobenius_status'], 'defined')
+                self.assertEqual(residuals['relative_operator_status'], 'defined')
+                self.assertLess(residuals['relative_frobenius'], 1e-10)
+                self.assertLess(residuals['relative_operator'], 1e-10)
+                json.dumps(to_json_record(d), allow_nan=False)
+
+    def test_adversarial_cli_checks_extreme_scales(self):
+        import json, subprocess, sys
+        result = subprocess.run([sys.executable, '-m', 'prepared_learning', 'check-geometry', '--suite', 'adversarial'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads(result.stdout)
+        for scale in (1e-200, 1e200):
+            records = [r for r in report['records'] if r.get('scale') == scale]
+            self.assertTrue(records)
+            self.assertTrue(all(r['derivative_relative_error'] < 1e-10 and r['update_scaled_error'] < 1e-10 for r in records))
+            self.assertTrue(all(r['diagnostics']['residuals']['relative_frobenius_status'] == 'defined' for r in records))

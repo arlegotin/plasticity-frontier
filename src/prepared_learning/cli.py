@@ -77,29 +77,32 @@ def command_check_theory(args: argparse.Namespace) -> int:
 def command_check_geometry(args: argparse.Namespace) -> int:
     import numpy as np
     from .geometry import construct_canonical, diagnose_geometry, effective_coefficient, simultaneous_step
-    from .metrics import CompactMetric, dense_metric
+    from .metrics import CompactMetric, dense_metric, relative_norm
     from .records import SupportMetadata
     from checks.independent_reference import complex_step_jacobian
     try:
         rng = np.random.default_rng(731)
         q, _ = np.linalg.qr(rng.normal(size=(4, 4)))
         records = []; derivative_count = 0; maximum = 0.0
-        for floor, increments in [(0., [0.,0.,0.,0.]), (1., [0.,0.,0.,0.]), (0., [0.,0.,1.,2.]), (1., [0.,0.,1.,2.]), (1e-14, [0.,1e-14,0.,0.]), (0., [1.,2.,3.,4.])]:
+        cases = [(0., [0.,0.,0.,0.], None), (1., [0.,0.,0.,0.], None), (0., [0.,0.,1.,2.], None), (1., [0.,0.,1.,2.], None), (1e-14, [0.,1e-14,0.,0.], None), (0., [1.,2.,3.,4.], None)]
+        cases += [(scale, [0.,scale,0.,0.], scale) for scale in (1e-200, 1e200)]
+        for floor, increments, scale in cases:
             m = CompactMetric(floor, q, np.array(increments), SupportMetadata('analytic', 0, increments.count(0.), tuple(i for i,x in enumerate(increments) if x)))
-            for depth in range(2, 9):
+            for depth in ([4] if scale is not None else range(2, 9)):
                 realization = construct_canonical(m, depth)
                 diagnostic = diagnose_geometry(m, realization)
                 jac = complex_step_jacobian(realization.layers)
                 derivative_count += jac.shape[1]
                 target = dense_metric(m)
-                ref = float(np.linalg.norm(target))
-                derivative_error = float(np.linalg.norm(jac@jac.T-target))
-                relative = derivative_error/ref if ref else derivative_error
+                derivative_error = jac@jac.T-target
+                relative, status = relative_norm(derivative_error, target)
+                if status == 'undefined_zero_reference': raise ValueError('nonzero derivative error for zero target')
                 z = np.array([.1, -.2, .3, -.4])
-                update_error = float(np.linalg.norm(effective_coefficient(simultaneous_step(realization.layers, -z, 1.))-target@z))
-                update_relative = update_error/ref if ref else update_error
+                update_error = effective_coefficient(simultaneous_step(realization.layers, -z, 1.))-target@z
+                update_relative, status = relative_norm(update_error, target)
+                if status == 'undefined_zero_reference': raise ValueError('nonzero update error for zero target')
                 maximum = max(maximum, relative, update_relative)
-                records.append({'depth':depth, 'diagnostics':to_json_record(diagnostic), 'derivative_relative_error':relative, 'update_scaled_error':update_relative})
+                records.append({'scale':scale, 'depth':depth, 'diagnostics':to_json_record(diagnostic), 'derivative_relative_error':relative, 'update_scaled_error':update_relative})
         layers = (np.array([[1.],[0.]]), np.array([[1.,1.],[0.,1.]]), np.array([[0.,1.]]))
         coefficient = float(effective_coefficient(simultaneous_step(layers, np.array([-1.]), 1.))[0])
         valid = maximum < 1e-10 and coefficient == 4.0
