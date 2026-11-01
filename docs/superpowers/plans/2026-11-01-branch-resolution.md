@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Resolve the diagnosed discontinuous-selector stopping failure using a versioned numerical improvement bound while preserving fixed-gamma estimators and scientific evidence standards.
+**Goal:** Resolve the diagnosed discontinuous-selector stopping failure and bound primary-pilot retention while preserving fixed-gamma estimators and scientific evidence standards.
 
 **Architecture:** Add a focused source-only diagnostic module, called only for otherwise unresolved local shrinkage comparisons. It computes noneligible branch probes and an interval lower envelope from fixed-family sensitivity, validation convexity and a declared uniform solver-error model. The existing adjacent-gap rule, tolerance, ranking and unsupported-family behavior remain available.
 
@@ -63,3 +63,20 @@
 - [ ] **Step 2: Execute `.venv/bin/python -m prepared_learning pilot --config <copied-config> --output runs/campaign/2026-11-01-main-branch-envelope-v2/reused-cohort` with durable file-backed stdout/stderr.** Respect its existing max_seconds=2400 and local guards. No concurrent source edits or commits during execution.
 - [ ] **Step 3: Compare all source keys/observation hashes and the known outer-12 group.** Report actual resolved counts, candidate/probe costs, failed/unresolved cases, unchanged pointwise maps on common gamma points, and the diagnostic's numerical margin. Never pool this rerun with old data as additional independent evidence. Do not use primary effect signs to choose settings.
 - [ ] **Step 4: Append the actual continuation decision and commit durable findings.** A successful repair permits a separate bounded-memory/full-G6 continuation, not protected execution. If the envelope fails, retain its constants and counterexample and investigate the specific cause without lowering tau or silently enlarging caps. Obtain artifact-scoped review; continue the original staged program where its gates permit.
+
+### Task 3: Retain compact primary-pilot planning state after complete publication
+
+**Files:**
+- Modify: `src/prepared_learning/pilot.py`
+- Modify: `tests/test_pilot.py`
+- Modify: `README.md` with the actual evidence-retention/timing boundary.
+
+**Interfaces:**
+- Consumes: the existing full `_preparation_replication` result and complete RunStore publication sequence; `measure_execution_envelope(results, blocks)` keeps its current caller contract.
+- Produces: `_compact_pilot_replication(result: dict) -> dict` and `_merge_pilot_envelopes(envelopes: list[dict]) -> dict`, internal helpers. `run_pilot` stores compact records in all long-lived collections and folds inline full-record measurements by source level. No new config knob or raw scientific schema change.
+
+- [ ] **Step 1: Write failing tests for bounded retention and scientific parity.** A fresh large weak-referenceable payload per mocked preparation must be collectible before the next executor call, including W1-to-W2 calibration; a shared payload cannot prove this. Verify full raw preparation/candidate/probe/failure content and paired records/assets survive. Exercise missing paired roles and preserve null differences. Check source curves, selected counts, ordered source keys/differences, validation variance/stability, precision/calibration and draft science against a fixed deterministic reference excluding measured timings/source identity. Test inline envelope byte sizes and per-level max association against existing `measure_execution_envelope` on the same full records; compact-summary bytes must never be used. Preserve other pilot-mode helper interfaces and resource-rejection behavior.
+- [ ] **Step 2: Run `.venv/bin/python -m unittest tests.test_pilot -v` and record expected regression failures before changing production code.**
+- [ ] **Step 3: Implement detached compact planning records and inline envelope folding.** Retain only level/block/replication/outer IDs; ordered source keys; existing risk scalars/difference/null states; resolution/failures; covariance/eigenspace errors; actual present selected roles' validation mean and copied scalar task-loss vectors; generation/preparation/serialization, diagnostic generation/adaptation/prediction and simulation timings. Complete publication must precede compaction. Measure each full result once via the existing envelope definition while live, then take per-level maxima for all measured envelope fields; a conservative per-unit scalar-analysis maximum may be documented. Release full result/assets/selected-row aliases before the next preparation and measured/assets between scaling calls. Do not alter source schedules, calculation formulas, candidates, raw contents or resource reserves. Retain existing `paired_chunks_v1` semantics and other-mode callers.
+- [ ] **Step 4: Run focused pilot/protocol/confirmation tests, then the full unittest suite once green; run `git diff --check`.** Record raw/publication parity and lifecycle evidence, any measured resource-value differences and actual test results.
+- [ ] **Step 5: Commit the bounded-retention change and obtain independent task review.** Reforecast actual record/RAM/disk/report/replay headroom using the repaired cohort measurements. Complete any needed report/replay source work before the definitive fresh full G6 pilot. This task does not allocate roots, run confirmation or upgrade research claims.
