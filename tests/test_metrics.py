@@ -33,3 +33,7 @@ class MetricScaleTests(unittest.TestCase):
                     metric_from_dense(scale*np.array([[1., .1], [0., 2.]]))
                 m = metric_from_dense(scale*np.diag([1., 2.]))
                 np.testing.assert_allclose(dense_metric(m)/scale, np.diag([1., 2.]), rtol=1e-14)
+
+    def test_dense_rejects_nonzero_entries_lost_in_normalization(self):
+        with self.assertRaisesRegex(ValueError, 'representable'):
+            metric_from_dense(np.diag([1e-200, 1e200]))

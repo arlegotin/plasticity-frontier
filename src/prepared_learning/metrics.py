@@ -96,6 +96,8 @@ def metric_from_dense(matrix):
         raise ValueError('dense metric must be finite and square')
     entry_scale = float(np.max(np.abs(a)))
     normalized = a / entry_scale if entry_scale else a.copy()
+    if np.any((a != 0) & (normalized == 0)):
+        raise ValueError('dense entries not representable after normalization')
     scale = float(np.linalg.norm(normalized, 2))
     tol = 64*np.finfo(float).eps*len(a)*scale
     skew = scaled_norm(normalized-normalized.T)
