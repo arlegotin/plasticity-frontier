@@ -29,6 +29,129 @@ def confirmation_input(root, mode='fixed_prior_task_simulation'):
 
 
 class ReportingTests(unittest.TestCase):
+    def test_native_json_admission_does_not_charge_raw_analysis_workspaces(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'inventory.json'
+            path.write_text(json.dumps({'inventory_note':'x'*(6*1024*1024)}))
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(512*1024*1024)}):
+                value=api._read(path)
+                self.assertEqual(len(value['inventory_note']),6*1024*1024)
+                # Raw analysis still needs the larger transformation/plot bound.
+                with self.assertRaises(api.ReportingResourceLimit):
+                    api._guard_paths([path],phase='raw_analysis')
+
+    def test_report_limit_precedes_store_open_and_raw_parse(self):
+        api=reporting(self)
+        from prepared_learning.runner import RunStore
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run=confirmation_input(root)
+            manifest=api.build_report_inputs([descriptor])
+            raw=next((run/'blocks').glob('*/records.json'))
+            original=raw.read_bytes()
+            # A sparse over-budget ledger need not be valid JSON: the guard
+            # must reject its size before parsing or opening the RunStore.
+            with raw.open('wb') as stream: stream.truncate(4*1024*1024)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024*1024)}), \
+                    patch.object(RunStore,'open',side_effect=AssertionError('store opened before resource guard')):
+                result=api.write_report(manifest,root/'report')
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertGreaterEqual(result.evidence['json_bytes'],4*1024*1024)
+            self.assertGreater(result.evidence['estimated_peak_bytes'],result.evidence['budget_bytes'])
+            self.assertEqual(raw.stat().st_size,4*1024*1024)
+            self.assertFalse((root/'report/tables.json').exists())
+            self.assertTrue((root/'report/resource_limit.json').exists())
+            raw.write_bytes(original)
+            # A declared modest local cap permits the same valid tiny evidence.
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
+                tables=api.regenerate_tables(manifest,root/'small')
+            self.assertEqual(tables['comparisons'][0]['primary_task_count'],3)
+            self.assertIn('resource_preflight',tables)
+
+    def test_builder_and_cli_guard_json_before_loading(self):
+        api=reporting(self)
+        import os,contextlib,io
+        from prepared_learning.cli import main
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); path=root/'huge.json'
+            with path.open('wb') as stream: stream.truncate(4*1024*1024)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024*1024)}):
+                self.assertTrue(hasattr(api,'ReportingResourceLimit'),'explicit reporting resource limit missing')
+                with patch.object(api.json,'loads',side_effect=AssertionError('JSON parsed before size guard')):
+                    with self.assertRaises(api.ReportingResourceLimit): api.build_report_inputs([path])
+                    for command in ('report','replay'):
+                        stdout=io.StringIO()
+                        with contextlib.redirect_stdout(stdout):
+                            code=main([command,'--manifest',str(path),'--output',str(root/command)])
+                        self.assertEqual(code,1)
+                        self.assertIn('LOCAL_RESOURCE_LIMIT',stdout.getvalue())
+
+    def test_aggregate_guard_counts_all_inputs_before_loading_any_raw(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptors=[]
+            for index in range(2):
+                raw=root/f'raw-{index}.json'
+                raw.write_text(json.dumps({'status':'recorded','payload':'x'*(2*1024*1024)}))
+                descriptor=root/f'input-{index}.json'; descriptors.append(descriptor)
+                descriptor.write_text(json.dumps({'kind':'diagnostic','raw_path':str(raw)}))
+            manifest=api.build_report_inputs(descriptors)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(768*1024*1024)}):
+                for entry in manifest['inputs']:
+                    admission=api._guard_paths(api._input_paths(entry),phase='single_input_test')
+                    self.assertLess(admission['estimated_peak_bytes'],admission['budget_bytes'])
+                with patch.object(api,'_read',side_effect=AssertionError('raw JSON loaded before aggregate guard')):
+                    result=api.write_report(manifest,root/'report')
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertGreaterEqual(result.evidence['json_bytes'],4*1024*1024)
+
+    def test_streamed_confirmation_retains_large_ledger_under_bounded_reserve(self):
+        api=reporting(self)
+        from prepared_learning.runner import RunStore
+        import os,numpy as np
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,original=confirmation_input(root)
+            run=json.loads((original/'run.json').read_text()); run['status']='running'
+            store=RunStore.create(root/'streamed',run)
+            expected=0; decision=None
+            for block in (original/'blocks').iterdir():
+                rows=json.loads((block/'records.json').read_text()); expected+=len(rows)
+                key=json.loads((block/'commit.json').read_text())['key']
+                assets={path.stem:np.load(path,allow_pickle=False) for path in (block/'assets').glob('*.npy')}
+                store.commit_block(key,rows,assets)
+                for row in rows:
+                    if row['kind']=='decisions': decision=row
+            for index in range(8):
+                store.commit_block(f'retained-history-{index}',[{**decision,'rationale':'x'*(3*1024*1024)}],{})
+                expected+=1
+            store.finalize('completed')
+            value=json.loads(descriptor.read_text()); value['run_path']=str(store.path)
+            descriptor.write_text(json.dumps(value))
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
+                manifest=api.build_report_inputs([descriptor])
+                tables=api.regenerate_tables(manifest,root/'report')
+                comparison=api.compare_run_stores(store.path,store.path,rtol=1e-10,atol=1e-12)
+                self.assertEqual(comparison['status'],'matched')
+                self.assertIn('disk index',comparison['record_comparison'])
+            self.assertEqual(tables['raw_record_count'],expected)
+            self.assertEqual(tables['comparisons'][0]['primary_task_count'],3)
+            bounds=tables['resource_preflight']
+            self.assertGreater(bounds['json_bytes'],8*bounds['json_working_bytes']*.9)
+            self.assertLess(bounds['estimated_peak_bytes'],bounds['budget_bytes'])
+            retained=0; histories=0
+            with (root/'report/raw_records.json').open() as stream:
+                for line in stream:
+                    text=line.strip().rstrip(',')
+                    if text in ('[',']',''): continue
+                    row=json.loads(text); retained+=1
+                    if row.get('rationale','').startswith('xxx'):
+                        self.assertEqual(len(row['rationale']),3*1024*1024); histories+=1
+            self.assertEqual(retained,expected); self.assertEqual(histories,8)
+
+
     def test_tables_rebuilt_from_raw(self):
         api = reporting(self)
         with tempfile.TemporaryDirectory() as tmp:

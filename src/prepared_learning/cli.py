@@ -56,7 +56,7 @@ def main(argv=None) -> int:
 
 
 def command_report(args: argparse.Namespace) -> int:
-    from .reporting import build_report_inputs, write_report
+    from .reporting import build_report_inputs, write_report, _read, ReportingResourceLimit, resource_limit_decision
     try:
         path=Path(args.manifest)
         if args.inputs:
@@ -64,19 +64,23 @@ def command_report(args: argparse.Namespace) -> int:
             manifest=build_report_inputs([Path(p) for p in args.inputs])
             path.parent.mkdir(parents=True,exist_ok=True)
             path.write_text(json.dumps(manifest,indent=2,allow_nan=False)+'\n')
-        else: manifest=json.loads(path.read_text())
+        else: manifest=_read(path)
         decision=write_report(manifest,Path(args.output)); print(json.dumps(to_json_record(decision),allow_nan=False))
-        return 1 if decision.code==GateCode.IMPLEMENTATION_INVALID else 0
+        return 1 if decision.code in (GateCode.IMPLEMENTATION_INVALID,GateCode.LOCAL_RESOURCE_LIMIT) else 0
+    except ReportingResourceLimit as exc:
+        print(json.dumps(to_json_record(resource_limit_decision(exc,args.output)),allow_nan=False)); return 1
     except (OSError,ValueError,KeyError,TypeError) as exc:
         print(json.dumps({'status':'failed','gate':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
 
 
 def command_replay(args: argparse.Namespace) -> int:
-    from .reporting import replay_run
+    from .reporting import replay_run, _read, ReportingResourceLimit, resource_limit_decision
     try:
-        manifest=json.loads(Path(args.manifest).read_text())
+        manifest=_read(Path(args.manifest))
         decision=replay_run(manifest,Path(args.output)); print(json.dumps(to_json_record(decision),allow_nan=False))
         return 0 if decision.code==GateCode.SUPPORTED_IN_SCOPE else 1
+    except ReportingResourceLimit as exc:
+        print(json.dumps(to_json_record(resource_limit_decision(exc,args.output)),allow_nan=False)); return 1
     except (OSError,ValueError,KeyError,TypeError) as exc:
         print(json.dumps({'status':'failed','gate':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
 

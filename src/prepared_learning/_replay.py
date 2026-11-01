@@ -17,7 +17,7 @@ import tempfile
 import time
 from .records import GateDecision, GateCode, content_hash
 from .reporting import (_read, _write, _sha, _scientific, compare_scientific,
-                        compare_run_stores, _verify_inputs)
+                        compare_run_stores, _verify_inputs, ReportingResourceLimit)
 
 
 def _run(command, *, cwd, env=None, log=None):
@@ -25,6 +25,10 @@ def _run(command, *, cwd, env=None, log=None):
     if log is not None:
         _write(log,{'command':command,'cwd':str(cwd),'returncode':result.returncode,
                     'stdout':result.stdout,'stderr':result.stderr})
+    if result.returncode==75:
+        try: limited=json.loads(result.stdout)
+        except ValueError: limited={}
+        if limited.get('gate')=='LOCAL_RESOURCE_LIMIT': raise ReportingResourceLimit(limited['evidence'])
     if result.returncode: raise ValueError(f'replay operation failed ({result.returncode}): {command[:4]}; {result.stderr[-1500:]}')
     return result.stdout
 
@@ -113,10 +117,11 @@ def clean_replay(manifest, output):
         _run([str(interpreter),'-m','prepared_learning._replay',str(request_path)],cwd=clone,env=env,log=output/'worker.json')
         worker=_read(output/'executions/replay-worker.json')
         # No mutation during a long run can replace the original authority.
-        _verify_inputs(manifest)
+        preflight=_verify_inputs(manifest,replay=True)
         receipt={'schema_version':1,'status':'matched','clean_environment':True,'source':source,
                  'fixture':any(e.get('fixture') for e in manifest['inputs']),
                  'input_order_sha256':manifest['input_order_sha256'],'wheel_hashes':wheel_manifest,
+                 'resource_preflight':preflight,
                  'restored_assets':restored,'executions':worker,'rtol':rtol,'atol':atol,
                  'timing_policy':'remeasured_not_equal','elapsed_seconds':time.perf_counter()-start,
                  'verification_scope':'same machine, exact committed source and fresh locked editable environment; replay is not a new independent sample; fixtures cannot establish production G10'}
@@ -130,7 +135,8 @@ def clean_replay(manifest, output):
 
 
 def worker(request):
-    manifest=request['manifest']; output=Path(request['output']); output.mkdir(parents=True,exist_ok=False)
+    manifest=request['manifest']; _verify_inputs(manifest,replay=True)
+    output=Path(request['output']); output.mkdir(parents=True,exist_ok=False)
     root=Path(__file__).resolve().parents[2]; replay=manifest['replay']; results=[]
     _validate_source(root,replay['source'])
     for entry in manifest['inputs']:
@@ -199,4 +205,7 @@ def worker(request):
 
 
 if __name__=='__main__':
-    worker(_read(sys.argv[1]))
+    try: worker(_read(sys.argv[1]))
+    except ReportingResourceLimit as exc:
+        print(json.dumps({'gate':'LOCAL_RESOURCE_LIMIT','evidence':exc.evidence},allow_nan=False))
+        raise SystemExit(75)

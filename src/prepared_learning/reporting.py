@@ -41,14 +41,178 @@ CHALLENGES = {
 }
 CONTRACT = ('architecture', 'population', 'baseline', 'metric', 'resource_contract')
 
+# Admission bounds for this module's retained JSON ledgers, inverse snapshots,
+# plot objects and serialization. They are deliberately much larger than the
+# on-disk JSON. The guard uses stat/scandir, never a parsed raw ledger or a list
+# of all paths. A local cap can only reduce the live half-available reserve.
+REPORT_BASE_BYTES = 64*1024*1024
+REPORT_JSON_FACTOR = 256
+REPORT_PARSE_FACTOR = 64
+REPORT_ARRAY_FACTOR = 16
+
+
+class ReportingResourceLimit(RuntimeError):
+    def __init__(self, evidence):
+        self.evidence=evidence
+        super().__init__('report/replay working set exceeds local reserve: '+str(evidence))
+
+
+def _report_budget():
+    from .pilot import _available_memory
+    available=max(0,int(_available_memory()))
+    declared=os.environ.get('PREPARED_REPORT_MEMORY_BYTES')
+    cap=None if declared is None else int(declared)
+    if cap is not None and cap<=0: raise ValueError('PREPARED_REPORT_MEMORY_BYTES must be a positive integer')
+    return available,min(available//2,cap) if cap is not None else available//2
+
+
+def _resource_check(scale, *, phase, copies=1, object_bytes=0, scalar_bytes=0, json_factor=REPORT_JSON_FACTOR):
+    available,budget=_report_budget()
+    estimate=(REPORT_BASE_BYTES + copies*(json_factor*scale['json_working_bytes']+scale['inventory_bytes'])
+              + REPORT_ARRAY_FACTOR*scale['max_array_bytes'] + 16*object_bytes + scalar_bytes)
+    evidence={**scale,'phase':phase,'available_memory_bytes':available,'reserve_fraction':.5,
+              'budget_bytes':budget,'estimated_peak_bytes':estimate,'object_bytes':object_bytes,
+              'scalar_and_key_working_bytes':scalar_bytes,'retained_copies':copies,
+              'policy':{'base_bytes':REPORT_BASE_BYTES,'json_expansion_factor':json_factor,
+                        'array_workspace_factor':REPORT_ARRAY_FACTOR,'inventory_entry_bytes':4096},
+              'scientific_counts':'not inferred from file counts; all raw observations remain unchanged',
+              'recovery':'retry the identical inputs with sufficient local reserve; no truncation, sampling or changed scientific identity'}
+    if estimate>budget: raise ReportingResourceLimit(evidence)
+    return evidence
+
+
+def _empty_scale():
+    return {'files_scanned':0,'json_bytes':0,'max_json_bytes':0,'json_working_bytes':0,'array_bytes':0,'max_array_bytes':0,
+            'inventory_bytes':0,'largest_file_bytes':0,'largest_file':None,'inventory_complete':True}
+
+
+def _guard_paths(paths, *, phase, copies=1, object_bytes=0, streaming=False, json_factor=REPORT_JSON_FACTOR):
+    scale=_empty_scale()
+    for value in paths:
+        path=Path(value); size=path.stat().st_size
+        scale['files_scanned']+=1
+        scale['inventory_bytes']+=4096+16*len(os.fsencode(path))
+        if path.suffix in ('.json','.jsonl'):
+            scale['json_bytes']+=size
+            scale['max_json_bytes']=max(scale['max_json_bytes'],size)
+        elif path.suffix=='.npy':
+            scale['array_bytes']+=size; scale['max_array_bytes']=max(scale['max_array_bytes'],size)
+        if size>scale['largest_file_bytes']:
+            scale['largest_file_bytes']=size; scale['largest_file']=str(path)
+    scale['json_working_bytes']=scale['max_json_bytes'] if streaming else scale['json_bytes']
+    return _resource_check(scale,phase=phase,copies=copies,object_bytes=object_bytes,json_factor=json_factor)
+
+
+def _walk_files(root, depth=0):
+    """A bounded-depth scandir walk; Path.rglob/os.walk retain path lists."""
+    root=Path(root)
+    if not root.exists(): return
+    if depth>32: raise ValueError('raw inventory exceeds supported directory depth')
+    with os.scandir(root) as entries:
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=False): yield from _walk_files(entry.path,depth+1)
+            elif entry.is_file(): yield Path(entry.path)
+
+
+def _store_paths(root):
+    root=Path(root)
+    for name in ('run.json','run.sha256','initial_run.json','terminal.json'):
+        if (root/name).exists(): yield root/name
+    for folder in ('blocks','journal'): yield from _walk_files(root/folder)
+
+
+def _input_paths(entry):
+    yield Path(entry['descriptor_path'])
+    kind=entry['kind']
+    if kind=='confirmation':
+        yield from _store_paths(entry['run_path'])
+        yield Path(entry['protocol_path'])
+    elif kind=='benchmark':
+        root=Path(entry['run_path']); yield root/'inputs.json'
+        for folder in ('blocks','requests'): yield from _walk_files(root/folder)
+        if (root/'failure.json').exists(): yield root/'failure.json'
+        # This bounded control JSON locates a second raw inventory. Its own
+        # read guard runs before parsing; no worker ledger is read here.
+        config=_read(root/'inputs.json')['inputs'].get('manifest',{})
+        if config.get('phase')=='finalized':
+            calibration=Path(config['frozen']['calibration_path'])
+            yield calibration; yield calibration.parent/'inputs.json'
+            for folder in ('blocks','requests'): yield from _walk_files(calibration.parent/folder)
+    elif kind!='not_run': yield Path(entry['raw_path'])
+    for asset in entry.get('assets',[]): yield Path(asset)
+
+
+def _object_bytes(value):
+    """Count the supplied JSON tree without making a serialization/copy first."""
+    import sys
+    size=sys.getsizeof(value)
+    if isinstance(value,dict):
+        for key,child in value.items(): size+=sys.getsizeof(key)+_object_bytes(child)
+    elif isinstance(value,(list,tuple)):
+        for child in value: size+=_object_bytes(child)
+    return size
+
+
+def _declared_count(value):
+    if value is None: return 0
+    if type(value)!=int or value<0: raise ValueError('nonnegative integer scientific count required for report admission')
+    return value
+
+
+def _guard_inputs(manifest, *, replay=False):
+    scale=_empty_scale(); largest_streamed=0; retained_json=0; scalars=0
+    for entry in manifest['inputs']:
+        streamed=entry['kind']=='confirmation'
+        measured=_guard_paths(_input_paths(entry),phase='input_before_store_open',streaming=streamed)
+        for key in ('files_scanned','json_bytes','array_bytes','inventory_bytes'): scale[key]+=measured[key]
+        for key in ('max_json_bytes','max_array_bytes'): scale[key]=max(scale[key],measured[key])
+        if measured['largest_file_bytes']>scale['largest_file_bytes']:
+            scale['largest_file_bytes']=measured['largest_file_bytes']; scale['largest_file']=measured['largest_file']
+        if streamed:
+            largest_streamed=max(largest_streamed,measured['max_json_bytes'])
+            if not replay:
+                scientific=_read(entry['protocol_path'])['scientific']; plan=scientific['config']['sample_plan']
+                j=_declared_count(plan['outer_replicates']) or 1
+                tasks=j*_declared_count(plan['tasks_per_replicate'])
+                for name in ('update_check_schedule','simulation_schedule'):
+                    schedule=scientific.get(name,{})
+                    tasks+=len(schedule.get('outer_replications',[]))*_declared_count(schedule.get('tasks_per_replication',0))
+                keys=j*(_declared_count(plan['source_training_tasks'])+_declared_count(plan['source_validation_tasks']))
+                # Scalar task dictionaries, paired roles/family losses, source
+                # and task key sets, completion indices and inference buffers.
+                scalars+=8192*tasks+2048*tasks*len(scientific['secondary_family']['contrasts'])+512*keys+8192*j
+        else: retained_json+=measured['json_bytes']
+    scale['json_working_bytes']=largest_streamed+retained_json
+    return _resource_check(scale,phase='replay_inputs' if replay else 'report_inputs',
+                           copies=2 if replay else 1,object_bytes=_object_bytes(manifest),scalar_bytes=scalars)
+
+
+def resource_limit_decision(exc, output):
+    output=Path(output)
+    evidence={**exc.evidence,'report_status':'not_completed',
+              'partial_artifacts':'any already streamed output is incomplete; original raw evidence and scientific counts are unchanged'}
+    decision=GateDecision(GateCode.LOCAL_RESOURCE_LIMIT,evidence,
+        'Report/replay allocation was refused before loading the offending raw working set.',
+        exc.evidence['recovery'])
+    _write(output/'resource_limit.json',evidence); _write(output/'gate_decision.json',decision)
+    return decision
+
 
 def _read(path):
+    # Parsing a native JSON tree does not allocate analysis/plot workspaces.
+    # In particular, inventory manifests grow with J but contain mostly paths
+    # and hashes. Raw semantic consumers have the separate 256x admission above.
+    _guard_paths((Path(path),),phase='json_before_parse',json_factor=REPORT_PARSE_FACTOR)
     return json.loads(Path(path).read_text())
 
 
 def _write(path, value):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(to_json_record(value), indent=2, allow_nan=False)+'\n')
+    # Native JSON ledgers stay shared: no whole-tree to_json_record copy and no
+    # complete encoded string in addition to the retained scientific records.
+    with path.open('w') as stream:
+        json.dump(value,stream,default=to_json_record,indent=2,allow_nan=False)
+        stream.write('\n')
 
 
 def _sha(path):
@@ -65,6 +229,7 @@ def _path(value, base):
 
 def _raw_files(entry):
     """Canonical inventory deliberately excludes rebuildable summaries."""
+    _guard_paths(_input_paths(entry),phase='raw_inventory_before_store_open',streaming=entry['kind']=='confirmation')
     files = {Path(entry['descriptor_path'])}
     kind = entry['kind']
     if kind == 'confirmation':
@@ -97,11 +262,10 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
     returned manifest uses absolute recovery paths and can be archived as-is on
     the recorded machine. Additional assets must be explicitly enumerated.
     """
-    from .protocol import checkout_identity
-    root = Path(__file__).resolve().parents[2]
-    versions, dirty = checkout_identity({}, {})
-    inputs = []
-    scientific_runs=set()
+    # Even descriptor/control JSON is admitted before parsing or fingerprinting
+    # the live source. The aggregate guard precedes every RunStore.open below.
+    _guard_paths(run_paths,phase='descriptors_before_parse')
+    entries=[]
     for index, value in enumerate(run_paths):
         path = Path(value).resolve(); descriptor = _read(path)
         kind = descriptor.get('kind')
@@ -113,6 +277,14 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
             if name in entry: entry[name] = str(_path(entry[name], path.parent))
         entry['assets'] = [str(_path(p, path.parent)) for p in descriptor.get('assets', [])]
         if kind == 'not_run' and not entry.get('reason'): raise ValueError('not_run requires a reason')
+        entries.append(entry)
+    _guard_inputs({'inputs':entries})
+    from .protocol import checkout_identity
+    root = Path(__file__).resolve().parents[2]
+    versions, dirty = checkout_identity({}, {})
+    inputs=[]; scientific_runs=set()
+    for entry in entries:
+        kind=entry['kind']
         entry['inventory'] = _raw_files(entry)
         if kind == 'confirmation':
             protocol = _read(entry['protocol_path']); run = _read(Path(entry['run_path'])/'run.json')
@@ -141,8 +313,9 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
             'input_order_sha256':content_hash(inputs)}
 
 
-def _verify_inputs(manifest):
+def _verify_inputs(manifest, *, replay=False):
     if manifest.get('schema_version') != 1 or not manifest.get('inputs'): raise ValueError('invalid report manifest')
+    preflight=_guard_inputs(manifest,replay=replay)
     if content_hash(manifest['inputs']) != manifest.get('input_order_sha256'): raise ValueError('input manifest identity changed')
     scientific_runs=set()
     for index, entry in enumerate(manifest['inputs']):
@@ -152,6 +325,7 @@ def _verify_inputs(manifest):
             run=_read(Path(entry['run_path'])/'run.json'); identity=tuple(run[k] for k in IDENTITY_FIELDS)
             if identity in scientific_runs: raise ValueError('duplicate scientific run cannot add independent samples')
             scientific_runs.add(identity)
+    return preflight
 
 
 def _contract(science):
@@ -174,11 +348,12 @@ def _outcome(analysis):
     return 'positive_in_scope' if interval[0] > 0 else 'inconclusive'
 
 
-def _confirmation(entry):
+def _confirmation(entry, emit=lambda row:None):
     from .confirmation import run_record, analyze_results
     from .protocol import validate_frozen_protocol
     from .records import TaskKey
     from .tasks import CONTEXT, NOISE
+    _guard_inputs({'inputs':[entry]})
     protocol = _read(entry['protocol_path']); science = protocol['scientific']
     if not entry.get('fixture'): validate_frozen_protocol(protocol)
     run = _read(Path(entry['run_path'])/'run.json')
@@ -188,24 +363,55 @@ def _confirmation(entry):
     if run['phase'] != 'confirmation' or run['dirty_diff_sha256'] is not None:
         raise ValueError('dirty or exploratory store cannot become protected evidence')
     store = RunStore.open(Path(entry['run_path']), expected)
-    raw = []
+    plan=science['config']['sample_plan']; outer_limit=_declared_count(plan['outer_replicates']) or 1
+    source_limit=_declared_count(plan['source_training_tasks'])+_declared_count(plan['source_validation_tasks'])
+    primary_limit=_declared_count(plan['tasks_per_replicate'])
+    schedules={endpoint:(set(science.get(name,{}).get('outer_replications',[])),
+                        _declared_count(science.get(name,{}).get('tasks_per_replication',0)))
+               for endpoint,name in (('update_check','update_check_schedule'),('secondary','simulation_schedule'))}
+    def endpoint_limit(endpoint,outer):
+        if endpoint=='primary': return primary_limit
+        selected,count=schedules[endpoint]
+        return count if outer in selected else 0
+    executions={}; tasks={}; completions=[]; raw_count=0
     for path in sorted((store.path/'blocks').iterdir()):
         store._verify(path)
-        rows = _read(path/'records.json'); store._validate_rows(rows); raw.extend(rows)
-    executions = {r['outer_replication']:r['result'] for r in raw if r['kind']=='execution'}
-    if len(executions) != sum(r['kind']=='execution' for r in raw): raise ValueError('duplicate preparations')
-    for result in executions.values(): result['tasks'] = []
-    for row in raw:
-        if row['kind'] != 'execution_task': continue
-        task = row['result']; keys = protocol['protected_keys']
-        phase = keys['test_phase']+{'primary':0,'update_check':100,'secondary':200}[task['endpoint']]
-        expected_key = content_hash({'key':TaskKey(keys['root_seed'],phase,task['outer_replication'],task['task_id'],0),
-                                     'context_stream':CONTEXT,'noise_stream':NOISE})
-        if task['task_key'] != expected_key: raise ValueError('scientific task key changed')
-        if task['outer_replication'] not in executions: raise ValueError('task without preparation')
-        executions[task['outer_replication']]['tasks'].append(task)
+        rows=_read(path/'records.json'); store._validate_rows(rows)
+        for row in rows:
+            emit(row); raw_count+=1
+            if row['kind']=='execution':
+                result=row['result']; outer=result['outer_replication']
+                if type(outer)!=int or not 0<=outer<outer_limit or len(result['source_keys'])>source_limit:
+                    raise ValueError('preparation exceeds declared reporting working set')
+                if outer in executions: raise ValueError('duplicate preparations')
+                executions[outer]={key:result[key] for key in ('outer_replication','status','source_keys')}
+                executions[outer]['failures']={'raw_failure_recorded':True} if result['failures'] else {}
+                executions[outer]['risks']={role:{'conditional_risk':value.get('conditional_risk')} for role,value in result['risks'].items() if role in ('baseline','joint')}
+                executions[outer]['tasks']=[]
+            elif row['kind']=='replication_completion' and row['status']=='completed':
+                if len(completions)>=outer_limit: raise ValueError('completion count exceeds frozen schedule')
+                completions.append(row['outer_replication'])
+            elif row['kind']=='execution_task':
+                task=row['result']; keys=protocol['protected_keys']
+                outer=task['outer_replication']; endpoint=task['endpoint']; task_id=task['task_id']
+                if type(outer)!=int or not 0<=outer<outer_limit or endpoint not in ('primary','update_check','secondary'):
+                    raise ValueError('task exceeds declared reporting working set')
+                if type(task_id)!=int or not 0<=task_id<endpoint_limit(endpoint,outer):
+                    raise ValueError('task exceeds declared endpoint count')
+                maximum=sum(endpoint_limit(e,outer) for e in ('primary','update_check','secondary'))
+                if len(tasks.get(outer,()))>=maximum: raise ValueError('duplicate task count exceeds frozen schedule')
+                phase=keys['test_phase']+{'primary':0,'update_check':100,'secondary':200}[task['endpoint']]
+                expected_key=content_hash({'key':TaskKey(keys['root_seed'],phase,task['outer_replication'],task['task_id'],0),
+                                          'context_stream':CONTEXT,'noise_stream':NOISE})
+                if task['task_key']!=expected_key: raise ValueError('scientific task key changed')
+                reduced={key:task[key] for key in ('endpoint','task_id','task_key')}
+                roles=('baseline','joint',*('family:'+mid for mid in science['secondary_family']['contrasts']))
+                reduced['values']={role:{key:value[key] for key in ('loss','status') if key in value} for role,value in task['values'].items() if role in roles}
+                tasks.setdefault(task['outer_replication'],[]).append(reduced)
+    for outer,values in tasks.items():
+        if outer not in executions: raise ValueError('task without preparation')
+        executions[outer]['tasks']=values
     for result in executions.values(): result['tasks'].sort(key=lambda t:(t['endpoint'],t['task_id']))
-    completions = [r['outer_replication'] for r in raw if r['kind']=='replication_completion' and r['status']=='completed']
     try:
         if run['status'] != 'completed' or sorted(completions) != sorted(executions):
             raise ValueError('uncompleted or failed run; no success-only inference')
@@ -215,12 +421,13 @@ def _confirmation(entry):
                     'n':None, 'secondary':{}, 'independent_unit':None}
     analysis.update(input_id=entry['input_id'], label=entry['label'], outcome=_outcome(analysis),
                     evidence_level=entry['evidence_level'], run_status=run['status'], **_contract(science))
-    return analysis, raw
+    return analysis, raw_count
 
 
 def _benchmark(entry):
     """Recompute paired resource comparisons from worker blocks, not benchmark.json."""
     from .benchmark import comparison_table, _campaign_configuration, _fixed_schedule
+    _guard_paths(_input_paths(entry),phase='benchmark_before_raw_allocation')
     root = Path(entry['run_path']); inputs = _read(root/'inputs.json')
     rows=[]; workers=[]; seen=set(); resources={}
     for path in sorted((root/'blocks').glob('*.json')):
@@ -318,6 +525,20 @@ def _csv(path, rows):
         writer.writerows({k:json.dumps(v,sort_keys=True,allow_nan=False) if isinstance(v,(dict,list,tuple)) else v for k,v in row.items()} for row in rows)
 
 
+class _RecordStream:
+    """Write complete raw/adverse JSON arrays one verified record at a time."""
+    def __init__(self,path):
+        self.path=Path(path); self.stream=None; self.count=0
+    def __enter__(self):
+        self.stream=self.path.open('w'); self.stream.write('[\n'); return self
+    def write(self,record):
+        if self.count: self.stream.write(',\n')
+        json.dump(record,self.stream,default=to_json_record,allow_nan=False)
+        self.count+=1
+    def __exit__(self,*error):
+        self.stream.write('\n]\n'); self.stream.close()
+
+
 def _figures(output, comparisons, benchmarks, diagnostics):
     # No implicit ~/.matplotlib write, including when a caller set MPLCONFIGDIR.
     with tempfile.TemporaryDirectory(prefix='prepared-plots-') as config:
@@ -388,35 +609,44 @@ def _figures(output, comparisons, benchmarks, diagnostics):
 
 
 def regenerate_tables(manifest: JsonRecord, output: Path) -> JsonRecord:
-    _verify_inputs(manifest)
+    preflight=_verify_inputs(manifest)
     output=Path(output); output.mkdir(parents=True,exist_ok=True)
-    comparisons=[]; benchmarks=[]; diagnostics=[]; raw=[]; statuses=[]
-    for entry in manifest['inputs']:
-        kind=entry['kind']
-        if kind=='confirmation':
-            comparison,records=_confirmation(entry); comparisons.append(comparison)
-            raw.extend({'input_id':entry['input_id'], **row} for row in records)
-            status=comparison['run_status']
-        elif kind=='benchmark':
-            benchmark=_benchmark(entry); benchmarks.append(benchmark); status=benchmark['status']
-        elif kind=='not_run': status='not_run'
-        else:
-            record=_read(entry['raw_path']); diagnostics.append({'input_id':entry['input_id'],'label':entry['label'],
-                'evidence_level':entry['evidence_level'],'raw':record})
-            status=record.get('status','recorded') if isinstance(record,dict) else 'recorded'
-        statuses.append({'input_id':entry['input_id'],'label':entry['label'],'kind':kind,'status':status,
-                         'reason':entry.get('reason'), 'evidence_paths':list(entry['inventory'])})
+    comparisons=[]; benchmarks=[]; diagnostics=[]; statuses=[]
+    with _RecordStream(output/'raw_records.json') as raw, _RecordStream(output/'adverse_records.json') as adverse, (output/'raw_records.csv').open('w',newline='') as raw_csv:
+        writer=csv.DictWriter(raw_csv,fieldnames=['input_id','kind','outer_replication','task_id','method_id','status','record_json'])
+        writer.writeheader()
+        for entry in manifest['inputs']:
+            kind=entry['kind']
+            if kind=='confirmation':
+                def emit(row):
+                    record={'input_id':entry['input_id'],**row}; raw.write(record)
+                    writer.writerow({**{key:record.get(key) for key in writer.fieldnames if key!='record_json'},
+                                     'record_json':json.dumps(record,allow_nan=False)})
+                    for failed in _adverse_records(record): adverse.write(failed)
+                comparison,_=_confirmation(entry,emit); comparisons.append(comparison)
+                status=comparison['run_status']
+            elif kind=='benchmark':
+                benchmark=_benchmark(entry); benchmarks.append(benchmark); status=benchmark['status']
+                for failed in _adverse_records(benchmark): adverse.write(failed)
+            elif kind=='not_run': status='not_run'
+            else:
+                record=_read(entry['raw_path']); diagnostics.append({'input_id':entry['input_id'],'label':entry['label'],
+                    'evidence_level':entry['evidence_level'],'raw':record})
+                for failed in _adverse_records(diagnostics[-1]): adverse.write(failed)
+                status=record.get('status','recorded') if isinstance(record,dict) else 'recorded'
+            statuses.append({'input_id':entry['input_id'],'label':entry['label'],'kind':kind,'status':status,
+                             'reason':entry.get('reason'), 'evidence_paths':list(entry['inventory'])})
+        raw_count=raw.count; adverse_count=adverse.count
     _csv(output/'comparisons_table.csv', comparisons)
     _csv(output/'input_status.csv', statuses)
-    _csv(output/'raw_records.csv', raw)
     _csv(output/'family_comparisons.csv', [{'input_id':r['input_id'],'method':mid,**value} for r in comparisons for mid,value in r.get('secondary',{}).items()])
     _csv(output/'pareto_table.csv', [{'input_id':b['input_id'],**row} for b in benchmarks for row in b['pareto']['rows']])
-    _write(output/'raw_records.json', raw); _write(output/'diagnostics.json',diagnostics)
+    _write(output/'diagnostics.json',diagnostics)
     _write(output/'benchmark_workers.json',benchmarks)
-    adverse=_adverse_records(raw)+_adverse_records(diagnostics)+_adverse_records(benchmarks)
-    _write(output/'adverse_records.json',adverse)
     figures=_figures(output,comparisons,benchmarks,diagnostics)
-    result={'comparisons':comparisons,'benchmarks':benchmarks,'diagnostics':diagnostics,'statuses':statuses,'figures':figures,'adverse_records':adverse}
+    result={'comparisons':comparisons,'benchmarks':benchmarks,'diagnostics':diagnostics,'statuses':statuses,'figures':figures,
+            'adverse_records':{'path':'adverse_records.json','count':adverse_count,'storage':'complete streamed records'},
+            'raw_record_count':raw_count,'resource_preflight':preflight}
     _write(output/'tables.json', result)
     return result
 
@@ -486,18 +716,19 @@ def _claims(manifest, tables):
     return ledger
 
 
-def write_report(manifest: JsonRecord, output: Path) -> GateDecision:
-    output=Path(output); tables=regenerate_tables(manifest,output); ledger=_claims(manifest,tables)
+def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
+    output=Path(output)
+    tables=regenerate_tables(manifest,output)
+    ledger=_claims(manifest,tables)
     _csv(output/'claim_ledger.csv',ledger)
-    lines=['# Scoped execution report','',
+    introduction=['# Scoped execution report','',
            'Raw records and assets were verified against the ordered input manifest. Cached summaries were not used.',
            'Exact rational fixture deductions, float64 analytic evaluations, sampled diagnostics, exploration, protected comparisons and forecasts have separate evidence labels.',
-           'No physical energy, biological, multistep, nonlinear-model, historical-priority or natural-transfer conclusion follows from this experiment.','',
-           '## Input outcomes','', '```json',json.dumps(tables['statuses'],indent=2),'```','',
-           '## Reconstructed comparisons and full contracts','', '```json',json.dumps(tables['comparisons'],indent=2),'```','',
-           '## All source, diagnostic, exact and forecast records','', '```json',json.dumps(tables['diagnostics'],indent=2),'```','',
-           '## Failed, unsupported and unavailable raw outcomes','', '```json',json.dumps(tables['adverse_records'],indent=2),'```','',
-           '## Operational comparisons','', '```json',json.dumps([{k:v for k,v in b.items() if k not in ('raw_workers','rows')} for b in tables['benchmarks']],indent=2),'```','',
+           'No physical energy, biological, multistep, nonlinear-model, historical-priority or natural-transfer conclusion follows from this experiment.','']
+    sections=[('Input outcomes',tables['statuses']),('Reconstructed comparisons and full contracts',tables['comparisons']),
+              ('All source, diagnostic, exact and forecast records',tables['diagnostics']),
+              ('Operational comparisons',[{k:v for k,v in b.items() if k not in ('raw_workers','rows')} for b in tables['benchmarks']])]
+    lines=[
            'All failed candidates, family task rows, branch diagnostics and timing records are retained in raw_records.json / raw_records.csv and benchmark_workers.json. No success-only subgroup replaces the declared population.',
            '', '## Blueprint §11.2 challenge pass','']
     for challenge,response in CHALLENGES.items():
@@ -527,9 +758,23 @@ def write_report(manifest: JsonRecord, output: Path) -> GateDecision:
         'Report reconstruction and clean replay completed in the recorded scope.' if completed else 'Reconstruction retained all outcomes; G10 remains incomplete without matching clean replay or with failed inputs.',
         'Retain scoped negative and positive conclusions alike.' if completed else 'Complete missing replay or inspect failed evidence; do not infer a positive scientific result.')
     lines.extend(['','## G10 decision','',json.dumps(to_json_record(decision),indent=2),''])
-    (output/'results.md').write_text('\n'.join(lines)); _write(output/'gate_decision.json',decision)
+    import shutil
+    with (output/'results.md').open('w') as stream:
+        stream.write('\n'.join(introduction))
+        for title,value in sections:
+            stream.write('\n## '+title+'\n\n```json\n')
+            json.dump(value,stream,indent=2,allow_nan=False); stream.write('\n```\n')
+        stream.write('\n## Failed, unsupported and unavailable raw outcomes\n\n```json\n')
+        with (output/'adverse_records.json').open() as raw: shutil.copyfileobj(raw,stream,length=64*1024)
+        stream.write('\n```\n'+ '\n'.join(lines))
+    _write(output/'gate_decision.json',decision)
     _write(output/'report_inputs.json',manifest)
     return decision
+
+
+def write_report(manifest: JsonRecord, output: Path) -> GateDecision:
+    try: return _write_report(manifest,output)
+    except ReportingResourceLimit as exc: return resource_limit_decision(exc,output)
 
 
 def compare_scientific(left, right, *, rtol, atol, path='root'):
@@ -570,40 +815,65 @@ def _scientific(value, _measurement_ids=None):
 
 
 def compare_run_stores(left: Path, right: Path, *, rtol, atol) -> JsonRecord:
-    stores=[]; rows=[]; arrays=[]
-    for root in (Path(left),Path(right)):
-        store=RunStore.open(root,_read(root/'run.json')); stores.append(store)
-        records=[]; assets={}
-        for block in sorted((root/'blocks').iterdir()):
-            store._verify(block)
-            for row in _read(block/'records.json'):
-                if row['kind'] not in ('timing_blocks','decisions'): records.append(_scientific(row))
-            marker=_read(block/'commit.json')
-            for asset in (block/'assets').glob('*.npy'):
-                assets[marker['key']+'/'+asset.name]=asset
-        def scientific_key(row):
-            nested=row.get('result',{})
-            return json.dumps({key:row.get(key,nested.get(key)) for key in
-                ('kind','outer_replication','task_id','task_key','method_id','configuration_key','branch','endpoint')},sort_keys=True)
-        rows.append(sorted(records,key=scientific_key))
-        arrays.append(assets)
+    import sqlite3,shutil,itertools
+    preflight=_guard_paths((path for root in (Path(left),Path(right)) for path in _store_paths(root)),
+                            phase='run_comparison_before_open',streaming=True)
+    arrays=[]; count=0
     for key in IDENTITY_FIELDS:
         if _read(left/'run.json')[key]!=_read(right/'run.json')[key]: raise ValueError('replay run identity mismatch: '+key)
-    compare_scientific(rows[0],rows[1],rtol=rtol,atol=atol)
+    # Payloads and their order index live on disk. RAM holds one verified raw
+    # block and one record pair, independent of J and checkpoint layout.
+    with tempfile.TemporaryDirectory(prefix='prepared-replay-index-') as temporary:
+        disk_budget=shutil.disk_usage(temporary).free//2
+        disk_estimate=8*preflight['json_bytes']+REPORT_BASE_BYTES
+        if disk_estimate>disk_budget:
+            raise ReportingResourceLimit({**preflight,'phase':'comparison_disk_index','resource':'disk',
+                'estimated_disk_bytes':disk_estimate,'disk_budget_bytes':disk_budget})
+        index=sqlite3.connect(str(Path(temporary)/'records.sqlite'))
+        try:
+            index.execute('PRAGMA cache_size=-2048'); index.execute('PRAGMA temp_store=FILE'); index.execute('PRAGMA threads=1')
+            index.execute('CREATE TABLE records (side INTEGER, unit TEXT, payload TEXT)')
+            for side,root in enumerate((Path(left),Path(right))):
+                store=RunStore.open(root,_read(root/'run.json')); assets={}
+                for block in sorted((root/'blocks').iterdir()):
+                    store._verify(block)
+                    for row in _read(block/'records.json'):
+                        if row['kind'] in ('timing_blocks','decisions'): continue
+                        scientific=_scientific(row); nested=scientific.get('result',{})
+                        key=json.dumps({key:scientific.get(key,nested.get(key)) for key in
+                            ('kind','outer_replication','task_id','task_key','method_id','configuration_key','branch','endpoint')},sort_keys=True)
+                        index.execute('INSERT INTO records VALUES (?,?,?)',
+                                      (side,key,json.dumps(scientific,sort_keys=True,allow_nan=False)))
+                    marker=_read(block/'commit.json')
+                    for asset in (block/'assets').glob('*.npy'): assets[marker['key']+'/'+asset.name]=asset
+                arrays.append(assets)
+            index.commit(); index.execute('CREATE INDEX record_order ON records(side,unit,payload)')
+            cursors=[index.execute('SELECT unit,payload FROM records WHERE side=? ORDER BY unit,payload',(side,)) for side in (0,1)]
+            for a,b in itertools.zip_longest(*cursors):
+                if a is None or b is None or a[0]!=b[0]: raise ValueError('scientific record keys/count differ')
+                compare_scientific(json.loads(a[1]),json.loads(b[1]),rtol=rtol,atol=atol)
+                count+=1
+        finally: index.close()
     if set(arrays[0])!=set(arrays[1]): raise ValueError('scientific array inventory differs')
     hashes={}
     for key,a in arrays[0].items():
-        b=arrays[1][key]; aa=np.load(a,allow_pickle=False); bb=np.load(b,allow_pickle=False)
-        if aa.shape!=bb.shape or aa.dtype!=bb.dtype or not np.allclose(aa,bb,rtol=rtol,atol=atol): raise ValueError('scientific array differs: '+key)
+        b=arrays[1][key]; aa=np.load(a,allow_pickle=False,mmap_mode='r'); bb=np.load(b,allow_pickle=False,mmap_mode='r')
+        if aa.shape!=bb.shape or aa.dtype!=bb.dtype: raise ValueError('scientific array differs: '+key)
+        for a_chunk,b_chunk in np.nditer([aa,bb],flags=['external_loop','buffered','zerosize_ok'],
+                                         op_flags=[['readonly'],['readonly']],buffersize=65536):
+            if not np.allclose(a_chunk,b_chunk,rtol=rtol,atol=atol): raise ValueError('scientific array differs: '+key)
         # The fixed environment reconstructs the exact frozen assets, independently
         # of the tolerance for derived arithmetic metrics.
         if _sha(a)!=_sha(b): raise ValueError('frozen asset hash differs: '+key)
         hashes[key]=_sha(a)
-    return {'status':'matched','scientific_records_compared':len(rows[0]),'arrays_compared':len(hashes),
-            'asset_hashes':hashes,'timing_policy':'remeasured_not_equal','rtol':rtol,'atol':atol}
+    return {'status':'matched','scientific_records_compared':count,'arrays_compared':len(hashes),
+            'asset_hashes':hashes,'timing_policy':'remeasured_not_equal','rtol':rtol,'atol':atol,
+            'resource_preflight':preflight,'record_comparison':'disk index; one raw block and record pair in memory'}
 
 
 def replay_run(manifest: JsonRecord, output: Path) -> GateDecision:
-    _verify_inputs(manifest)
     from ._replay import clean_replay
-    return clean_replay(manifest,Path(output))
+    try:
+        _verify_inputs(manifest,replay=True)
+        return clean_replay(manifest,Path(output))
+    except ReportingResourceLimit as exc: return resource_limit_decision(exc,output)

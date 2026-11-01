@@ -8,6 +8,40 @@ from tests.test_reporting import reporting, confirmation_input
 
 
 class ReplayTests(unittest.TestCase):
+    def test_worker_resource_stop_remains_local_resource_limit(self):
+        api=reporting(self)
+        import subprocess
+        from prepared_learning._replay import _run
+        evidence={'phase':'worker_comparison','estimated_peak_bytes':200,'budget_bytes':100,
+                  'recovery':'retry identical scientific inputs'}
+        result=subprocess.CompletedProcess(['worker'],75,json.dumps({'gate':'LOCAL_RESOURCE_LIMIT','evidence':evidence}),'')
+        with tempfile.TemporaryDirectory() as tmp,patch('prepared_learning._replay.subprocess.run',return_value=result):
+            with self.assertRaises(api.ReportingResourceLimit) as caught:
+                _run(['worker'],cwd=Path(tmp),log=Path(tmp)/'worker.json')
+            self.assertEqual(caught.exception.evidence,evidence)
+            self.assertEqual(json.loads((Path(tmp)/'worker.json').read_text())['returncode'],75)
+
+    def test_replay_limits_arrays_before_store_open_or_loading(self):
+        api=reporting(self)
+        from prepared_learning.runner import RunStore
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run=confirmation_input(root)
+            manifest=api.build_report_inputs([descriptor])
+            asset=next((run/'blocks').glob('*/assets/*.npy'))
+            with asset.open('wb') as stream: stream.truncate(128*1024*1024)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024*1024)}), \
+                    patch.object(RunStore,'open',side_effect=AssertionError('store opened before array-size guard')), \
+                    patch.object(api.np,'load',side_effect=AssertionError('array allocated before guard')):
+                decision=api.replay_run(manifest,root/'replay')
+                self.assertEqual(decision.code,'LOCAL_RESOURCE_LIMIT')
+                self.assertGreaterEqual(decision.evidence['max_array_bytes'],128*1024*1024)
+                self.assertTrue(hasattr(api,'ReportingResourceLimit'))
+                with self.assertRaises(api.ReportingResourceLimit):
+                    api.compare_run_stores(run,run,rtol=1e-10,atol=1e-12)
+            self.assertEqual(asset.stat().st_size,128*1024*1024)
+            self.assertFalse((root/'replay/clone.json').exists())
+
     def test_learned_replay_remeasures_fit_cost_ids(self):
         api=reporting(self)
         from prepared_learning import confirmation
