@@ -303,6 +303,9 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     """
     import json
     import platform
+    import os
+    import sys
+    import scipy
     import time
     from datetime import datetime, timezone
     from dataclasses import replace
@@ -348,7 +351,10 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     store=RunStore.create(Path(output),run)
     _write_json(store.path/'hardware.json',{'platform':platform.platform(),'available_memory_bytes':available,'memory_budget_bytes':budget,
         'peak_rss_unit':'bytes','peak_scope':'cumulative process high water; no per-method peak claim',
-        'power_thermal_condition':'unmeasured','runtime_identity':runtime,'runtime_sha256':versions['runtime_sha256'],
+        'power_thermal_condition':'unmeasured',
+        'runtime_locations':{'python_executable':sys.executable,'working_directory':str(Path.cwd()),'pid':os.getpid(),
+                             'numpy_module':str(Path(np.__file__).resolve()),'scipy_module':str(Path(scipy.__file__).resolve())},
+        'runtime_identity':runtime,'runtime_sha256':versions['runtime_sha256'],
         'thread_policy':runtime['thread_environment'],'blas_policy':content_hash(runtime['builds'])})
     all_results=[]; curves=[]; block_rows={}; failures=[]; stop=None; outer=0
     for level,(training,validation) in enumerate(zip(levels,validations)):

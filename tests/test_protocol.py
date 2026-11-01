@@ -161,3 +161,39 @@ class ProtocolTests(unittest.TestCase):
         api=self.api(); draft=draft_fixture(); evidence=evidence_fixture(draft)
         evidence['runtime_identity']={'tampered':'runtime'}
         with self.assertRaises(ValueError): api._validate_draft(draft,evidence)
+
+    def test_runtime_fingerprint_survives_relocated_environment_and_cwd(self):
+        import os
+        import subprocess
+        import sysconfig
+        import venv
+        import shutil
+        import csv
+        import hashlib
+        import base64
+        api=self.api(); expected=api.runtime_identity()
+        source=str(Path('src').resolve()); installed=Path(sysconfig.get_path('purelib'))
+        with tempfile.TemporaryDirectory() as root:
+            root=Path(root); relocated=root/'relocated-environment'
+            venv.EnvBuilder(with_pip=False,symlinks=True).create(relocated)
+            python=relocated/'bin/python'
+            site=Path(subprocess.check_output([str(python),'-c','import sysconfig; print(sysconfig.get_path("purelib"))'],text=True).strip())
+            for entry in installed.iterdir():
+                if entry.name.startswith(('numpy','scipy')):
+                    if entry.name.endswith('.dist-info'): shutil.copytree(entry,site/entry.name)
+                    else: (site/entry.name).symlink_to(entry,target_is_directory=entry.is_dir())
+            # pip regenerates console-entry shebangs and their RECORD hashes at
+            # the new installation path; these scripts are not numerical runtime.
+            for record in site.glob('*.dist-info/RECORD'):
+                with record.open(newline='') as file: rows=list(csv.reader(file))
+                for row in rows:
+                    if '/bin/' in row[0]:
+                        payload=('#!'+str(python)+'\n# relocated entry point\n').encode()
+                        (site/row[0]).write_bytes(payload)
+                        row[1]='sha256='+base64.urlsafe_b64encode(hashlib.sha256(payload).digest()).decode().rstrip('=')
+                        row[2]=str(len(payload))
+                with record.open('w',newline='') as file: csv.writer(file).writerows(rows)
+            other_cwd=root/'other-cwd'; other_cwd.mkdir()
+            env={**os.environ,'PYTHONPATH':source}
+            actual=json.loads(subprocess.check_output([str(python),'-c','import json; from prepared_learning.protocol import runtime_identity; print(json.dumps(runtime_identity()))'],cwd=other_cwd,env=env,text=True))
+            self.assertEqual(actual,expected)

@@ -243,15 +243,18 @@ def runtime_identity():
     for name,module in (('numpy',numpy),('scipy',scipy)):
         dist=importlib.metadata.distribution(name)
         if module.__version__!=dist.version or dist.version!=locked.get(name): raise ValueError(f'executed {name} does not match dependency lock')
-        installed={}
+        installed={}; declarations={}
         for file in dist.files or ():
             if str(file).endswith(('.py','.so','.dylib','.dll','.pyd')):
                 path=Path(dist.locate_file(file))
                 installed[str(file)]=hashlib.sha256(path.read_bytes()).hexdigest()
+                declarations[str(file)]={'hash':{'mode':file.hash.mode,'value':file.hash.value} if file.hash else None,'size':file.size}
         if not installed: raise ValueError(f'cannot fingerprint installed {name}')
         distributions[name]={'version':dist.version,'installed_files_sha256':content_hash(installed),
             'metadata_sha256':hashlib.sha256((dist.read_text('METADATA') or '').encode()).hexdigest(),
-            'record_sha256':hashlib.sha256((dist.read_text('RECORD') or '').encode()).hexdigest()}
+            # Ignore installer-specific console shebangs, pyc, and provenance paths.
+            # The numerical RECORD subset and its actual bytes define the build.
+            'record_sha256':content_hash(declarations)}
     system_build=subprocess.check_output(['sw_vers','-buildVersion'],text=True).strip() if sys.platform=='darwin' else platform.release()
     return {'schema_version':1,'python':{'version':sys.version,'implementation':platform.python_implementation(),
                 'cache_tag':sys.implementation.cache_tag,'compiler':platform.python_compiler(),'build':list(platform.python_build()),
