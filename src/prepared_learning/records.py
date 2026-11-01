@@ -1,5 +1,5 @@
 """Shared immutable records; mathematical behavior belongs in later modules."""
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, field
 from collections.abc import Mapping
 from types import MappingProxyType
 from enum import Enum
@@ -85,7 +85,7 @@ class Context(ImmutableArrays):
     X: Array; y: Array; task_key: str
 @dataclass(frozen=True)
 class SourceTask(ImmutableArrays):
-    A: Array; B: Array; source_key: str
+    A: Context; B: Context; source_key: str
 @dataclass(frozen=True)
 class PriorAsset(ImmutableArrays):
     covariance: Array | None; basis: Array | None; eigenvalues: Array | None; noise_variance: float | None; information_access: str; fit_metadata: JsonRecord; asset_hash: str
@@ -109,3 +109,17 @@ class GateCode(str, Enum):
 @dataclass(frozen=True)
 class GateDecision(ImmutableArrays):
     code: str; evidence: object; rationale: str; next_action: str
+
+@dataclass(frozen=True)
+class TaskKey(ImmutableArrays):
+    root_seed: int; phase_id: int; outer_replication: int; task_id: int; stream_id: int
+    def __post_init__(self):
+        super().__post_init__()
+        if any(not isinstance(getattr(self, f.name), int) or isinstance(getattr(self, f.name), bool) or getattr(self, f.name) < 0 for f in fields(self)):
+            raise ValueError('key fields must be nonnegative integers')
+
+@dataclass(frozen=True)
+class PopulationTruth(ImmutableArrays):
+    second_moment: Array; sigma2: float; population_hash: str
+    target_context_size: int = field(kw_only=True)
+    input_law: str = field(default="gaussian_isotropic", kw_only=True)
