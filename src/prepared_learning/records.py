@@ -123,3 +123,14 @@ class PopulationTruth(ImmutableArrays):
     second_moment: Array; sigma2: float; population_hash: str
     target_context_size: int = field(kw_only=True)
     input_law: str = field(default="gaussian_isotropic", kw_only=True)
+
+# Required raw evidence fields. Units are encoded in field names where applicable;
+# null measurements require an accompanying status/reason in the producing record.
+RAW_RECORD_FIELDS = {
+    'task_metrics': frozenset('run_id outer_replication task_id task_key method_id information_access n d depth norm_cap parameter_cap eta branch loss_parameter_mse loss_noiseless_prediction_mse adaptation_ns prediction_ns status failure_reason'.split()),
+    'preparation_risks': frozenset('run_id outer_replication source_key method_id selection_procedure_hash prior_asset_hash metric_hash analysis_mode source_training_tasks source_validation_tasks total_source_labels conditional_risk paired_contrast_id paired_risk_difference risk_evaluator_version true_S_evaluator_hash noise_truth_evaluator_hash numerical_error_assessment status failure_reason'.split()),
+    'geometry': frozenset('target_hash realized_hash spectral_scale support_policy minimum_eigenvalue gamma initial_norm post_norm actual_trainable_count stored_scalars serialized_bytes null_residual kernel_absolute_error kernel_relative_error kernel_relative_error_status direct_step_error numerical_repairs'.split()),
+    'certificates': frozenset('configuration_key branch objective primal_upper dual_lower primal_slack dual_feasibility stationarity_residual complementarity_residual solver_status solver_version solver_options repair_size certificate_level roundoff_treatment roundoff_enclosures claimed_risk_precision rational_numerators rational_denominators'.split()),
+    'timing_blocks': frozenset('method_order cold_warm block_size generation_boundary preparation_boundary adaptation_boundary prediction_boundary serialization_boundary repetitions wall_time_ns peak_rss peak_rss_unit power_thermal_condition gpu_metadata timing_stratum'.split()),
+    'decisions': frozenset('timestamp work_package observation evidence_paths evidence_hashes decision rationale affected_claim_ids next_action methodological_amendment_required fresh_confirmation_required'.split()),
+}
