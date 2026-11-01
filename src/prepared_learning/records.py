@@ -183,6 +183,34 @@ def validate_run_record(run: JsonRecord) -> None:
         if not isinstance(methods, list) or len(methods) < 2 or any(not isinstance(x, str) or not x for x in methods) or len(set(methods)) != len(methods): raise ValueError('invalid pairing methods')
 
 
+
+def _fractions(numerators, denominators):
+    if isinstance(numerators, dict) and isinstance(denominators, dict):
+        if not numerators or numerators.keys() != denominators.keys(): raise ValueError('fraction keys differ')
+        for key in numerators:
+            _text(key, 'fraction key'); _fractions(numerators[key], denominators[key])
+    elif isinstance(numerators, list) and isinstance(denominators, list):
+        if not numerators or len(numerators) != len(denominators): raise ValueError('fraction shapes differ')
+        for n, d in zip(numerators, denominators): _fractions(n, d)
+    else:
+        if not isinstance(numerators, int) or isinstance(numerators, bool): raise ValueError('invalid numerator')
+        _count(denominators, 'denominator', 1)
+
+
+def _enclosures(value):
+    if isinstance(value, dict):
+        if not value: raise ValueError('empty enclosures')
+        for key, item in value.items():
+            _text(key, 'enclosure key'); _enclosures(item)
+    elif isinstance(value, list):
+        if len(value) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in value):
+            for x in value: _number(x, 'enclosure endpoint')
+            if value[0] > value[1]: raise ValueError('reversed enclosure')
+        else:
+            if not value: raise ValueError('empty enclosures')
+            for item in value: _enclosures(item)
+    else: raise ValueError('invalid enclosure')
+
 def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
     """Validate raw evidence without inventing values for unavailable measurements."""
     if not isinstance(row, dict): raise ValueError('record must be a mapping')
@@ -224,7 +252,7 @@ def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
             if row[name] is not None: _sha(row[name], name)
         if status == 'completed': _sha(row['metric_hash'], 'metric_hash')
         if status == 'completed' or row['conditional_risk'] is not None: _number(row['conditional_risk'], 'conditional_risk', 0)
-        if status == 'completed' or row['paired_risk_difference'] is not None: _number(row['paired_risk_difference'], 'paired_risk_difference')
+        if row['paired_risk_difference'] is not None: _number(row['paired_risk_difference'], 'paired_risk_difference')
         if (status == 'completed' or row['numerical_error_assessment'] is not None) and not isinstance(row['numerical_error_assessment'], dict): raise ValueError('numerical error assessment required')
     elif kind == 'geometry':
         for name in ('target_hash','realized_hash'): _sha(row[name], name)
@@ -244,6 +272,9 @@ def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
             if row[name] is not None and not isinstance(row[name], (dict, list)): raise ValueError(f'invalid {name}')
         if row['certificate_level'] == 'exact_rational' and (row['rational_numerators'] is None or row['rational_denominators'] is None): raise ValueError('exact rational certificate needs fractions')
         if row['certificate_level'] == 'rigorous_enclosure' and row['roundoff_enclosures'] is None: raise ValueError('enclosure certificate needs enclosures')
+        if (row['rational_numerators'] is None) != (row['rational_denominators'] is None): raise ValueError('both fraction payloads required')
+        if row['rational_numerators'] is not None: _fractions(row['rational_numerators'], row['rational_denominators'])
+        if row['roundoff_enclosures'] is not None: _enclosures(row['roundoff_enclosures'])
         for name in ('objective','primal_upper','dual_lower','primal_slack','dual_feasibility','stationarity_residual','complementarity_residual','repair_size','claimed_risk_precision'):
             if row[name] is not None: _number(row[name], name)
     elif kind == 'timing_blocks':

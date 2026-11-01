@@ -81,9 +81,9 @@ class RunStore:
             try: yield
             finally: fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
-    def _verify(self, block):
+    def _verify(self, block, marker=None):
         try:
-            marker = json.loads((block / 'commit.json').read_text())
+            if marker is None: marker = json.loads((block / 'commit.json').read_text())
             if _name(marker['key']) != block.name: raise ValueError('block key mismatch')
             manifest = json.loads((block / 'manifest.json').read_text())
             if _hash(block / 'manifest.json') != marker['manifest_sha256']: raise ValueError('manifest hash mismatch')
@@ -101,10 +101,17 @@ class RunStore:
             if entry.name.startswith('.pending-'):
                 entry.unlink(); continue
             block = blocks / entry.name
-            if not block.is_dir() or not (block / 'commit.json').is_file():
-                raise ValueError('committed block or marker missing')
-            if _hash(block / 'commit.json') != entry.read_text(): raise ValueError('commit marker mismatch')
-            self._verify(block)
+            if not block.is_dir(): raise ValueError('committed block missing')
+            try: marker = json.loads(entry.read_text())
+            except (OSError, json.JSONDecodeError) as exc: raise ValueError('corrupt journal receipt') from exc
+            self._verify(block, marker)
+            marker_path = block / 'commit.json'
+            if marker_path.exists():
+                if marker_path.read_bytes() != _bytes(marker): raise ValueError('commit marker mismatch')
+            else:
+                pending = block / 'commit.pending'
+                if pending.exists(): pending.unlink()
+                _write(pending, _bytes(marker)); os.rename(pending, marker_path); _syncdir(block)
         for block in blocks.iterdir():
             if not block.is_dir(): raise ValueError('unexpected block entry')
             if not (journal / block.name).exists():
@@ -117,6 +124,7 @@ class RunStore:
         specs = run.get('pairing_spec', {})
         grouped = {}
         shared_keys = {}
+        grouped_rows = {}
         for row in records:
             validate_raw_record(row, run)
             kind = row['kind']
@@ -130,8 +138,14 @@ class RunStore:
                 shared_keys[key] = shared
                 if role in roles or role not in spec['method_ids']: raise ValueError('duplicate or undeclared method')
                 roles.add(role)
+                grouped_rows.setdefault(key, []).append(row)
         for (kind, unit), roles in grouped.items():
             if roles != set(specs[kind]['method_ids']): raise ValueError('incomplete paired unit')
+            if kind == 'preparation_risks':
+                paired = grouped_rows[(kind, unit)]
+                complete = all(row['status'] == 'completed' for row in paired)
+                if any((row['paired_risk_difference'] is None) == complete for row in paired):
+                    raise ValueError('paired contrast availability disagrees with paired statuses')
         return set(grouped)
 
     def committed_keys(self) -> set[str]:
@@ -176,9 +190,10 @@ class RunStore:
             for path, digest in files.items():
                 if _hash(temp / path) != digest: raise ValueError('precommit verification failed')
             _syncdir(temp); os.rename(temp, final); _syncdir(blocks)
-            _write(final / 'commit.pending', _bytes({'key': block_key, 'manifest_sha256': _hash(final / 'manifest.json')}))
-            os.rename(final / 'commit.pending', final / 'commit.json'); _syncdir(final)
+            marker = {'key': block_key, 'manifest_sha256': _hash(final / 'manifest.json')}
             journal = self.path / 'journal'; pending = journal / ('.pending-' + name)
-            _write(pending, _hash(final / 'commit.json').encode()); os.rename(pending, journal / name); _syncdir(journal)
+            _write(pending, _bytes(marker)); os.rename(pending, journal / name); _syncdir(journal)
+            _write(final / 'commit.pending', _bytes(marker))
+            os.rename(final / 'commit.pending', final / 'commit.json'); _syncdir(final)
         finally:
             if temp.exists(): shutil.rmtree(temp)

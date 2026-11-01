@@ -46,8 +46,7 @@ class RunnerTests(unittest.TestCase):
             with patch.object(runner, '_write', side_effect=interrupted):
                 with self.assertRaises(OSError): store.commit_block('x', [task_row('a', 'failed'), task_row('b')], {})
             store = RunStore.open(store.path, IDENTITY)
-            self.assertEqual(store.committed_keys(), set())
-            store.commit_block('x', [task_row('a', 'failed'), task_row('b')], {})
+            self.assertEqual(store.committed_keys(), {'x'})
             self.assertEqual(len(store.read_records('task_metrics')), 2)
 
     def test_thread_change_requires_equivalence_and_stratum(self):
@@ -77,12 +76,12 @@ class RunnerTests(unittest.TestCase):
             store.commit_block('valid', [row, other], {})
             with self.assertRaises(ValueError): store.commit_block('duplicate-unit', [row, other], {})
 
-    def test_missing_committed_marker_is_corruption(self):
+    def test_missing_secondary_marker_is_reconstructed(self):
         with tempfile.TemporaryDirectory() as d:
             store = RunStore.create(Path(d), RUN)
             store.commit_block('x', [], {})
             next(store.path.glob('blocks/*/commit.json')).unlink()
-            with self.assertRaises(ValueError): RunStore.open(store.path, IDENTITY)
+            self.assertEqual(RunStore.open(store.path, IDENTITY).committed_keys(), {'x'})
 
     def test_crash_boundaries_reconcile(self):
         from unittest.mock import patch
@@ -99,20 +98,17 @@ class RunnerTests(unittest.TestCase):
                     return real(path, data)
                 with patch.object(runner, '_write', side_effect=crash):
                     with self.assertRaises(OSError): store.commit_block('x', rows, {'a':np.array([1.])})
-                if boundary == 'journal':
-                    with self.assertRaises(ValueError): RunStore.open(store.path, IDENTITY)
-                    import json
-                    persisted = next(store.path.glob('blocks/*/records.json'))
-                    self.assertEqual(json.loads(persisted.read_text()), rows)
+                store = RunStore.open(store.path, IDENTITY)
+                if boundary == 'commit.pending':
+                    self.assertEqual(store.committed_keys(), {'x'})
                 else:
-                    store = RunStore.open(store.path, IDENTITY)
                     self.assertEqual(store.committed_keys(), set())
                     store.commit_block('x', rows, {'a':np.array([1.])})
-                    recovered = store.read_records('task_metrics')
-                    self.assertEqual(recovered, rows)
-                    from prepared_learning.analysis import paired_differences
-                    np.testing.assert_equal(paired_differences(recovered[2:], ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse'), [1.])
-                    with self.assertRaises(ValueError): paired_differences(recovered, ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse')
+                recovered = store.read_records('task_metrics')
+                self.assertEqual(recovered, rows)
+                from prepared_learning.analysis import paired_differences
+                np.testing.assert_equal(paired_differences(recovered[2:], ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse'), [1.])
+                with self.assertRaises(ValueError): paired_differences(recovered, ['outer_replication','task_id'], 'a', 'b', 'loss_parameter_mse')
 
     def test_pairing_spec_required_and_fixed_units(self):
         with tempfile.TemporaryDirectory() as d:
@@ -209,9 +205,14 @@ class ReviewRegressionTests(unittest.TestCase):
     def test_failed_preparation_without_metric_is_retained(self):
         with tempfile.TemporaryDirectory() as d:
             store = RunStore.create(Path(d), RUN)
-            rows = [prep_row('a'), prep_row('b', 'failed')]
+            successful = prep_row('a'); successful['paired_risk_difference'] = None
+            successful['null_reasons']['paired_risk_difference'] = 'paired method failed'
+            rows = [successful, prep_row('b', 'failed')]
             store.commit_block('x', rows, {})
-            self.assertEqual(RunStore.open(store.path, IDENTITY).read_records('preparation_risks'), rows)
+            recovered = RunStore.open(store.path, IDENTITY).read_records('preparation_risks')
+            self.assertEqual(recovered, rows)
+            from prepared_learning.analysis import paired_differences
+            with self.assertRaises(ValueError): paired_differences(recovered, ['outer_replication'], 'a', 'b', 'conditional_risk')
 
     def test_bad_success_preparation_fields_rejected(self):
         for field, value in [('conditional_risk', None), ('paired_risk_difference', None), ('metric_hash', 'fake'), ('analysis_mode', 'bad'), ('source_training_tasks', -1), ('source_validation_tasks', '2'), ('total_source_labels', True)]:
@@ -243,3 +244,41 @@ class ReviewRegressionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             for changes in ({'hardware_record': None}, {'timing_boundaries': {}}, {'timing_boundaries': {'adaptation': 5}}):
                 with self.subTest(changes=changes), self.assertRaises(ValueError): RunStore.create(Path(d), dict(RUN, **changes))
+
+    def test_certificate_payload_contents(self):
+        from prepared_learning.records import validate_raw_record
+        row = {key: None for key in RAW_RECORD_FIELDS['certificates']}
+        row.update(kind='certificates', configuration_key='c', branch='F', solver_status='ok', solver_version='v1', solver_options={}, certificate_level='exact_rational', roundoff_treatment='exact', rational_numerators={'a':[1, -2]}, rational_denominators={'a':[2, 3]})
+        row['null_reasons'] = {key:'not applicable' for key in RAW_RECORD_FIELDS['certificates'] if row[key] is None}
+        validate_raw_record(row, RUN)
+        for numerator, denominator in [(['bad'], [1]), ([1], [0]), ([True], [1]), ([1,2], [1]), ([1], [-2]), ({'a':[1]}, {'b':[1]})]:
+            with self.subTest(numerator=numerator, denominator=denominator), self.assertRaises(ValueError):
+                validate_raw_record(dict(row, rational_numerators=numerator, rational_denominators=denominator), RUN)
+        enclosure = dict(row, certificate_level='rigorous_enclosure', roundoff_enclosures={'risk':[0., 1.]})
+        validate_raw_record(enclosure, RUN)
+        for bad in ({'risk':['x',1.]}, {'risk':[2.,1.]}, {'risk':[0., float('inf')]}, {'risk':[0., 1., 2.]}):
+            with self.subTest(enclosure=bad), self.assertRaises(ValueError): validate_raw_record(dict(enclosure, roundoff_enclosures=bad), RUN)
+
+    def test_rename_interruptions_preserve_pair(self):
+        from unittest.mock import patch
+        import prepared_learning.runner as runner
+        for stage in ('block', 'receipt', 'marker'):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as d:
+                store = RunStore.create(Path(d), RUN)
+                rows = [task_row('a'), task_row('b', 'failed')]
+                real = runner.os.rename
+                def crash(source, destination):
+                    source, destination = Path(source), Path(destination)
+                    is_block = source.parent.name == 'blocks'
+                    is_receipt = source.parent.name == 'journal'
+                    is_marker = destination.name == 'commit.json'
+                    if {'block':is_block, 'receipt':is_receipt, 'marker':is_marker}[stage]: raise OSError('crash')
+                    return real(source, destination)
+                with patch.object(runner.os, 'rename', side_effect=crash):
+                    with self.assertRaises(OSError): store.commit_block('x', rows, {})
+                reopened = RunStore.open(store.path, IDENTITY)
+                if stage != 'marker':
+                    self.assertEqual(reopened.committed_keys(), set())
+                    reopened.commit_block('x', rows, {})
+                else: self.assertEqual(reopened.committed_keys(), {'x'})
+                self.assertEqual(reopened.read_records('task_metrics'), rows)
