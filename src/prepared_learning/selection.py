@@ -1,5 +1,5 @@
 """Source-only preparation and validation selection."""
-from .records import SelectionResult, to_json_record
+from .records import SelectionResult, to_json_record, content_hash
 
 class CandidateFitError(ValueError):
     def __init__(self, records):
@@ -156,9 +156,13 @@ def select_method(candidates,train,validation,config):
         # Extend finite ridge boundary minima, shared across all methods.
         extend=set(); positives=[x for x in multipliers if x>0]
         ridge_rows=[r for r in rows if r.get('status')=='completed' and r.get('tuning_kind') in ('penalty','zero')]
-        by_method={}
-        for row in ridge_rows: by_method.setdefault(row['method_id'],[]).append(row)
-        for group in by_method.values():
+        ridge_groups={}
+        for row in ridge_rows:
+            # Penalty and its zero-estimator limit vary within a fixed preparation.
+            fixed_options={k:v for k,v in row.get('options',{}).items() if k not in ('penalty','zero_estimator')}
+            key=(row['method_id'],row['asset_hash'],row.get('rank'),content_hash(fixed_options))
+            ridge_groups.setdefault(key,[]).append(row)
+        for group in ridge_groups.values():
             best=min(group,key=lambda r:r['validation_loss'])
             if best['tuning_kind']=='penalty' and positives:
                 scale=best['ridge_scale']; multiplier=best['tuning_value']/scale if scale else 0.
@@ -168,7 +172,7 @@ def select_method(candidates,train,validation,config):
                 extend.update(boundary)
                 best['ridge_boundary_check']={'best_multiplier':multiplier,'positive_grid_bounds':[positives[0],positives[-1]],
                     'extension_multipliers':boundary,'decision':'extend_finite_boundary' if boundary else 'finite_boundaries_checked'}
-                same=sorted((r for r in group if r['tuning_kind']=='penalty' and r['asset_hash']==best['asset_hash'] and r.get('rank')==best.get('rank')),key=lambda r:r['tuning_value'])
+                same=sorted((r for r in group if r['tuning_kind']=='penalty'),key=lambda r:r['tuning_value'])
                 index=next((i for i,r in enumerate(same) if r['candidate_id']==best['candidate_id']),None)
                 if index is not None:
                     for i in (index-1,index):

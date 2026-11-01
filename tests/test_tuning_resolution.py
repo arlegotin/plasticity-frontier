@@ -33,6 +33,49 @@ class AnalyticCandidates:
         return SelectionResult(selected['candidate_id'], tuple(rows), None)
 
 
+class GroupedRidgeCandidates:
+    """Multiple fixed representations inside one method's penalty search."""
+    method_id = 'B09:ridge'
+
+    def __init__(self, control=False, limits=False):
+        self.control = control
+        self.limits = limits
+
+    def fit_meta(self, train, validation, config):
+        rows = []
+        groups = [(asset, rank, 'ordinary') for asset in ('A', 'B') for rank in (1, 2)]
+        if self.control:
+            groups.append(('A', 1, 'alternate'))
+        for asset, rank, variant in groups:
+            for gamma in config['fitting_candidates']['gammas']:
+                penalties = list(config['fitting_candidates']['ridge_multipliers'])
+                if self.limits:
+                    penalties.append(None)  # Explicit zero-estimator limit.
+                for penalty in penalties:
+                    if penalty is None:
+                        level = 0. if (asset, rank) == ('B', 2) else 1000.
+                    elif self.limits and (asset, rank) == ('A', 1):
+                        level = 1.+.001*penalty**2  # Zero/pseudoinverse minimum.
+                    elif self.control or self.limits or (asset, rank) == ('A', 1):
+                        level = 1.+.1*rank+(.5 if asset == 'B' else 0)+(.5 if variant == 'alternate' else 0)+.001*(penalty-1)**2
+                    elif (asset, rank) == ('A', 2):
+                        level = 20.+10*penalty  # Losing lower boundary.
+                    elif (asset, rank) == ('B', 1):
+                        level = 200.+100/(penalty+1)  # Losing upper boundary.
+                    else:
+                        level = 300.+10*(penalty-1)**2  # Losing interior, both gaps unresolved.
+                    options = {'rank': rank, 'variant': variant}
+                    options.update({'zero_estimator': True} if penalty is None else {'penalty': penalty})
+                    rows.append({'candidate_id': f'{asset}:{rank}:{variant}:{gamma}:{penalty}',
+                        'method_id': self.method_id, 'status': 'completed', 'gamma': gamma,
+                        'tuning_kind': 'zero' if penalty is None else 'penalty', 'tuning_value': penalty,
+                        'rank': rank, 'ridge_scale': 1., 'options': options,
+                        'asset': {'fit_metadata': {'parent_hash': asset}}, 'asset_hash': f'{asset}:{gamma}',
+                        'validation_task_losses': [level, level+4], 'validation_loss': level+2, 'elapsed_ns': 1})
+        selected = min(rows, key=lambda row: row['validation_loss'])
+        return SelectionResult(selected['candidate_id'], tuple(rows), None)
+
+
 class TuningResolutionTests(unittest.TestCase):
     def run_selection(self, methods=None, validation_count=2, **settings):
         def task(key):
@@ -86,7 +129,7 @@ class TuningResolutionTests(unittest.TestCase):
                 dimension = 'ridge_penalty' if ridge else 'shrinkage'
                 checks = [c for r in result.candidate_records if r['refinement_iteration'] == 1
                     for c in r.get('tuning_checks', []) if c['dimension'] == dimension]
-                self.assertEqual(len(checks), 2)
+                self.assertEqual(len(checks), 6 if ridge else 2)
                 for check in checks:
                     self.assertEqual(check['decision'], 'objective_resolved')
                     self.assertAlmostEqual(check['objective_tolerance'], 2.)
@@ -101,6 +144,58 @@ class TuningResolutionTests(unittest.TestCase):
         check = next(c for c in first['tuning_checks'] if c['dimension'] == 'ridge_penalty')
         self.assertEqual(check['decision'], 'objective_resolved')
         self.assertEqual(result.candidate_records[-1]['tuning_resolution'], 'unresolved')
+
+    def test_ridge_checks_losing_assets_and_ranks_and_unions_grid_requests(self):
+        result = self.run_selection([GroupedRidgeCandidates()], gammas=[0., .5, 1.],
+            ridge_multipliers=[.1, 1., 10.], max_refinement_rounds=1)
+        self.assertEqual(result.candidate_records[-1]['tuning_resolution'], 'unresolved')
+        first = [r for r in result.candidate_records if r['refinement_iteration'] == 0]
+        checked = [r for r in first if 'ridge_boundary_check' in r]
+        self.assertEqual({(r['asset_hash'], r['rank']) for r in checked},
+            {(f'{asset}:{gamma}', rank) for asset in ('A', 'B') for gamma in (0., .5, 1.) for rank in (1, 2)})
+        lower = next(r for r in checked if r['asset_hash'] == 'A:0.0' and r['rank'] == 2)
+        check = next(c for c in lower['tuning_checks'] if c['dimension'] == 'ridge_penalty')
+        self.assertAlmostEqual(check['absolute_mean_gap'], 9.)
+        self.assertAlmostEqual(check['objective_tolerance'], 2.)
+        self.assertEqual(lower['ridge_boundary_check']['extension_multipliers'], (.01,))
+        final = [r for r in result.candidate_records if r['refinement_iteration'] == 1]
+        for asset in ('A', 'B'):
+            for rank in (1, 2):
+                values = {r['tuning_value'] for r in final if r['asset_hash'] == f'{asset}:0.0' and r['rank'] == rank}
+                self.assertTrue({.01, 100., math.sqrt(.1), math.sqrt(10.)} <= values)
+
+    def test_fully_checked_ridge_assets_ranks_and_fixed_options_can_resolve(self):
+        result = self.run_selection([GroupedRidgeCandidates(control=True)], gammas=[0., .5, 1.],
+            ridge_multipliers=[.1, 1., 10.], max_refinement_rounds=0)
+        self.assertEqual(result.candidate_records[-1]['tuning_resolution'], 'resolved')
+        checked = [r for r in result.candidate_records if 'ridge_boundary_check' in r]
+        self.assertEqual(len(checked), 15)  # Four asset/rank groups plus one fixed-option group, each at three gammas.
+        by_id = {r['candidate_id']: r for r in result.candidate_records}
+        for row in checked:
+            checks = [c for c in row.get('tuning_checks', []) if c['dimension'] == 'ridge_penalty']
+            self.assertEqual(len(checks), 2)
+            for check in checks:
+                self.assertEqual(check['decision'], 'objective_resolved')
+                for side in ('left', 'right'):
+                    peer = by_id[check[side+'_candidate_id']]
+                    self.assertEqual((peer['asset_hash'], peer['rank'], peer['options']['variant']),
+                        (row['asset_hash'], row['rank'], row['options']['variant']))
+
+    def test_grouped_ridge_preserves_zero_penalty_and_zero_estimator_limits(self):
+        result = self.run_selection([GroupedRidgeCandidates(limits=True)], gammas=[0., .5, 1.],
+            ridge_multipliers=[0., .1, 1., 10.], max_refinement_rounds=0)
+        self.assertEqual(result.candidate_records[-1]['tuning_resolution'], 'resolved')
+        checked = [r for r in result.candidate_records if 'ridge_boundary_check' in r]
+        self.assertEqual(len(checked), 12)
+        for row in checked:
+            self.assertEqual(row['ridge_boundary_check']['extension_multipliers'], ())
+            if row['asset_hash'].startswith('A:') and row['rank'] == 1:
+                self.assertEqual(row['tuning_kind'], 'penalty')
+                self.assertEqual(row['tuning_value'], 0.)
+                self.assertTrue(any(c['dimension'] == 'ridge_penalty' for c in row['tuning_checks']))
+            if row['asset_hash'].startswith('B:') and row['rank'] == 2:
+                self.assertEqual(row['tuning_kind'], 'zero')
+                self.assertEqual(row['ridge_boundary_check']['decision'], 'zero_estimator_limit_selected')
 
     def test_public_policy_is_declared_and_cannot_be_overridden(self):
         from prepared_learning.records import BudgetSpec, PreparationSpec, RunConfig, SamplePlan
