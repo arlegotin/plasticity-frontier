@@ -10,7 +10,7 @@
   "preparation": {
     "target_context_size": 4,
     "input_dimension": 6,
-    "input_law": "isotropic_gaussian",
+    "input_law": "gaussian_isotropic",
     "loss_normalization": "squared_error_over_2n",
     "task_second_moment_trace": 1.0
   },

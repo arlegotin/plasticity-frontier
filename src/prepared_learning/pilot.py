@@ -104,95 +104,34 @@ def _write_json(path, value):
 
 
 def _restore_candidate(row):
-    from .records import PriorAsset
-    from .methods import make_method
-    prior=dict(row['asset'])
-    for key in ('covariance','basis','eigenvalues'):
-        if prior[key] is not None: prior[key]=np.asarray(prior[key],dtype=float)
-    return make_method(row['method_id'],row['options']),PriorAsset(**prior)
+    from .execution import _restore_candidate as restore
+    return restore(row)
 
 
 def _preparation_replication(config, root, outer, phase, methods):
-    """Trusted driver assigns source authorization before generating observations."""
-    import time
-    from .records import TaskKey, content_hash, to_json_record
-    from .tasks import generate_source_task, population_for
-    from .selection import public_method_config, select_method
-    from .methods import make_method
-    from .evaluation import conditional_risk
-    from .priors import estimate_cross_moment
+    """Compatibility adapter over the same scientific executor as confirmation."""
+    from .execution import execute_replication
     from .protocol import BASELINE, JOINT
-    sample=config.sample_plan
-    train_keys=[TaskKey(root,phase,outer,i,0) for i in range(sample.source_training_tasks)]
-    val_keys=[TaskKey(root,phase+1,outer,i,0) for i in range(sample.source_validation_tasks)]
-    public=public_method_config(config)
-    public['source_access_manifest']={'training_keys':[content_hash({'key':key}) for key in train_keys],
-                                      'validation_keys':[content_hash({'key':key}) for key in val_keys]}
-    generation_start=time.perf_counter_ns()
-    train=[generate_source_task(config,key) for key in train_keys]
-    validation=[generate_source_task(config,key) for key in val_keys]
-    generation_ns=time.perf_counter_ns()-generation_start
-    order=list(methods); np.random.default_rng(np.random.SeedSequence(root,spawn_key=(phase,outer,17))).shuffle(order)
-    started=time.perf_counter_ns()
-    selection=select_method([make_method(mid,{}) for mid in order],train,validation,{**public,'selection_class':'mechanism_all'})
-    preparation_ns=time.perf_counter_ns()-started
-    # Evaluation truth is constructed after fitting, and never enters public config.
-    truth,_=population_for(config,TaskKey(root,phase,outer,0,0))
-    raw=estimate_cross_moment(train,config.preparation.input_dimension)
-    relative_error=float(np.linalg.norm(raw.covariance-truth.second_moment)/np.linalg.norm(truth.second_moment))
-    r=min(2,config.preparation.input_dimension)
-    _,vectors=np.linalg.eigh(truth.second_moment)
-    projection_error=float(np.linalg.norm(raw.basis[:,:r]@raw.basis[:,:r].T-vectors[:,-r:]@vectors[:,-r:].T))
-    ledger=to_json_record(selection.candidate_records)
-    final=max((row.get('refinement_iteration',0) for row in ledger),default=0)
-    selected={}; risks={}; failures={}; assets={}
-    adaptation_ns=0; prediction_ns=0; check_generation_ns=0
-    for role,allowed in (('baseline',BASELINE),('joint',JOINT)):
-        candidates=[row for row in ledger if row.get('status')=='completed' and row['method_id'] in allowed and row.get('refinement_iteration',0)==final]
-        if not candidates:
-            failures[role]='no completed candidate in final refinement'; continue
-        row=min(candidates,key=lambda row:(row['validation_loss'],row['method_id'],row['logical_candidate_id']))
-        try:
-            method,prior=_restore_candidate(row)
-            prepared=method.prepare(prior,config.budget,config.preparation)
-            risks[role]=conditional_risk(prepared.metric,truth)
-            # Independent dense formula diagnoses arithmetic sensitivity, not a certificate.
-            from .metrics import dense_metric
-            G=dense_metric(prepared.metric); S=truth.second_moment; n=truth.target_context_size
-            dense=float(1-2*np.trace(G@S)+(n+1)/n*np.trace(G@G@S)+(1+truth.sigma2)/n*np.trace(G@G))
-            # Fixed update diagnostics are separate from the analytic endpoint;
-            # their losses never enter preparation-risk inference or allocation.
-            from .tasks import generate_task
-            from .metrics import apply_metric
-            check_start=time.perf_counter_ns()
-            context,check_truth=generate_task(config,TaskKey(root,phase+500,outer,0,0))
-            check_generation_ns+=time.perf_counter_ns()-check_start
-            adapt_start=time.perf_counter_ns(); adapted=method.adapt(prepared,context)
-            adaptation_ns+=time.perf_counter_ns()-adapt_start
-            predict_start=time.perf_counter_ns(); method.predict(adapted,context.X)
-            prediction_ns+=time.perf_counter_ns()-predict_start
-            direct=apply_metric(prepared.metric,context.X.T@context.y/len(context.y))
-            direct_error=float(np.linalg.norm(adapted.coefficient-direct))
-            if direct_error>1e-9*max(1.,float(np.linalg.norm(direct))): raise ValueError('literal update/direct-map diagnostic failed')
-            selected[role]={'candidate_id':row['candidate_id'],'method_id':row['method_id'],'asset_hash':prior.asset_hash,
-                'metric_hash':content_hash(prepared.metric),'validation_loss':row['validation_loss'],
-                'validation_task_losses':row['validation_task_losses'],'prepared_state':to_json_record(prepared),
-                'numerical_error_assessment':{'dense_compact_absolute_difference':abs(dense-risks[role]),'literal_direct_step_error':direct_error,'level':'float64_diagnostic'}}
-            assets[role+'_covariance']=prior.covariance; assets[role+'_basis']=prepared.metric.basis
-            assets[role+'_increments']=prepared.metric.increments
-            for i,layer in enumerate(prepared.initial_layers or ()): assets[f'{role}_layer_{i}']=layer
-        except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
-            failures[role]=str(exc); risks.pop(role,None); selected.pop(role,None)
-    source_keys=public['source_access_manifest']['training_keys']+public['source_access_manifest']['validation_keys']
-    return {'selected':selected,'risks':risks,'failures':failures,'candidate_records':ledger,
-        'source_keys':source_keys,'source_key':content_hash(public['source_access_manifest']),
-        'training_observation_hash':content_hash(train),'validation_observation_hash':content_hash(validation),
-        'relative_covariance_error':relative_error,'eigenspace_projection_error':projection_error,
-        'tuning_resolution':'resolved' if ledger and all(row.get('tuning_resolution')=='resolved' and row.get('status')=='completed' for row in ledger) else 'unresolved',
-        'diagnostic_adaptation_ns':adaptation_ns,'diagnostic_prediction_ns':prediction_ns,'diagnostic_generation_ns':check_generation_ns,
-        'generation_ns':generation_ns,'preparation_ns':preparation_ns,'method_order':order,
-        'truth_second_moment_hash':content_hash(truth.second_moment),'truth_noise_hash':content_hash(truth.sigma2),
-        'peak_rss_bytes':_rss_bytes()},assets
+    scientific={'selectors':{'baseline':list(BASELINE),'joint':list(JOINT)},
+        'assets':{},'update_check_schedule':{'outer_replications':[outer],'tasks_per_replication':1}}
+    result,assets=execute_replication(config,scientific,root,outer,{'training_phase':phase,'test_phase':phase+400})
+    all_risks=result['risks']
+    result['family_risks']=all_risks
+    result['risks']={role:all_risks[role]['conditional_risk'] for role in ('baseline','joint') if role in all_risks}
+    for role in result['selected']:
+        if role in all_risks: result['selected'][role]['numerical_error_assessment']=all_risks[role]['numerical_error_assessment']
+    values=result['tasks'][0]['values'] if result['tasks'] else {}
+    predictions=sum(v.get('diagnostics',{}).get('prediction_ns',0) for v in values.values())
+    result['diagnostic_generation_ns']=result['task_generation_ns']
+    result['diagnostic_adaptation_ns']=max(0,result['task_ns']-result['task_generation_ns']-predictions)
+    result['diagnostic_prediction_ns']=predictions
+    result['diagnostic_values']=values
+    result['simulation_task_seconds']=result['task_ns']/1e9
+    result['preparation_ns']+=result['evaluation_ns']
+    for role in ('baseline','joint'):
+        if role in result['selected'] and values.get(role,{}).get('status')=='completed':
+            result['selected'][role]['numerical_error_assessment']['literal_direct_step_error']=values[role]['diagnostics']['literal_direct_step_error']
+    return result,assets
 
 
 def calibration_diagnostics(blocks, procedure, resamples, seed, planned_count=None, memory_budget_bytes=None, deadline=None):
@@ -243,7 +182,7 @@ def calibration_diagnostics(blocks, procedure, resamples, seed, planned_count=No
 def _draft_for_pilot(config, result, versions):
     from .records import to_json_record, content_hash
     from .protocol import BASELINE, JOINT
-    from .tasks import RNG_SPEC
+    from .tasks import RNG_SPEC, population_identity
     record=to_json_record(config)
     # Exploration settings and seed are excluded from the protected procedure.
     record['numerics'].pop('pilot',None)
@@ -251,7 +190,7 @@ def _draft_for_pilot(config, result, versions):
     record['sample_plan'].update({k:result['source_count_decision'].get(k) for k in ('source_training_tasks','source_validation_tasks','source_block_size')})
     record['sample_plan']['outer_replicates']=result['precision_diagnostics'].get('planned_outer_replicates')
     record['sample_plan']['tasks_per_replicate']=None
-    return {'schema_version':1,'scientific':{'config':record,'scenario_id':'primary_richer_k_3_5','amendment':None,
+    draft={'schema_version':1,'scientific':{'config':record,'scenario_id':'primary_richer_k_3_5','amendment':None,
         'selectors':{'baseline':list(BASELINE),'joint':list(JOINT)},
         'endpoint':{'metric':'squared_coefficient_error','contrast':'baseline_minus_joint'},
         'inference':{'procedure':'student','alpha':.05,'coverage':'approximate','moment_basis':'bounded_constrained_fixed_maps'},
@@ -259,9 +198,15 @@ def _draft_for_pilot(config, result, versions):
         'update_check_schedule':{'outer_replications':[0],'tasks_per_replication':2},
         'precision':{'target_half_width':float(INITIAL_HALF_WIDTH)},'generator':RNG_SPEC,
         'versions':versions,'stop_rule':'fixed_counts_invariants_only',
-        'assets':{'prior':'refit_each_replication','preprocessing':'identity'}},
+        'assets':{'prior':'refit_each_replication','preprocessing':'identity','population':population_identity(config)}},
         'operational':{'batch_size':1,'reserve_memory_fraction':.5,'thread_policy':result['runtime_identity']['thread_environment'],
                        'blas_policy':content_hash(result['runtime_identity']['builds'])}}
+
+    extras=sorted(set(config.methods)-(set(BASELINE)|set(JOINT)))
+    if extras:
+        draft['scientific']['simulation_schedule']={'outer_replications':[0],'tasks_per_replication':2,'method_ids':extras,'inference':'descriptive_only'}
+        draft['scientific']['secondary_family']['contrasts']=extras
+    return draft
 
 
 
@@ -295,6 +240,10 @@ def _validation_stability(blocks):
     return ('stable' if maximum<=3 else 'unstable'),maximum
 
 def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
+    from .tasks import resolve_population
+    config=resolve_population(config,config.keys.get('exploration',0))
+    if config.sample_plan.analysis_mode!='conditional_risk_over_preparations':
+        return run_mode_pilot(config,output)
     """Run a prespecified exploratory source-learning schedule with real replications.
 
     W0 conditional-risk calibration is primary. Representative W1/W2 blocks only
@@ -319,7 +268,8 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     if sample.analysis_mode!='conditional_risk_over_preparations': raise ValueError('run_pilot currently calibrates the primary fixed-map endpoint; other endpoint allocations require separate evidence')
     if sample.tasks_per_replicate is not None: raise ValueError('analytic primary has no inner allocation')
     if sample.source_block_size!=config.preparation.target_context_size: raise ValueError('source block size must match the declared adaptation context')
-    if set(config.methods)!=set(BASELINE)|set(JOINT): raise ValueError('pilot requires complete matched mechanism candidate sets')
+    extras=set(config.methods)-(set(BASELINE)|set(JOINT))
+    if not (set(BASELINE)|set(JOINT))<=set(config.methods) or not extras<=set(('B00','B08:gd','B08:ridge','B09:least_squares','B09:ridge','B10:empirical_bayes')): raise ValueError('pilot requires complete matched mechanism candidate sets')
     if config.access.get('prior')!='estimated' or config.access.get('selection')!='learned_only': raise ValueError('learned-only source preparation required')
     root=config.keys.get('exploration')
     if type(root)!=int or root<0 or set(config.keys)!={'exploration'}: raise ValueError('only an exploratory root is permitted')
@@ -443,7 +393,9 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     update_schedule={'outer_replications':[0],'tasks_per_replication':2}
     mean_cost=float(np.mean(cost_values)) if cost_values else None
     count=plan['outer_replicates']
-    estimate=project_runtime({'replication_seconds':cost_values,'update_check_seconds':check_costs},count,update_schedule) if count is not None and len(cost_values)>=2 and len(check_costs)>=2 else None
+    simulation_costs=[r['simulation_task_seconds'] for r in all_results if r['level']==selected_level]
+    simulation_schedule={'outer_replications':[0],'tasks_per_replication':2} if extras else None
+    estimate=project_runtime({'replication_seconds':cost_values,'update_check_seconds':check_costs,'simulation_task_seconds':simulation_costs},count,update_schedule,simulation_schedule) if count is not None and len(cost_values)>=2 and len(check_costs)>=2 else None
     scaling=[]
     if not stop:
         for index,name in enumerate(workloads[1:]):
@@ -462,7 +414,7 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
             outer+=1
     resource={'status':'feasible' if estimate is not None and estimate<=max_seconds and _rss_bytes()<=budget and not stop else 'unresolved',
         'preparation_seconds':chosen['preparation_seconds'] if chosen else None,'estimated_total_seconds':estimate,
-        'replication_seconds':cost_values,'update_check_seconds':check_costs,
+        'replication_seconds':cost_values,'update_check_seconds':check_costs,'simulation_task_seconds':simulation_costs,
         'estimated_total_seconds_interval':[float(np.quantile(cost_values,q))*count+float(np.quantile(check_costs,q))*2 for q in (.1,.9)] if count and cost_values and check_costs else None,
         'estimate_qualification':'empirical 10–90% per-replication throughput range, not a runtime confidence interval',
         'peak_rss_bytes':_rss_bytes(),'available_memory_bytes':available,'memory_budget_bytes':budget,
@@ -509,5 +461,154 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
         'decision':code,'rationale':'; '.join(reasons) or 'pilot diagnostics and resource criteria met; freeze still required',
         'affected_claim_ids':['primary_learned_mechanism'],'next_action':result['gate']['next_action'],
         'methodological_amendment_required':False,'fresh_confirmation_required':True}],{})
+    store.finalize(result['status'])
+    return result
+
+
+def run_mode_pilot(config: RunConfig, output: Path) -> JsonRecord:
+    """Real deterministic/fixed/nested calibration, with explicit descriptive arms.
+
+    Descriptive schedules retain unresolved moments and tuning as limitations;
+    they cannot earn a comparative mean-risk claim or a precision guarantee.
+    """
+    import time
+    import tempfile
+    from dataclasses import replace
+    from .records import content_hash, to_json_record
+    from .tasks import population_identity, RNG_SPEC
+    from .specs import validate_config
+    from .protocol import checkout_identity, runtime_identity, scientific_contract, moment_policy, _validate_draft
+    from .execution import execute_replication, fixed_preparation
+    from .confirmation import analyze_results, _rows, run_record
+    from .runner import RunStore
+    from .analysis import nested_variance_components
+    validate_config(config,False)
+    root=config.keys.get('exploration')
+    if type(root)!=int or root<0 or set(config.keys)!={'exploration'}: raise ValueError('exploratory root required')
+    mode=config.sample_plan.analysis_mode; nested=mode=='nested_task_simulation'; deterministic=mode=='deterministic_frontier'
+    settings=to_json_record(config.numerics.get('pilot',{}))
+    selectors=settings.get('selectors',{'baseline':[config.methods[0]],'joint':[config.methods[1]]})
+    procedure='inapplicable' if deterministic else settings.get('procedure','descriptive_only')
+    policy=moment_policy(config)
+    if procedure not in ('inapplicable','descriptive_only','student','outer_bootstrap'): raise ValueError('unknown inference procedure')
+    if procedure in ('student','outer_bootstrap') and not policy['mean_ci_eligible']: raise ValueError('unsupported moments require a descriptive-only schedule')
+    if not deterministic and config.sample_plan.tasks_per_replicate is None: raise ValueError('fixed task schedule required')
+    block_count=1 if deterministic else settings.get('blocks',2)
+    reps=settings.get('replicates_per_block',4) if nested else 1
+    if type(block_count)!=int or block_count<(1 if deterministic else 2) or type(reps)!=int or reps<1: raise ValueError('invalid pilot blocks')
+    runtime=runtime_identity(); versions,dirty=checkout_identity(selectors,to_json_record(config.numerics.get('fitting_candidates',{})),runtime=runtime)
+    record=to_json_record(config); record['keys']={}; record['numerics'].pop('pilot',None)
+    assets={'population':population_identity(config),'preprocessing':'identity','prior':'refit_each_replication' if nested else 'fixed_declared_prior'}
+    if not nested: assets['fixed_prior_hashes']={key:state.prior.asset_hash for key,(_,state) in fixed_preparation(config).items()}
+    s={'config':record,'scenario_id':settings.get('scenario_id',mode),'amendment':settings.get('amendment','Separately scoped '+mode+'; no primary learned-mechanism claim'),
+       'selectors':selectors,'endpoint':{'metric':'squared_coefficient_error','contrast':'baseline_minus_joint'},
+       'inference':{'procedure':procedure,'alpha':.05,'coverage':'approximate' if procedure in ('student','outer_bootstrap') else None,
+                    'moment_basis':'structural_per_estimator' if policy['mean_ci_eligible'] else 'unsupported_or_unverified'},
+       'moment_policy':policy,'secondary_family':{'contrasts':[],'adjustment':'holm'},
+       'update_check_schedule':settings.get('update_check_schedule',{'outer_replications':[0],'tasks_per_replication':1}),
+       'precision':{'target_half_width':None if deterministic else settings.get('target_half_width',float(INITIAL_HALF_WIDTH))},
+       'generator':RNG_SPEC,'versions':versions,'stop_rule':'fixed_counts_invariants_only','assets':assets}
+    available=_available_memory(); budget=available//2; max_seconds=float(settings.get('max_seconds',1800.))
+    if max_seconds<=0 or not math.isfinite(max_seconds): raise ValueError('positive finite runtime budget required')
+    op={'batch_size':1,'reserve_memory_fraction':.5,'thread_policy':runtime['thread_environment'],'blas_policy':content_hash(runtime['builds'])}
+    draft={'schema_version':1,'scientific':s,'operational':op}
+    # This identity is exploratory; it never allocates protected keys.
+    manifest={**draft,'scientific_sha256':content_hash(s),'operational_sha256':content_hash(op),
+              'protocol_sha256':content_hash({'draft':draft,'root':root,'started_ns':time.perf_counter_ns()})}
+    run=run_record(manifest,phase='exploration',dirty=dirty); store=RunStore.create(Path(output),run)
+    _write_json(store.path/'hardware.json',runtime)
+    blocks=[]; failures=[]; stopped=False; outer_index=0; started=time.perf_counter()
+    levels=settings.get('source_levels',[config.sample_plan.source_training_tasks]) if nested else [None]
+    validations=settings.get('validation_levels',[config.sample_plan.source_validation_tasks]*len(levels)) if nested else [None]
+    if len(levels)!=len(validations): raise ValueError('source level count mismatch')
+    source_curves=[]; groups=[]
+    for level,(training,validation) in enumerate(zip(levels,validations)):
+        group=[]
+        for block in range(block_count):
+            plan=replace(config.sample_plan,outer_replicates=reps if nested else None,
+                source_training_tasks=training,source_validation_tasks=validation,
+                tasks_per_replicate=max(2,config.sample_plan.tasks_per_replicate) if nested else config.sample_plan.tasks_per_replicate)
+            local=replace(config,sample_plan=plan); ls={**s,'config':to_json_record(local)}
+            ls['update_check_schedule']={'outer_replications':[0],'tasks_per_replication':1}
+            results=[]
+            for j in range(reps):
+                if _rss_bytes()>budget or time.perf_counter()-started>max_seconds: stopped=True; break
+                phases={'training_phase':10+4*(level*block_count+block),'test_phase':12+4*(level*block_count+block)}
+                try: result,arrays=execute_replication(local,ls,root,j,phases)
+                except (ValueError,RuntimeError,np.linalg.LinAlgError) as exc:
+                    failures.append(str(exc)); break
+                results.append(result); failures.extend(result['failures'].values())
+                # Durable complete replication; global IDs disambiguate exploratory blocks.
+                stored={**result,'outer_replication':outer_index}
+                for task in stored['tasks']: task['outer_replication']=outer_index
+                store.commit_block(f'replication-{outer_index}',_rows(stored,manifest,run['run_id']),arrays)
+                outer_index+=1
+                if failures: break
+            item={'level':level,'block_id':block,'sample_plan':to_json_record(plan),'update_check_schedule':ls['update_check_schedule'],'results':results}
+            group.append(item)
+            if stopped or failures: break
+        groups.append(group)
+        if nested and group and all(len(b['results'])==reps for b in group):
+            values=[r for b in group for r in b['results']]; errors=[r['relative_covariance_error'] for r in values]
+            stable,_=_validation_stability([b['results'] for b in group])
+            source_curves.append({'level':level,'source_training_tasks':training,'source_validation_tasks':validation,
+                'source_block_size':config.sample_plan.source_block_size,'replications':len(values),
+                'relative_covariance_error_upper_diagnostic':float(np.mean(errors)+1.96*np.std(errors,ddof=1)/np.sqrt(len(errors))) if len(errors)>1 else None,
+                'validation_stability':stable,'preparation_seconds':float(np.mean([r['preparation_ns']/1e9 for r in values]))})
+        if stopped or failures: break
+    chosen,source_status=choose_source_level(source_curves,settings.get('source_relative_error_target',.5),reps*block_count) if nested else (None,'inapplicable')
+    chosen_level=chosen['level'] if chosen else 0
+    blocks=groups[chosen_level] if chosen_level<len(groups) else []
+    if nested and chosen:
+        s['config']['sample_plan'].update(source_training_tasks=chosen['source_training_tasks'],source_validation_tasks=chosen['source_validation_tasks'])
+    independent=[]; components=[]
+    for block in blocks:
+        if failures or stopped: break
+        local={**s,'config':{**s['config'],'sample_plan':block['sample_plan']},'update_check_schedule':block['update_check_schedule']}
+        independent.append({'differences':analyze_results(block['results'],local,root)['differences']})
+        if nested and reps>=2 and block['sample_plan']['tasks_per_replicate']>=2:
+            rows=[{'outer_replication':r['outer_replication'],'difference':t['values']['baseline']['loss']-t['values']['joint']['loss']} for r in block['results'] for t in r['tasks'] if t['endpoint']=='primary']
+            components.append(nested_variance_components(rows))
+    values=[r for b in blocks for r in b['results']]
+    base=[(r['generation_ns']+r['preparation_ns']+r['evaluation_ns'])/1e9 for r in values]; task_cost=[r['task_ns']/1e9/max(1,len(r['tasks'])) for r in values]
+    plan={'decision':'inapplicable' if deterministic else 'descriptive_fixed_schedule'}
+    cal={'status':'inapplicable','procedure':procedure,'coverage':None}
+    if procedure in ('student','outer_bootstrap') and independent:
+        planning={'analysis_mode':mode,'blocks':independent}
+        if nested and len(components)>=2:
+            between=[v['between_variance'] for v in components]; within=[v['within_variance'] for v in components]
+            stable=min(between)>0 and min(within)>0 and max(between)/min(between)<=4 and max(within)/min(within)<=4
+            planning.update(variance_between=max(between),variance_within=max(within),variance_stable=stable,
+                preparation_cost=float(np.mean(base)),task_cost=float(np.mean(task_cost)))
+        plan=plan_sample_sizes(planning,s['precision']['target_half_width'],.05)
+        if plan['decision']=='provisional':
+            s['config']['sample_plan']['tasks_per_replicate']=max(config.sample_plan.tasks_per_replicate,plan['tasks_per_replicate']) if nested else plan['tasks_per_replicate']
+            if nested: s['config']['sample_plan']['outer_replicates']=plan['outer_replicates']
+            final_count=plan['outer_replicates'] if nested else plan['tasks_per_replicate']
+            # Nested calibration at a changed inner N needs new measured pilot blocks.
+            if not nested or plan['tasks_per_replicate']<=config.sample_plan.tasks_per_replicate:
+                cal=calibration_diagnostics(independent,procedure,settings.get('calibration_resamples',1000),root,planned_count=final_count,memory_budget_bytes=budget,deadline=started+max_seconds)
+                cal['moment_basis']='structural_per_estimator'
+            else: cal={'status':'extend_pilot','reason':'repeat pilot at proposed inner N before final-J calibration'}
+    counts=s['config']['sample_plan']; total_tasks=(counts['outer_replicates'] or 1)*(counts['tasks_per_replicate'] or 0)+len(s['update_check_schedule']['outer_replications'])*s['update_check_schedule']['tasks_per_replication']
+    projection=float(np.mean(base))*(counts['outer_replicates'] or 1)+float(np.mean(task_cost))*total_tasks if base else None
+    resources={'status':'feasible' if projection is not None and projection<=max_seconds and not stopped and _rss_bytes()<=budget else 'unresolved',
+        'max_seconds':max_seconds,'estimated_total_seconds':projection,'available_memory_bytes':available,
+        'memory_budget_bytes':budget,'peak_rss_bytes':_rss_bytes(),'measured_total_seconds':time.perf_counter()-started}
+    result={'schema_version':1,'phase':'exploration','status':'failed' if failures else ('incomplete' if stopped else 'completed'),
+        'run_path':str(store.path),'runtime_identity':runtime,'versions':versions,'dirty_diff_sha256':dirty,'excluded_roots':[root],
+        'execution_blocks':blocks,'variance_components':components,'source_curve':source_curves,
+        'source_accuracy':{'status':source_status if source_status=='resolved' else ('descriptive_unverified' if procedure=='descriptive_only' else source_status),
+                           'relative_error_target':settings.get('source_relative_error_target',.5)},
+        'tuning_resolution':'resolved' if values and all(r['tuning_resolution'] in ('resolved','inapplicable') for r in values) else 'unresolved',
+        'precision_diagnostics':plan,'calibration':cal,'resources':resources,'failures':failures,
+        'scientific_contract_sha256':scientific_contract(s)}
+    try: _validate_draft(draft,result); reasons=[]
+    except ValueError as exc: reasons=[str(exc)]
+    result['gate']={'code':'LOCAL_RESOURCE_LIMIT' if stopped else ('IMPLEMENTATION_INVALID' if failures else ('INSENSITIVE_OR_UNSUITABLE' if reasons else 'SUPPORTED_IN_SCOPE')),
+                   'gate':'G6','reasons':reasons,'scope':'schedule readiness only; descriptive arms have no mean-risk CI or superiority claim'}
+    _write_json(store.path/'pilot.json',result); _write_json(store.path/'power_precision.json',plan)
+    _write_json(store.path/'protocol_draft.json',{'draft':draft,'evidence_path':'pilot.json','status':'unresolved' if reasons else 'ready'})
+    (store.path/'pilot_report.md').write_text('Exploratory '+mode+'\n\n'+str(result['gate'])+'\n')
     store.finalize(result['status'])
     return result

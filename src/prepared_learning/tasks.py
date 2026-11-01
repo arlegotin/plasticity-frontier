@@ -24,10 +24,12 @@ def population_for(config, key):
     p = config.preparation
     s = np.asarray(config.workload['spectrum'], dtype=np.float64)
     sigma2 = config.workload['sigma2']
-    if p.input_law != 'isotropic_gaussian' or s.shape != (p.input_dimension,) or not np.all(np.isfinite(s)) or np.any(s < 0) or not np.isclose(s.sum(), 1, atol=1e-12, rtol=0) or not np.isfinite(sigma2) or sigma2 < 0:
+    if p.input_law != 'gaussian_isotropic' or s.shape != (p.input_dimension,) or not np.all(np.isfinite(s)) or np.any(s < 0) or not np.isclose(s.sum(), 1, atol=1e-12, rtol=0) or not np.isfinite(sigma2) or sigma2 < 0:
         raise ValueError('invalid Gaussian population')
     # Population orientation is fixed for every task and phase of a root seed.
-    rotation_key = TaskKey(key.root_seed, 0, 0, 0, 0)
+    seed = config.workload.get("population_seed", key.root_seed)
+    if type(seed) is not int or seed < 0: raise ValueError("invalid population seed")
+    rotation_key = TaskKey(seed, 0, 0, 0, 0)
     q, r = np.linalg.qr(_rng(rotation_key, ROTATION).normal(size=(len(s), len(s))))
     signs = np.where(np.diag(r) < 0, -1., 1.)
     q = q * signs
@@ -64,3 +66,17 @@ def generate_source_task(config, key: TaskKey):
     A = _block(key, theta, n, population.sigma2, SOURCE_A_CONTEXT, SOURCE_A_NOISE)
     B = _block(key, theta, n, population.sigma2, SOURCE_B_CONTEXT, SOURCE_B_NOISE)
     return SourceTask(A, B, content_hash({'key': key}))
+
+
+def resolve_population(config, exploratory_root):
+    """Resolve population once before changing data namespaces or freezing."""
+    from dataclasses import replace
+    return replace(config, workload={**config.workload,
+        'population_seed':config.workload.get('population_seed', exploratory_root)})
+
+
+def population_identity(config):
+    if 'population_seed' not in config.workload: raise ValueError('explicit population seed required')
+    truth, asset = population_for(config, TaskKey(0,0,0,0,0))
+    return {'population_seed':config.workload['population_seed'],
+            'population_hash':truth.population_hash, 'artifact_hash':asset['artifact_hash']}

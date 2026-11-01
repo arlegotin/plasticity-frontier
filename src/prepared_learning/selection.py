@@ -33,7 +33,7 @@ def _validate_preparation(config):
     from .records import PreparationSpec
     try: prep=PreparationSpec(**config['preparation'])
     except (KeyError,TypeError): raise ValueError('invalid preparation contract') from None
-    if (type(prep.input_dimension) is not int or prep.input_dimension<1 or type(prep.target_context_size) is not int or prep.target_context_size<1 or prep.input_law!='isotropic_gaussian' or prep.loss_normalization!='squared_error_over_2n' or prep.task_second_moment_trace!=1):
+    if (type(prep.input_dimension) is not int or prep.input_dimension<1 or type(prep.target_context_size) is not int or prep.target_context_size<1 or prep.input_law!='gaussian_isotropic' or prep.loss_normalization!='squared_error_over_2n' or prep.task_second_moment_trace!=1):
         raise ValueError('unsupported learned preparation contract')
     return prep
 

@@ -50,6 +50,11 @@ class BudgetSpec(ImmutableArrays):
 @dataclass(frozen=True)
 class PreparationSpec(ImmutableArrays):
     target_context_size: int; input_dimension: int; input_law: str; loss_normalization: str; task_second_moment_trace: float
+
+    def __post_init__(self):
+        if self.input_law == "isotropic_gaussian":
+            object.__setattr__(self, "input_law", "gaussian_isotropic")
+        super().__post_init__()
 @dataclass(frozen=True)
 class SamplePlan(ImmutableArrays):
     analysis_mode: str; outer_replicates: int | None; tasks_per_replicate: int | None; source_training_tasks: int | None; source_validation_tasks: int | None; source_block_size: int | None
@@ -127,6 +132,7 @@ class PopulationTruth(ImmutableArrays):
 # Required raw evidence fields. Units are encoded in field names where applicable;
 # null measurements require an accompanying status/reason in the producing record.
 RAW_RECORD_FIELDS = {
+    'execution': frozenset('outer_replication result status failure_reason'.split()),
     'task_metrics': frozenset('run_id outer_replication task_id task_key method_id information_access n d depth norm_cap parameter_cap eta branch loss_parameter_mse loss_noiseless_prediction_mse adaptation_ns prediction_ns status failure_reason'.split()),
     'preparation_risks': frozenset('run_id outer_replication source_key method_id selection_procedure_hash prior_asset_hash metric_hash analysis_mode source_training_tasks source_validation_tasks total_source_labels conditional_risk paired_contrast_id paired_risk_difference risk_evaluator_version true_S_evaluator_hash noise_truth_evaluator_hash numerical_error_assessment status failure_reason'.split()),
     'geometry': frozenset('target_hash realized_hash spectral_scale support_policy minimum_eigenvalue gamma initial_norm post_norm actual_trainable_count stored_scalars serialized_bytes null_residual kernel_absolute_error kernel_relative_error kernel_relative_error_status direct_step_error numerical_repairs'.split()),
@@ -231,6 +237,10 @@ def validate_raw_record(row: JsonRecord, run: JsonRecord) -> None:
             if not isinstance(reasons.get(field), str) or not reasons[field].strip(): raise ValueError(f'{field} requires null reason')
     if kind in ('task_metrics', 'preparation_risks'):
         for name in ('method_id', 'status'): _text(row[name], name)
+    if kind == 'execution':
+        if not isinstance(row['result'],dict) or row['result'].get('status')!=status:
+            raise ValueError('invalid execution result')
+        return
     if kind == 'task_metrics':
         _text(row['task_key'], 'task_key')
         for name in ('n','d','depth'): _count(row[name], name, 1)

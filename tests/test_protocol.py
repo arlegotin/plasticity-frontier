@@ -17,6 +17,10 @@ from prepared_learning.records import content_hash
 def draft_fixture():
     config = json.loads(Path('configs/exploration/learned_prior.json').read_text())
     config['keys']={}
+    config['workload']['population_seed']=42
+    from prepared_learning.tasks import population_identity
+    from prepared_learning.protocol import config_from_record
+    population=population_identity(config_from_record(config))
     config['sample_plan'].update(outer_replicates=400, source_training_tasks=16, source_validation_tasks=8)
     return {'schema_version': 1, 'scientific': {
         'config': config, 'scenario_id': 'primary_richer_k_3_5', 'amendment': None,
@@ -28,7 +32,7 @@ def draft_fixture():
         'precision': {'target_half_width': .0079770991405094},
         'generator': {'stream_mapping_version':1, 'bit_generator':'PCG64'},
         'versions': {k:'a'*64 for k in ['code_sha256','dependency_lock_sha256','analysis_sha256','generator_sha256','candidate_sha256','selection_sha256','evaluation_sha256','source_manifest_sha256','preprocessing_sha256']},
-        'stop_rule':'fixed_counts_invariants_only', 'assets': {'prior':'refit_each_replication','preprocessing':'identity'},
+        'stop_rule':'fixed_counts_invariants_only', 'assets': {'prior':'refit_each_replication','preprocessing':'identity','population':population},
     }, 'operational': {'batch_size':1,'reserve_memory_fraction':.5}}
 
 

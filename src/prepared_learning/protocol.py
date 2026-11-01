@@ -46,6 +46,8 @@ def _finite(value, name, minimum=0):
 
 
 def _validate_draft(draft, evidence):
+    if draft.get('scientific',{}).get('config',{}).get('sample_plan',{}).get('analysis_mode')!='conditional_risk_over_preparations':
+        return _validate_mode_draft(draft,evidence)
     try:
         if draft['schema_version'] != 1 or 'protected_keys' in draft: raise ValueError('invalid draft or premature protected keys')
         s=draft['scientific']; config=config_from_record(s['config']); validate_config(config,False)
@@ -66,7 +68,9 @@ def _validate_draft(draft, evidence):
         for name,allowed in (('baseline',BASELINE),('joint',JOINT)):
             ids=selectors[name]
             if not isinstance(ids,list) or not ids or len(set(ids))!=len(ids) or not set(ids)<=set(allowed): raise ValueError('ineligible primary comparator')
-        if set(config.methods)!=set(selectors['baseline'])|set(selectors['joint']): raise ValueError('method and selector candidates differ')
+        secondary_methods=set(s.get('simulation_schedule',{}).get('method_ids',[]))
+        if set(config.methods)!=set(selectors['baseline'])|set(selectors['joint'])|secondary_methods: raise ValueError('method and selector candidates differ')
+        if not secondary_methods<=set(('B00','B08:gd','B08:ridge','B09:least_squares','B09:ridge','B10:empirical_bayes')): raise ValueError('unsupported operational method')
         if set(selectors['baseline'])!=set(BASELINE) or set(selectors['joint'])!=set(JOINT):
             if not s.get('amendment'): raise ValueError('candidate parity change requires an amendment')
         if not s['scenario_id']: raise ValueError('scenario required')
@@ -81,10 +85,17 @@ def _validate_draft(draft, evidence):
             raise ValueError('only bounded fixed-map primary inference is currently calibrated')
         family=s['secondary_family']
         if family['adjustment'] not in ('holm','simultaneous') or not isinstance(family['contrasts'],list) or len(set(family['contrasts']))!=len(family['contrasts']): raise ValueError('invalid secondary family')
+        if secondary_methods:
+            if s['simulation_schedule'].get('inference')!='descriptive_only' or set(family['contrasts'])!=secondary_methods: raise ValueError('operational schedule requires explicit descriptive contrasts')
+            costs=evidence['resources'].get('simulation_task_seconds',[])
+            if len(costs)!=sum(len(b['differences']) for b in evidence['blocks']) or any(not math.isfinite(v) or v<=0 for v in costs): raise ValueError('measured operational simulation costs required')
+        elif family['contrasts']: raise ValueError('secondary contrasts need a simulation schedule')
         schedule=s['update_check_schedule']; _positive(schedule['tasks_per_replication'],'update checks')
         if not isinstance(schedule['outer_replications'],list) or not schedule['outer_replications'] or any(type(j)!=int or not 0<=j<counts['outer_replicates'] for j in schedule['outer_replications']) or len(set(schedule['outer_replications']))!=len(schedule['outer_replications']): raise ValueError('invalid fixed update schedule')
         if s['stop_rule']!='fixed_counts_invariants_only': raise ValueError('outcome-dependent stopping forbidden')
-        if s['assets']!={'prior':'refit_each_replication','preprocessing':'identity'}: raise ValueError('invalid learned asset contract')
+        from .tasks import population_identity
+        if s['assets']!={'prior':'refit_each_replication','preprocessing':'identity','population':population_identity(config)}: raise ValueError('invalid learned/population asset contract')
+        validate_schedules(s,counts['outer_replicates'])
         if s['generator'].get('stream_mapping_version')!=1 or s['generator'].get('bit_generator')!='PCG64': raise ValueError('unknown generator')
         versions=s['versions']
         for key in HASH_FIELDS:
@@ -150,7 +161,7 @@ def _validate_draft(draft, evidence):
         if resource['status']!='feasible': raise ValueError('unresolved local feasibility')
         for key in ('preparation_seconds','estimated_total_seconds','peak_rss_bytes','available_memory_bytes','memory_budget_bytes'): _finite(resource[key],key)
         _finite(resource['max_seconds'],'runtime budget')
-        projection=project_runtime(resource,counts['outer_replicates'],schedule)
+        projection=project_runtime(resource,counts['outer_replicates'],schedule,s.get('simulation_schedule'))
         if resource['max_seconds']<=0 or projection>resource['max_seconds'] or not math.isclose(resource['estimated_total_seconds'],projection,rel_tol=1e-12,abs_tol=1e-9): raise ValueError('runtime projection or declared budget infeasible')
         if len(resource['replication_seconds'])!=sum(len(b['differences']) for b in blocks): raise ValueError('runtime observations do not match pilot schedule')
         if not math.isclose(resource['preparation_seconds'],chosen['preparation_seconds'],rel_tol=1e-12): raise ValueError('source preparation timing mismatch')
@@ -283,7 +294,7 @@ def validate_runtime_identity(runtime):
     except (KeyError,TypeError,AttributeError) as exc: raise ValueError('incomplete runtime identity') from exc
 
 
-def project_runtime(resources, outer_count, update_schedule):
+def project_runtime(resources, outer_count, update_schedule, simulation_schedule=None):
     """Recompute a mean cost projection for the exact frozen outer/update schedule."""
     _positive(outer_count,'outer count')
     for key in ('replication_seconds','update_check_seconds'):
@@ -294,4 +305,166 @@ def project_runtime(resources, outer_count, update_schedule):
             if value<=0: raise ValueError('positive measured runtime required')
     base=math.fsum(resources['replication_seconds'])/len(resources['replication_seconds'])
     check=math.fsum(resources['update_check_seconds'])/len(resources['update_check_seconds'])
-    return base*outer_count+check*len(update_schedule['outer_replications'])*update_schedule['tasks_per_replication']
+    total=base*outer_count+check*len(update_schedule['outer_replications'])*update_schedule['tasks_per_replication']
+    if simulation_schedule:
+        values=resources['simulation_task_seconds']
+        if len(values)<2 or any(not math.isfinite(v) or v<=0 for v in values): raise ValueError('measured simulation costs required')
+        total+=math.fsum(values)/len(values)*len(simulation_schedule['outer_replications'])*simulation_schedule['tasks_per_replication']
+    return total
+
+
+def moment_policy(config):
+    """Structural loss-second-moment policy; observed finite losses prove nothing.
+
+    Gaussian pseudoinverse squared loss requires inverse-Wishart second moments
+    (dimension gap > 3). This sufficient policy intentionally declines noiseless
+    special cases unless their exact cancellation has a separate proof.
+    """
+    learned=config.sample_plan.analysis_mode in ('nested_task_simulation','conditional_risk_over_preparations')
+    n=config.preparation.target_context_size; d=config.preparation.input_dimension
+    records={}
+    for mid in config.methods:
+        family=mid.split(':')[0]; options=config.numerics.get('method_options',{}).get(mid,{})
+        eligible=False; basis='unverified random inverse or population moments'
+        if family in ('B00','B01','B02','B03','B04','B11') or (not learned and family in ('B05','B06','B07')):
+            eligible=True; basis='bounded constrained fixed map and Gaussian task/input/noise moments' if learned else 'fixed finite linear map and Gaussian task/input/noise moments'
+        elif mid=='B08:gd':
+            eligible=True; basis='finite frozen step grid and Gaussian polynomial moments'
+        elif not learned and family in ('B08','B09'):
+            penalty=0 if mid=='B09:least_squares' else float(options.get('penalty',0))
+            rank=int(options.get('rank',d)) if family=='B09' else d
+            if not 1<=rank<=d: raise ValueError('rank outside declared dimension')
+            if penalty>0:
+                eligible=True; basis='fixed strictly positive ridge penalty bounds inverse'
+            elif abs(n-rank)>3:
+                eligible=True; basis='Gaussian rectangular pseudoinverse; dimension gap > 3 gives loss second moment'
+            else: basis='near-interpolation Gaussian pseudoinverse; loss second moment unsupported'
+        elif not learned and family=='B10':
+            if config.access.get('prior')=='oracle' and config.workload['sigma2']>0:
+                eligible=True; basis='fixed covariance posterior with strictly positive noise'
+        records[mid]={'status':'finite_loss_second_moment' if eligible else 'unsupported_or_unverified','basis':basis}
+    return {'mean_ci_eligible':bool(records) and all(v['status']=='finite_loss_second_moment' for v in records.values()),
+            'estimators':records,'population':'Gaussian theta, isotropic Gaussian X, independent Gaussian noise',
+            'finite_observed_losses_are_not_evidence':True}
+
+
+def validate_schedules(scientific, count):
+    for name in ('update_check_schedule','simulation_schedule'):
+        schedule=scientific.get(name)
+        if schedule is None:
+            if name=='update_check_schedule': raise ValueError('fixed update schedule required')
+            continue
+        indices=schedule['outer_replications']; n=schedule['tasks_per_replication']
+        if not isinstance(indices,list) or len(set(indices))!=len(indices) or any(type(j)!=int or not 0<=j<count for j in indices):
+            raise ValueError('invalid fixed schedule')
+        if type(n)!=int or n<0 or (bool(indices)!=(n>0)) or n>=10**9: raise ValueError('invalid diagnostic task count')
+
+
+def _validate_mode_draft(draft,evidence):
+    """Mode-specific real evidence validation outside the primary learned endpoint."""
+    from .tasks import population_identity
+    from .confirmation import analyze_results
+    import numpy as np
+    try:
+        s=draft['scientific']; c=config_from_record(s['config']); p=c.sample_plan
+        validate_config(c,False)
+        if draft['schema_version']!=1 or 'protected_keys' in draft or c.keys: raise ValueError('invalid draft namespace')
+        mode=p.analysis_mode
+        if mode not in ('deterministic_frontier','fixed_prior_task_simulation','nested_task_simulation'): raise ValueError('unsupported mode')
+        required={'deterministic_frontier':(), 'fixed_prior_task_simulation':('tasks_per_replicate',),
+                  'nested_task_simulation':('outer_replicates','tasks_per_replicate','source_training_tasks','source_validation_tasks','source_block_size')}[mode]
+        for name in ('outer_replicates','tasks_per_replicate','source_training_tasks','source_validation_tasks','source_block_size'):
+            value=getattr(p,name)
+            if name in required: _positive(value,name)
+            elif value is not None: raise ValueError('inapplicable stochastic count')
+        if s['assets']['population']!=population_identity(c): raise ValueError('population identity mismatch')
+        if s['assets']['preprocessing']!='identity': raise ValueError('unknown preprocessing')
+        if not s['amendment'] or not s['scenario_id']: raise ValueError('explicit nonprimary scope required')
+        if s['endpoint']!={'metric':'squared_coefficient_error','contrast':'baseline_minus_joint'}: raise ValueError('unsupported endpoint')
+        if s['stop_rule']!='fixed_counts_invariants_only': raise ValueError('outcome stopping forbidden')
+        if set(s['selectors'])!={'baseline','joint'} or any(not ids or not set(ids)<=set(c.methods) for ids in s['selectors'].values()): raise ValueError('invalid selectors')
+        if mode!='nested_task_simulation' and any(len(ids)!=1 for ids in s['selectors'].values()): raise ValueError('fixed selectors required')
+        if mode=='nested_task_simulation':
+            if c.access.get('prior')!='estimated' or s['assets']['prior']!='refit_each_replication': raise ValueError('source-only nested preparation required')
+        else:
+            if s['assets']['prior']!='fixed_declared_prior': raise ValueError('fixed prior required')
+            from .execution import fixed_preparation
+            states=fixed_preparation(c)
+            if s['assets']['fixed_prior_hashes']!={key:state.prior.asset_hash for key,(_,state) in states.items()}: raise ValueError('fixed prior identity mismatch')
+            if mode=='deterministic_frontier' and any(state.metric is None for _,state in states.values()): raise ValueError('deterministic risk requires fixed maps')
+        validate_schedules(s,p.outer_replicates or 1)
+        if s['secondary_family']!={'contrasts':[],'adjustment':'holm'}: raise ValueError('nonprimary secondary inference not declared')
+        if s['generator']['stream_mapping_version']!=1 or s['generator']['bit_generator']!='PCG64': raise ValueError('unsupported generator')
+        versions=s['versions']; runtime=evidence['runtime_identity']; validate_runtime_identity(runtime)
+        if versions['runtime_sha256']!=content_hash(runtime): raise ValueError('runtime identity mismatch')
+        for key in HASH_FIELDS:
+            if not re.fullmatch('[0-9a-f]{64}',str(versions[key])): raise ValueError('invalid version hash')
+        if versions['candidate_sha256']!=content_hash({'selectors':s['selectors'],'fitting_candidates':s['config']['numerics'].get('fitting_candidates',{})}): raise ValueError('candidate hash mismatch')
+        op=draft['operational']; _positive(op['batch_size'],'batch size')
+        if not .5<=op['reserve_memory_fraction']<1 or op['thread_policy']!=runtime['thread_environment'] or op['blas_policy']!=content_hash(runtime['builds']): raise ValueError('runtime stratum mismatch')
+        if evidence['dirty_diff_sha256'] is not None or evidence['phase']!='exploration' or evidence['status']!='completed': raise ValueError('incomplete or uncommitted pilot')
+        if evidence['versions']!=versions or evidence['scientific_contract_sha256']!=scientific_contract(s): raise ValueError('evidence identity mismatch')
+        roots=evidence['excluded_roots']
+        if not roots or any(type(r)!=int or r<0 for r in roots) or len(set(roots))!=len(roots): raise ValueError('exploratory roots required')
+        policy=moment_policy(c)
+        if s['moment_policy']!=policy: raise ValueError('estimator moment policy mismatch')
+        inference=s['inference']; procedure=inference['procedure']
+        if inference['alpha']!=.05: raise ValueError('unsupported alpha')
+        if mode=='deterministic_frontier':
+            if procedure!='inapplicable' or inference['coverage'] is not None or s['precision']['target_half_width'] is not None: raise ValueError('deterministic CI/count obligation forbidden')
+        elif procedure=='descriptive_only':
+            if inference['coverage'] is not None: raise ValueError('descriptive results have no coverage claim')
+        elif procedure not in ('student','outer_bootstrap') or not policy['mean_ci_eligible'] or inference['coverage']!='approximate': raise ValueError('unsupported mean inference')
+        blocks=evidence['execution_blocks']; expected_blocks=1 if mode=='deterministic_frontier' else 2
+        if len(blocks)<expected_blocks: raise ValueError('independent measured pilot blocks required')
+        seen=set(); independent=[]; base_costs=[]; task_costs=[]
+        for block in blocks:
+            local=copy.deepcopy(s); local['config']['sample_plan']=block['sample_plan']
+            local['update_check_schedule']=block['update_check_schedule']
+            analysis=analyze_results(block['results'],local,roots[0])
+            independent.append({'differences':analysis['differences']})
+            for result in block['results']:
+                keys=result['source_keys']+[t['task_key'] for t in result['tasks']]
+                if seen.intersection(keys) or len(keys)!=len(set(keys)): raise ValueError('reused exploratory units')
+                seen.update(keys)
+                base_costs.append((result['generation_ns']+result['preparation_ns']+result['evaluation_ns'])/1e9)
+                task_costs.append(result['task_ns']/1e9/max(1,len(result['tasks'])))
+        components=[]
+        if mode=='nested_task_simulation':
+            from .analysis import nested_variance_components
+            for block in blocks:
+                rows=[{'outer_replication':r['outer_replication'],'difference':t['values']['baseline']['loss']-t['values']['joint']['loss']} for r in block['results'] for t in r['tasks'] if t['endpoint']=='primary']
+                components.append(nested_variance_components(rows))
+            if evidence['variance_components']!=components: raise ValueError('variance components differ from measured tasks')
+            actual_tuning='resolved' if all(r['tuning_resolution']=='resolved' for b in blocks for r in b['results']) else 'unresolved'
+            if evidence['tuning_resolution']!=actual_tuning: raise ValueError('tuning evidence differs from measured candidates')
+            if evidence['source_accuracy']['status']=='resolved':
+                from .pilot import choose_source_level
+                chosen,status=choose_source_level(evidence['source_curve'],evidence['source_accuracy']['relative_error_target'],sum(len(b['results']) for b in blocks))
+                if status!='resolved' or any(chosen[name]!=getattr(p,name) for name in ('source_training_tasks','source_validation_tasks','source_block_size')):
+                    raise ValueError('source curves do not support frozen counts')
+        if procedure in ('student','outer_bootstrap'):
+            if mode=='nested_task_simulation' and any(b['sample_plan']['tasks_per_replicate']!=p.tasks_per_replicate for b in blocks): raise ValueError('nested calibration needs the final inner N')
+            if any(len(b['differences'])<30 for b in independent): raise ValueError('insufficient independent calibration units')
+            cal=evidence['calibration']; n=p.outer_replicates if mode=='nested_task_simulation' else p.tasks_per_replicate
+            if cal['status']!='adequate' or cal.get('moment_basis')!='structural_per_estimator' or cal['sample_size']!=n or cal['procedure']!=procedure or cal['replicates']<500 or not .9<=cal['coverage']<=1: raise ValueError('insufficient final-count calibration')
+            h=s['precision']['target_half_width']; _finite(h,'precision')
+            if h<=0: raise ValueError('positive precision required')
+            from .pilot import plan_sample_sizes
+            if mode=='fixed_prior_task_simulation':
+                plan=plan_sample_sizes({'analysis_mode':mode,'blocks':independent},h,.05)
+            else:
+                between=[r['between_variance'] for r in components]; within=[r['within_variance'] for r in components]
+                stable=min(between)>0 and min(within)>0 and max(between)/min(between)<=4 and max(within)/min(within)<=4
+                plan=plan_sample_sizes({'analysis_mode':mode,'variance_between':max(between),'variance_within':max(within),
+                    'variance_stable':stable,'preparation_cost':float(np.mean(base_costs)),'task_cost':float(np.mean(task_costs))},h,.05)
+                if evidence['source_accuracy']['status']!='resolved' or evidence['tuning_resolution']!='resolved': raise ValueError('nested source accuracy or tuning unresolved')
+            if plan['decision']!='provisional' or p.tasks_per_replicate<plan['tasks_per_replicate'] or (mode=='nested_task_simulation' and p.outer_replicates<plan['outer_replicates']): raise ValueError('insufficient frozen allocation')
+        elif mode=='nested_task_simulation':
+            if evidence['source_accuracy']['status'] not in ('resolved','descriptive_unverified'): raise ValueError('source accuracy status required')
+        resource=evidence['resources']; _finite(resource['max_seconds'],'runtime budget')
+        tasks=(p.outer_replicates or 1)*(p.tasks_per_replicate or 0)+sum(len(s.get(name,{}).get('outer_replications',[]))*s.get(name,{}).get('tasks_per_replication',0) for name in ('update_check_schedule','simulation_schedule'))
+        projection=float(np.mean(base_costs))*(p.outer_replicates or 1)+float(np.mean(task_costs))*tasks
+        if resource['status']!='feasible' or resource['max_seconds']<=0 or projection>resource['max_seconds'] or not math.isclose(projection,resource['estimated_total_seconds'],rel_tol=1e-12): raise ValueError('unverified schedule resource projection')
+        if not 0<resource['peak_rss_bytes']<=resource['memory_budget_bytes']<=resource['available_memory_bytes']*(1-op['reserve_memory_fraction']): raise ValueError('memory reserve unverified')
+    except (KeyError,TypeError,AttributeError) as exc: raise ValueError(f'incomplete mode evidence: {exc}') from exc

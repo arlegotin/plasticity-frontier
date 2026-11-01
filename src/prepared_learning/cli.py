@@ -46,6 +46,8 @@ def main(argv=None) -> int:
     learned = sub.add_parser('fit-priors'); learned.add_argument('--config', required=True); learned.set_defaults(handler=command_fit_priors)
     pilot = sub.add_parser('pilot'); pilot.add_argument('--config', required=True); pilot.add_argument('--output', default='runs/pilots'); pilot.set_defaults(handler=command_pilot)
     freeze = sub.add_parser('freeze'); freeze.add_argument('--protocol', required=True); freeze.add_argument('--output'); freeze.set_defaults(handler=command_freeze)
+    confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.set_defaults(handler=command_confirm)
+    analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -309,3 +311,24 @@ def command_freeze(args: argparse.Namespace) -> int:
             'next_action':'execute the fixed protected schedule using this immutable manifest'})); return 0
     except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1
+
+
+def command_confirm(args: argparse.Namespace) -> int:
+    from .confirmation import run_confirmation
+    try:
+        result=run_confirmation(json.loads(Path(args.manifest).read_text()),Path(args.output),manifest_path=Path(args.manifest))
+        print(json.dumps(to_json_record(result),allow_nan=False))
+        return 1 if result.code in ('IMPLEMENTATION_INVALID','LOCAL_RESOURCE_LIMIT') else 0
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        print(json.dumps({'status':'failed','code':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
+
+
+def command_analyze(args: argparse.Namespace) -> int:
+    from .confirmation import analyze_run, run_record
+    try:
+        manifest=json.loads(Path(args.manifest).read_text())
+        path=Path(args.run) if args.run else Path(args.output)/run_record(manifest)['run_id']
+        result=analyze_run(path,manifest,manifest_path=Path(args.manifest))
+        print(json.dumps(result,allow_nan=False)); return 0
+    except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
+        print(json.dumps({'status':'failed','code':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
