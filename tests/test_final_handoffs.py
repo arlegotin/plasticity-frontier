@@ -235,7 +235,7 @@ class ExactExportHandoff(unittest.TestCase):
 
 
 class FullArtifactReplay(unittest.TestCase):
-    def producer(self, root, kind, *, failed=False):
+    def producer(self, root, kind, *, failed=False, output_override=False):
         from prepared_learning.robustness import make_manifest
         from prepared_learning.specs import load_config
         if kind=='robustness':
@@ -252,7 +252,7 @@ class FullArtifactReplay(unittest.TestCase):
         path = root/'config.json'
         path.write_text(json.dumps(config))
         command = [kind, input_flag, str(path)]
-        if kind=='robustness':
+        if kind=='robustness' or output_override:
             command += ['--output', str(root/'original')]
         process = root/'process.json'
         run = subprocess.run([sys.executable, '-m', 'prepared_learning', *command,
@@ -391,4 +391,75 @@ class FullArtifactReplay(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'output_artifact'):
                     worker({'manifest':manifest,'output':str(root/'replay')})
             self.assertEqual(list((root/'original').iterdir()),attempts)
+
+    def test_noncanonical_frontier_commands_reject_before_producer_dispatch(self):
+        from prepared_learning._replay import worker
+        from prepared_learning.records import content_hash
+        with tempfile.TemporaryDirectory(dir='runs') as tmp:
+            root=Path(tmp).resolve()
+            manifest,_=self.producer(root,'frontier')
+            absolute=str(root/'config.json')
+            relative=str((root/'config.json').relative_to(Path.cwd()))
+            point='configs/exploration/frontier.json'
+            variants=(
+                ['frontier','--config='+absolute],
+                ['frontier','--config='+relative],
+                ['frontier','--conf',absolute],
+                ['frontier','--conf='+relative],
+                ['frontier','--config',point,'--config',absolute],
+                ['frontier','--config',point,'--conf',relative],
+                ['frontier','--config',point,'--config='+absolute],
+                ['frontier','--certify','--config='+absolute],
+                ['frontier','--certify','--config',relative],
+                ['frontier','--config',point,'--cert'],
+                ['frontier','--config',point,'--certify','--certify'],
+                ['frontier','--output',str(root/'original'),'--config',relative],
+            )
+            before={str(p.relative_to(root/'original')):(p.read_bytes() if p.is_file() else None)
+                    for p in (root/'original').rglob('*')}
+            real_run=subprocess.run
+            dispatched=[]
+            def intercept(command,**kwargs):
+                if command[1:3]==['-m','prepared_learning']:
+                    dispatched.append(command)
+                    raise ValueError('producer reached forbidden boundary')
+                return real_run(command,**kwargs)
+            for index,command in enumerate(variants):
+                changed=copy.deepcopy(manifest)
+                del changed['inputs'][0]['output_artifact']
+                changed['inputs'][0]['command']=command
+                changed['input_order_sha256']=content_hash(changed['inputs'])
+                with self.subTest(command=command), patch('prepared_learning._replay._validate_source'), \
+                        patch('prepared_learning._replay.subprocess.run',side_effect=intercept):
+                    with self.assertRaisesRegex(ValueError,'canonical'):
+                        worker({'manifest':changed,'output':str(root/('rejected-'+str(index)))})
+                    self.assertEqual(dispatched,[])
+                    self.assertEqual(before,{str(p.relative_to(root/'original')):(p.read_bytes() if p.is_file() else None)
+                        for p in (root/'original').rglob('*')})
+
+    def test_canonical_point_frontier_and_declared_output_override_still_replay(self):
+        from prepared_learning._replay import worker
+        for certify in (False,True):
+            with self.subTest(certify=certify), tempfile.TemporaryDirectory(dir='runs') as tmp:
+                root=Path(tmp).resolve()
+                config=Path('configs/exploration/frontier.json')
+                command=['frontier','--config',str(config)]+(['--certify'] if certify else [])
+                run=subprocess.run([sys.executable,'-m','prepared_learning',*command],capture_output=True,text=True)
+                self.assertEqual(run.returncode,0,run.stderr+run.stdout)
+                raw=root/'raw.json';raw.write_text(run.stdout)
+                descriptor=root/'input.json'
+                descriptor.write_text(json.dumps({'kind':'diagnostic','fixture':True,'raw_path':str(raw),
+                    'command':command,'assets':[str(config.resolve()),str(Path('tests/fixtures/exact_cases.json').resolve())]}))
+                manifest=reporting.build_report_inputs([descriptor])
+                with patch('prepared_learning._replay._validate_source'):
+                    worker({'manifest':manifest,'output':str(root/'replay')})
+                self.assertEqual(json.loads((root/'replay/replay-worker.json').read_text())[0]['status'],'matched')
+        with tempfile.TemporaryDirectory(dir='runs') as tmp:
+            root=Path(tmp).resolve()
+            manifest,original=self.producer(root,'frontier',output_override=True)
+            before=original.read_bytes()
+            with patch('prepared_learning._replay._validate_source'):
+                worker({'manifest':manifest,'output':str(root/'replay')})
+            self.assertEqual(original.read_bytes(),before)
+            self.assertEqual(json.loads((root/'replay/replay-worker.json').read_text())[0]['status'],'matched')
 

@@ -187,6 +187,12 @@ def worker(request):
         else:
             command=entry['command']
             if not isinstance(command,list) or not command or any(not isinstance(s,str) for s in command): raise ValueError('recorded CLI argument list required')
+            if command[0]=='frontier' and 'output_artifact' not in entry:
+                canonical=(len(command) in (3,4) and command[1]=='--config'
+                           and command[2] and not command[2].startswith('-')
+                           and (len(command)==3 or command[3]=='--certify'))
+                if not canonical:
+                    raise ValueError('frontier replay requires canonical --config PATH with optional trailing --certify')
             relocated=[]
             for argument in command:
                 path=Path(argument)
@@ -197,8 +203,7 @@ def worker(request):
             command=relocated
             artifact_root=None
             if 'output_artifact' not in entry and (command[0]=='robustness' or
-                    (command[0]=='frontier' and '--config' in command and
-                     'grid' in _read(command[command.index('--config')+1]))):
+                    (command[0]=='frontier' and 'grid' in _read(command[2]))):
                 raise ValueError('file-producing diagnostics require output_artifact for full scientific replay')
             if 'output_artifact' in entry:
                 expected_process,expected_summary=_validate_output_artifact(entry,replay['source_root'])
