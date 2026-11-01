@@ -1,4 +1,6 @@
 evidence_id,work_package,evidence_path,sha256,status,notes
 G0-environment.json,WP00,runs/environment/environment.json,3b40b9dcbd0f4c58e2f8997d6ae8554294ee0e0c4fafd23f5f0b4883a961248b,observed,Local smoke evidence; not a scientific campaign
-G0-hardware.json,WP00,runs/environment/hardware.json,20ee6d8646f01659d32e58a9125e52dbf1cc04c9e72885d818982c4ad6e22690,observed,Local smoke evidence; not a scientific campaign
+G0-hardware.json,WP00,runs/environment/hardware.json,af24444013c8d710f919e4869efd510723da8dc16106f8403b01fb884c7cb0c2,observed,Local smoke evidence; not a scientific campaign
+G0-hardware_scalars.json,WP00,runs/environment/hardware_scalars.json,27bb7f94a3d925107702777d9ab2040401e362b349f2e270ca60d8d5dd1a4a10,observed,Local smoke evidence; not a scientific campaign
 G0-source_manifest.json,WP00,runs/environment/source_manifest.json,eb3aa37a9cb4fa1284e82a68f1d3b5d5f9d8461c31ddf89e3feec9023aaac724,observed,Local smoke evidence; not a scientific campaign
+G0-gate_decision.json,WP00,runs/environment/gate_decision.json,71395d8c9614dab64982076cf7319d9fd65602cef74873ef2fb711cec2e32f8f,observed,Local smoke evidence; not a scientific campaign

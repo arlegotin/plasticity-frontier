@@ -53,3 +53,27 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaises(ValueError): load_config(path)
         self.assertEqual(content_hash({'b': 2, 'a': 1}), content_hash({'a': 1, 'b': 2}))
         with self.assertRaises(ValueError): content_hash({'x': float('nan')})
+
+class ImmutableRecordTests(unittest.TestCase):
+    def test_nested_assets_are_copied_frozen_and_serializable(self):
+        import numpy as np
+        from prepared_learning.records import PriorAsset, content_hash, to_json_record
+        array = np.array([1., 2.]); metadata = {'nested': [{'values': array}]}
+        asset = PriorAsset(None, None, None, None, 'estimated', metadata, 'fixture')
+        identity = content_hash(to_json_record(asset))
+        array[0] = 9; metadata['nested'].append('changed')
+        self.assertEqual(asset.fit_metadata['nested'][0]['values'][0], 1.)
+        self.assertEqual(content_hash(to_json_record(asset)), identity)
+        with self.assertRaises(TypeError): asset.fit_metadata['nested'][0]['other'] = 1
+        with self.assertRaises((TypeError, AttributeError)): asset.fit_metadata['nested'].append('changed')
+        with self.assertRaises(ValueError): asset.fit_metadata['nested'][0]['values'][0] = 8
+        with self.assertRaises(ValueError): asset.fit_metadata['nested'][0]['values'].setflags(write=True)
+
+    def test_loaded_config_nested_values_cannot_be_mutated(self):
+        config = load(BASE); identity = content_hash(to_json_record_for_test(config))
+        with self.assertRaises(TypeError): config.workload['spectrum'][0] = 0.7
+        self.assertEqual(identity, content_hash(to_json_record_for_test(config)))
+
+def to_json_record_for_test(record):
+    from prepared_learning.records import to_json_record
+    return to_json_record(record)

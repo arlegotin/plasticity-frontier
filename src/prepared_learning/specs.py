@@ -20,7 +20,7 @@ def validate_config(config: RunConfig, confirmation: bool) -> None:
     if not positive_int(p.target_context_size) or not positive_int(p.input_dimension) or b.trainable_parameter_cap < p.input_dimension + b.depth - 1: raise ValueError('infeasible dimensions or parameter cap')
     if p.input_law != 'isotropic_gaussian' or p.loss_normalization != 'squared_error_over_2n' or p.task_second_moment_trace != 1: raise ValueError('invalid core preparation')
     spectrum = config.workload.get('spectrum'); sigma2 = config.workload.get('sigma2')
-    if not isinstance(spectrum, list) or len(spectrum) != p.input_dimension or not all(finite_nonnegative(x) for x in spectrum) or not math.isclose(sum(spectrum), 1.0, abs_tol=1e-12, rel_tol=0): raise ValueError('invalid spectrum')
+    if not isinstance(spectrum, (list, tuple)) or len(spectrum) != p.input_dimension or not all(finite_nonnegative(x) for x in spectrum) or not math.isclose(sum(spectrum), 1.0, abs_tol=1e-12, rel_tol=0): raise ValueError('invalid spectrum')
     if not finite_nonnegative(sigma2) or config.numerics.get('dtype') != 'float64': raise ValueError('invalid numeric contract')
     if config.access.get('selection') == 'learned_only' and (config.access.get('prior') == 'oracle' or 'oracle' in config.methods): raise ValueError('oracle asset in learned-only selection')
     if s.analysis_mode not in ('deterministic_frontier', 'conditional_risk_over_preparations', 'nested_task_simulation', 'fixed_prior_task_simulation'): raise ValueError('unknown analysis mode')

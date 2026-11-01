@@ -1,5 +1,7 @@
 """Shared immutable records; mathematical behavior belongs in later modules."""
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
+from collections.abc import Mapping
+from types import MappingProxyType
 from enum import Enum
 import hashlib
 import json
@@ -10,13 +12,29 @@ Array = NDArray[np.float64]
 Layers = tuple[Array, ...]
 JsonRecord = dict[str, object]
 
+def to_json_record(value):
+    """Return detached JSON-compatible values for immutable records and assets."""
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: to_json_record(getattr(value, field.name)) for field in fields(value)}
+    if isinstance(value, Mapping):
+        return {key: to_json_record(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)): return [to_json_record(item) for item in value]
+    if isinstance(value, np.ndarray): return to_json_record(value.tolist())
+    if isinstance(value, np.generic): return value.item()
+    if isinstance(value, Enum): return value.value
+    return value
+
 def content_hash(value: JsonRecord) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(to_json_record(value), sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
 
 def _freeze(value):
     if isinstance(value, np.ndarray):
-        result = np.array(value, copy=True); result.setflags(write=False); return result
-    if isinstance(value, tuple): return tuple(_freeze(v) for v in value)
+        if value.dtype.hasobject: raise ValueError('object arrays cannot be frozen')
+        # An immutable bytes buffer also prevents callers from re-enabling writes.
+        copied = np.ascontiguousarray(value)
+        return np.frombuffer(copied.tobytes(), dtype=copied.dtype).reshape(copied.shape)
+    if isinstance(value, Mapping): return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, (tuple, list)): return tuple(_freeze(v) for v in value)
     return value
 
 class ImmutableArrays:
@@ -27,40 +45,40 @@ class Status(str, Enum):
     RUNNING = 'running'; COMPLETED = 'completed'; INTERRUPTED = 'interrupted'; INVALID = 'invalid'; FAILED = 'failed'
 
 @dataclass(frozen=True)
-class BudgetSpec:
+class BudgetSpec(ImmutableArrays):
     depth: int; initialization_norm_cap: float; trainable_parameter_cap: int; learning_rate: float
 @dataclass(frozen=True)
-class PreparationSpec:
+class PreparationSpec(ImmutableArrays):
     target_context_size: int; input_dimension: int; input_law: str; loss_normalization: str; task_second_moment_trace: float
 @dataclass(frozen=True)
-class SamplePlan:
+class SamplePlan(ImmutableArrays):
     analysis_mode: str; outer_replicates: int | None; tasks_per_replicate: int | None; source_training_tasks: int | None; source_validation_tasks: int | None; source_block_size: int | None
 @dataclass(frozen=True)
-class RunConfig:
+class RunConfig(ImmutableArrays):
     schema_version: int; workload: dict; budget: BudgetSpec; preparation: PreparationSpec; numerics: dict; access: dict; methods: tuple; keys: dict; sample_plan: SamplePlan; confirmation: dict
 @dataclass(frozen=True)
-class SupportMetadata:
+class SupportMetadata(ImmutableArrays):
     policy: str; exact_zero_multiplicity: int; minimum_multiplicity: int; retained_indices: tuple; projections: tuple = (); truncations: tuple = ()
 @dataclass(frozen=True)
-class Resources:
+class Resources(ImmutableArrays):
     initialization_norm: float; trainable_parameters: int; stored_scalars: int; serialized_bytes: int
 @dataclass(frozen=True)
 class NetworkRealization(ImmutableArrays):
     layers: Layers; resources: Resources; support_metadata: SupportMetadata
 @dataclass(frozen=True)
-class GeometryDiagnostics:
+class GeometryDiagnostics(ImmutableArrays):
     residuals: JsonRecord; repairs: tuple
 @dataclass(frozen=True)
 class QPData(ImmutableArrays):
     constant: float; linear: Array; hessian: Array; A: Array; offset: Array
 @dataclass(frozen=True)
-class NumericDiagnostics:
+class NumericDiagnostics(ImmutableArrays):
     feasibility: object; kkt: object; dual: object; roundoff: object
 @dataclass(frozen=True)
-class BranchResult:
+class BranchResult(ImmutableArrays):
     branch: str; variables: object; metric: object; objective: float; diagnostics: NumericDiagnostics; status: str
 @dataclass(frozen=True)
-class FrontierResult:
+class FrontierResult(ImmutableArrays):
     F: BranchResult; Z: BranchResult; selected_branches: tuple; selection_status: str
 @dataclass(frozen=True)
 class Context(ImmutableArrays):
@@ -78,7 +96,7 @@ class PreparedState(ImmutableArrays):
 class AdaptedState(ImmutableArrays):
     coefficient: Array; layers: Layers | None; status: str; timing: object
 @dataclass(frozen=True)
-class SelectionResult:
+class SelectionResult(ImmutableArrays):
     selected_id: str; candidate_records: tuple; asset: PriorAsset | None
 class GateCode(str, Enum):
     IMPLEMENTATION_INVALID = 'IMPLEMENTATION_INVALID'
@@ -89,5 +107,5 @@ class GateCode(str, Enum):
     SUPPORTED_IN_SCOPE = 'SUPPORTED_IN_SCOPE'
 
 @dataclass(frozen=True)
-class GateDecision:
+class GateDecision(ImmutableArrays):
     code: str; evidence: object; rationale: str; next_action: str
