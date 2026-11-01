@@ -5,6 +5,12 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def runtime_fixture():
+    from prepared_learning.protocol import runtime_identity
+    return runtime_identity()
 from prepared_learning.records import content_hash
 
 
@@ -28,10 +34,13 @@ def draft_fixture():
 
 def evidence_fixture(draft):
     scientific = draft['scientific']
+    runtime=copy.deepcopy(runtime_fixture())
+    scientific['versions']['runtime_sha256']=content_hash(runtime)
+    draft['operational'].update(thread_policy=runtime['thread_environment'],blas_policy=content_hash(runtime['builds']))
     scientific['versions']['git_commit'] = 'b'*40
     scientific['versions']['candidate_sha256'] = content_hash({'selectors':scientific['selectors'], 'fitting_candidates':scientific['config']['numerics']['fitting_candidates']})
     values = [-.02, -.01, .01, .02]*10
-    return {'schema_version':1, 'phase':'exploration','status':'completed',
+    return {'schema_version':1, 'phase':'exploration','status':'completed','runtime_identity':runtime,
         'scientific_contract_sha256':content_hash({k:v for k,v in scientific.items() if k not in ('precision',)}),
         'blocks':[{'block_id':j,'differences':values,'source_keys':[f'{j}:{i}' for i in range(40*24)]} for j in range(2)],
         'tuning_resolution':'resolved', 'source_count_decision':{'status':'resolved','source_training_tasks':16,'source_validation_tasks':8,'source_block_size':4,'basis':'preparation_accuracy_and_cost','relative_error_target':.5},
@@ -39,7 +48,7 @@ def evidence_fixture(draft):
                         {'level':1,'source_training_tasks':16,'source_validation_tasks':8,'source_block_size':4,'replications':80,'relative_covariance_error_upper_diagnostic':.3,'validation_stability':'stable','preparation_seconds':.2}],
         'precision_diagnostics':{'status':'stable','planned_outer_replicates':400,'target_half_width':scientific['precision']['target_half_width'],'alpha':.05,'coverage':'approximate'},
         'calibration':{'status':'adequate','procedure':'student','moment_basis':'bounded_constrained_fixed_maps','replicates':1000,'sample_size':400,'coverage':.952,'reference':'centered_empirical_pilot'},
-        'resources':{'status':'feasible','preparation_seconds':.1,'estimated_total_seconds':40.,'peak_rss_bytes':1000,'available_memory_bytes':10000,'memory_budget_bytes':5000, 'scaling':[{'workload':'W1','preparation_seconds':.2,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}, {'workload':'W2','preparation_seconds':.3,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}]},
+        'resources':{'status':'feasible','preparation_seconds':.2,'max_seconds':200.,'replication_seconds':[.25]*80,'update_check_seconds':[.01]*80,'estimated_total_seconds':100.+.01*len(scientific['update_check_schedule']['outer_replications'])*scientific['update_check_schedule']['tasks_per_replication'],'peak_rss_bytes':1000,'available_memory_bytes':10000,'memory_budget_bytes':5000, 'scaling':[{'workload':'W1','preparation_seconds':.2,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}, {'workload':'W2','preparation_seconds':.3,'generation_seconds':.01,'peak_rss_bytes':1000,'failures':{}}]},
         'dirty_diff_sha256':None, 'excluded_roots':[42], 'versions': copy.deepcopy(scientific['versions'])}
 
 
@@ -110,3 +119,45 @@ class ProtocolTests(unittest.TestCase):
             frozen['protected_keys']['root_seed']=42
             frozen['protocol_sha256']=content_hash({k:v for k,v in frozen.items() if k!='protocol_sha256'})
             with self.assertRaises(ValueError): api.validate_frozen_protocol(frozen)
+
+    def test_rejects_infeasible_or_inconsistent_runtime_projection(self):
+        api=self.api()
+        for changes in ({'max_seconds':1.,'estimated_total_seconds':1e12},
+                        {'max_seconds':None},
+                        {'replication_seconds':[10.]*80,'estimated_total_seconds':40.,'max_seconds':100.},
+                        {'replication_seconds':[.001]*80,'estimated_total_seconds':.42,'max_seconds':1.}):
+            with self.subTest(changes=changes):
+                draft=draft_fixture(); evidence=evidence_fixture(draft)
+                evidence['resources'].update(changes)
+                with self.assertRaises(ValueError): api._validate_draft(draft,evidence)
+
+    def test_source_block_must_match_primary_adaptation_context(self):
+        api=self.api(); draft=draft_fixture(); evidence=evidence_fixture(draft)
+        draft['scientific']['config']['sample_plan']['source_block_size']=999
+        evidence['source_count_decision']['source_block_size']=999
+        for row in evidence['source_curve']: row['source_block_size']=999
+        evidence['scientific_contract_sha256']=api.scientific_contract(draft['scientific'])
+        with self.assertRaisesRegex(ValueError,'source block'): api._validate_draft(draft,evidence)
+
+    def test_runtime_identity_binds_executed_build_and_thread_policy(self):
+        api=self.api(); self.assertTrue(callable(getattr(api,'runtime_identity',None)))
+        from unittest.mock import patch
+        import scipy
+        identity=api.runtime_identity()
+        self.assertEqual(identity['distributions']['scipy']['version'],scipy.__version__)
+        self.assertEqual(len(identity['distributions']['scipy']['installed_files_sha256']),64)
+        self.assertTrue(identity['builds']['numpy']['Build Dependencies']['blas']['found'])
+        with patch.dict('os.environ',{'OMP_NUM_THREADS':'7'}): changed=api.runtime_identity()
+        self.assertNotEqual(content_hash(identity),content_hash(changed))
+        base,_=api.checkout_identity({'baseline':['B01'],'joint':['B03']},{})
+        with patch.dict('os.environ',{'OMP_NUM_THREADS':'7'}):
+            live,_=api.checkout_identity({'baseline':['B01'],'joint':['B03']},{})
+        self.assertEqual(base['dependency_lock_sha256'],live['dependency_lock_sha256'])
+        self.assertNotEqual(base['runtime_sha256'],live['runtime_sha256'])
+        with patch.object(scipy,'__version__','0.0.review-mismatch'):
+            with self.assertRaises(ValueError): api.checkout_identity({'baseline':['B01'],'joint':['B03']},{})
+
+    def test_runtime_hash_is_required_and_verified(self):
+        api=self.api(); draft=draft_fixture(); evidence=evidence_fixture(draft)
+        evidence['runtime_identity']={'tampered':'runtime'}
+        with self.assertRaises(ValueError): api._validate_draft(draft,evidence)

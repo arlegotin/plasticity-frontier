@@ -22,7 +22,7 @@ BASELINE = ('B01', 'B02', 'B11:Z')
 JOINT = ('B03', 'B04', 'B11:F', 'B11:Z')
 HASH_FIELDS = ('code_sha256', 'dependency_lock_sha256', 'analysis_sha256',
                'generator_sha256', 'candidate_sha256', 'selection_sha256', 'evaluation_sha256',
-               'source_manifest_sha256', 'preprocessing_sha256')
+               'source_manifest_sha256', 'preprocessing_sha256', 'runtime_sha256')
 
 
 def config_from_record(data):
@@ -57,6 +57,8 @@ def _validate_draft(draft, evidence):
         for name in ('outer_replicates','tasks_per_replicate','source_training_tasks','source_validation_tasks','source_block_size'):
             if name in required: _positive(counts[name],name)
             elif counts[name] is not None: raise ValueError(f'{name} is inapplicable for {mode}')
+        if mode=='conditional_risk_over_preparations' and counts['source_block_size']!=config.preparation.target_context_size:
+            raise ValueError('source block size must match primary adaptation context')
         if config.access.get('prior') != 'estimated' or config.access.get('selection') != 'learned_only':
             raise ValueError('this learned protocol requires observed-source information access')
         selectors=s['selectors']
@@ -90,9 +92,13 @@ def _validate_draft(draft, evidence):
         if not re.fullmatch('[0-9a-f]{40}|[0-9a-f]{64}',str(versions['git_commit'])): raise ValueError('invalid code revision')
         candidate=content_hash({'selectors':selectors,'fitting_candidates':s['config']['numerics']['fitting_candidates']})
         if versions['candidate_sha256']!=candidate: raise ValueError('candidate hash mismatch')
+        runtime=evidence['runtime_identity']
+        if versions['runtime_sha256']!=content_hash(runtime): raise ValueError('executed runtime identity mismatch')
+        validate_runtime_identity(runtime)
         op=draft['operational']; _positive(op['batch_size'],'batch size')
         _finite(op['reserve_memory_fraction'],'memory reserve',.5)
         if op['reserve_memory_fraction']>=1: raise ValueError('invalid memory reserve')
+        if op['thread_policy']!=runtime['thread_environment'] or op['blas_policy']!=content_hash(runtime['builds']): raise ValueError('runtime timing stratum mismatch')
         h=s['precision']['target_half_width']; _finite(h,'precision')
         if h<=0: raise ValueError('positive precision required')
         if evidence.get('dirty_diff_sha256') is not None: raise ValueError('pilot code must be committed before freezing')
@@ -143,6 +149,12 @@ def _validate_draft(draft, evidence):
             if row['preparation_seconds']<=0 or row['failures']: raise ValueError('incomplete scaling calibration')
         if resource['status']!='feasible': raise ValueError('unresolved local feasibility')
         for key in ('preparation_seconds','estimated_total_seconds','peak_rss_bytes','available_memory_bytes','memory_budget_bytes'): _finite(resource[key],key)
+        _finite(resource['max_seconds'],'runtime budget')
+        projection=project_runtime(resource,counts['outer_replicates'],schedule)
+        if resource['max_seconds']<=0 or projection>resource['max_seconds'] or not math.isclose(resource['estimated_total_seconds'],projection,rel_tol=1e-12,abs_tol=1e-9): raise ValueError('runtime projection or declared budget infeasible')
+        if len(resource['replication_seconds'])!=sum(len(b['differences']) for b in blocks): raise ValueError('runtime observations do not match pilot schedule')
+        if not math.isclose(resource['preparation_seconds'],chosen['preparation_seconds'],rel_tol=1e-12): raise ValueError('source preparation timing mismatch')
+        if math.fsum(resource['replication_seconds'])/len(resource['replication_seconds'])<resource['preparation_seconds']: raise ValueError('total replication cost is below its preparation component')
         if resource['preparation_seconds']<=0 or resource['estimated_total_seconds']<=0 or not 0<resource['peak_rss_bytes']<=resource['memory_budget_bytes']<=resource['available_memory_bytes']*(1-op['reserve_memory_fraction']): raise ValueError('memory/time feasibility unverified')
     except (KeyError,TypeError,AttributeError) as exc:
         raise ValueError(f'incomplete protocol/evidence: {exc}') from exc
@@ -189,7 +201,7 @@ def validate_frozen_protocol(manifest: JsonRecord) -> None:
     except (KeyError,TypeError) as exc: raise ValueError('incomplete frozen protocol') from exc
 
 
-def checkout_identity(selectors, fitting_candidates):
+def checkout_identity(selectors, fitting_candidates, *, runtime=None):
     """Hash actual checked-out scientific source and dependency bytes."""
     root=Path(__file__).resolve().parents[2]
     def digest(path): return hashlib.sha256((root/path).read_bytes()).hexdigest()
@@ -199,7 +211,84 @@ def checkout_identity(selectors, fitting_candidates):
     untracked=subprocess.check_output(['git','ls-files','--others','--exclude-standard'],cwd=root,text=True).splitlines()
     dirty=bool(diff or untracked)
     dirty_hash=content_hash({'diff_sha256':hashlib.sha256(diff).hexdigest(),'untracked':{p:digest(Path(p)) for p in untracked if (root/p).is_file()}}) if dirty else None
-    return {'git_commit':commit,'code_sha256':content_hash(source),'dependency_lock_sha256':digest(Path('requirements.lock.txt')),
+    runtime=runtime_identity() if runtime is None else runtime
+    validate_runtime_identity(runtime)
+    return {'runtime_sha256':content_hash(runtime),'git_commit':commit,'code_sha256':content_hash(source),'dependency_lock_sha256':digest(Path('requirements.lock.txt')),
             'analysis_sha256':digest(Path('src/prepared_learning/analysis.py')),'generator_sha256':digest(Path('src/prepared_learning/tasks.py')),
             'evaluation_sha256':digest(Path('src/prepared_learning/evaluation.py')),'selection_sha256':digest(Path('src/prepared_learning/selection.py')),'candidate_sha256':content_hash({'selectors':selectors,'fitting_candidates':fitting_candidates}),
             'source_manifest_sha256':digest(Path('source_manifest.json')),'preprocessing_sha256':content_hash({'preprocessing':'identity'})},dirty_hash
+
+
+THREAD_ENVIRONMENT = ('OMP_NUM_THREADS','OMP_DYNAMIC','OMP_THREAD_LIMIT','OPENBLAS_NUM_THREADS',
+                      'MKL_NUM_THREADS','MKL_DYNAMIC','VECLIB_MAXIMUM_THREADS','BLIS_NUM_THREADS',
+                      'GOTO_NUM_THREADS','NUMEXPR_NUM_THREADS')
+
+
+def runtime_identity():
+    """Fingerprint executed numerical packages/builds and actual thread controls.
+
+    All installed numerical Python/native-library bytes are hashed, not merely
+    wheel RECORD declarations. System BLAS is identified by vendor build metadata
+    plus the operating-system build. Unset thread variables are explicit nulls;
+    no claim about a vendor's dynamically chosen worker count is inferred.
+    """
+    import importlib.metadata
+    import platform
+    import sys
+    import numpy
+    import scipy
+    root=Path(__file__).resolve().parents[2]
+    locked={line.split('==')[0]:line.split('==')[1] for line in (root/'requirements.lock.txt').read_text().splitlines() if line and not line.startswith('#')}
+    distributions={}
+    for name,module in (('numpy',numpy),('scipy',scipy)):
+        dist=importlib.metadata.distribution(name)
+        if module.__version__!=dist.version or dist.version!=locked.get(name): raise ValueError(f'executed {name} does not match dependency lock')
+        installed={}
+        for file in dist.files or ():
+            if str(file).endswith(('.py','.so','.dylib','.dll','.pyd')):
+                path=Path(dist.locate_file(file))
+                installed[str(file)]=hashlib.sha256(path.read_bytes()).hexdigest()
+        if not installed: raise ValueError(f'cannot fingerprint installed {name}')
+        distributions[name]={'version':dist.version,'installed_files_sha256':content_hash(installed),
+            'metadata_sha256':hashlib.sha256((dist.read_text('METADATA') or '').encode()).hexdigest(),
+            'record_sha256':hashlib.sha256((dist.read_text('RECORD') or '').encode()).hexdigest()}
+    system_build=subprocess.check_output(['sw_vers','-buildVersion'],text=True).strip() if sys.platform=='darwin' else platform.release()
+    return {'schema_version':1,'python':{'version':sys.version,'implementation':platform.python_implementation(),
+                'cache_tag':sys.implementation.cache_tag,'compiler':platform.python_compiler(),'build':list(platform.python_build()),
+                'executable_sha256':hashlib.sha256(Path(sys.executable).resolve().read_bytes()).hexdigest()},
+            'platform':{'system':platform.system(),'release':platform.release(),'machine':platform.machine(),'build':system_build},
+            'distributions':distributions,'builds':{'numpy':numpy.show_config(mode='dicts'),'scipy':scipy.show_config(mode='dicts')},
+            'thread_environment':{name:os.environ.get(name) for name in THREAD_ENVIRONMENT},
+            'thread_count_interpretation':'actual environment controls; unset means vendor defaults, effective dynamic worker count is not measured'}
+
+
+def validate_runtime_identity(runtime):
+    try:
+        if runtime['schema_version']!=1: raise ValueError('invalid runtime identity')
+        for name in ('version','implementation','cache_tag','compiler','build'):
+            if not runtime['python'][name]: raise ValueError('missing Python build identity')
+        if not re.fullmatch('[0-9a-f]{64}',runtime['python']['executable_sha256']): raise ValueError('invalid interpreter hash')
+        if not all(runtime['platform'][name] for name in ('system','release','machine','build')): raise ValueError('missing OS build identity')
+        for name in ('numpy','scipy'):
+            distribution=runtime['distributions'][name]
+            if not distribution['version']: raise ValueError('missing executed dependency version')
+            for key in ('installed_files_sha256','metadata_sha256','record_sha256'):
+                if not re.fullmatch('[0-9a-f]{64}',distribution[key]): raise ValueError('invalid installed dependency hash')
+            dependencies=runtime['builds'][name]['Build Dependencies']
+            if not dependencies['blas']['found'] or not dependencies['lapack']['found']: raise ValueError('unidentified numerical build')
+        if set(runtime['thread_environment'])!=set(THREAD_ENVIRONMENT) or any(v is not None and not isinstance(v,str) for v in runtime['thread_environment'].values()): raise ValueError('missing actual thread controls')
+    except (KeyError,TypeError,AttributeError) as exc: raise ValueError('incomplete runtime identity') from exc
+
+
+def project_runtime(resources, outer_count, update_schedule):
+    """Recompute a mean cost projection for the exact frozen outer/update schedule."""
+    _positive(outer_count,'outer count')
+    for key in ('replication_seconds','update_check_seconds'):
+        values=resources[key]
+        if not isinstance(values,list) or len(values)<2: raise ValueError('measured runtime repetitions required')
+        for value in values:
+            _finite(value,key)
+            if value<=0: raise ValueError('positive measured runtime required')
+    base=math.fsum(resources['replication_seconds'])/len(resources['replication_seconds'])
+    check=math.fsum(resources['update_check_seconds'])/len(resources['update_check_seconds'])
+    return base*outer_count+check*len(update_schedule['outer_replications'])*update_schedule['tasks_per_replication']

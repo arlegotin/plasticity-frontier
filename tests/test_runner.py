@@ -282,3 +282,49 @@ class ReviewRegressionTests(unittest.TestCase):
                     reopened.commit_block('x', rows, {})
                 else: self.assertEqual(reopened.committed_keys(), {'x'})
                 self.assertEqual(reopened.read_records('task_metrics'), rows)
+
+class LifecycleTests(unittest.TestCase):
+    def test_finalize_is_durable_idempotent_and_seals_blocks(self):
+        import json
+        self.assertTrue(callable(getattr(RunStore,'finalize',None)))
+        with tempfile.TemporaryDirectory() as root:
+            store=RunStore.create(Path(root),RUN); store.commit_block('x',[task_row('a'),task_row('b')],{})
+            store.finalize('completed'); store.finalize('completed')
+            self.assertEqual(json.loads((store.path/'run.json').read_text())['status'],'completed')
+            reopened=RunStore.open(store.path,IDENTITY)
+            self.assertEqual(len(reopened.read_records('task_metrics')),2)
+            with self.assertRaises(ValueError): reopened.commit_block('late',[],{})
+            with self.assertRaises(ValueError): reopened.finalize('failed')
+
+    def test_finalize_recovers_interrupted_metadata_publication(self):
+        import json
+        from unittest.mock import patch
+        import prepared_learning.runner as runner
+        self.assertTrue(callable(getattr(RunStore,'finalize',None)))
+        for destination in ('run.json','run.sha256'):
+            with self.subTest(destination=destination),tempfile.TemporaryDirectory() as root:
+                store=RunStore.create(Path(root),RUN)
+                real=runner.os.replace
+                def interrupt(source,target):
+                    if Path(target).name==destination: raise OSError('injected lifecycle interruption')
+                    return real(source,target)
+                with patch.object(runner.os,'replace',side_effect=interrupt):
+                    with self.assertRaises(OSError): store.finalize('completed')
+                reopened=RunStore.open(store.path,IDENTITY)
+                self.assertEqual(json.loads((reopened.path/'run.json').read_text())['status'],'completed')
+                self.assertEqual(reopened.committed_keys(),set())
+
+    def test_terminal_metadata_corruption_and_missing_receipt_are_rejected(self):
+        import json
+        self.assertTrue(callable(getattr(RunStore,'finalize',None)))
+        for corrupt in ('metadata','receipt','initial_and_receipt','late_block'):
+            with self.subTest(corrupt=corrupt),tempfile.TemporaryDirectory() as root:
+                store=RunStore.create(Path(root),RUN); store.finalize('completed')
+                if corrupt=='metadata':
+                    run=json.loads((store.path/'run.json').read_text()); run['pairing_spec']={}
+                    (store.path/'run.json').write_text(json.dumps(run))
+                elif corrupt=='receipt': (store.path/'terminal.json').unlink()
+                elif corrupt=='initial_and_receipt':
+                    (store.path/'terminal.json').unlink(); (store.path/'initial_run.json').unlink()
+                else: (store.path/'journal'/'unexpected').write_text('{}')
+                with self.assertRaises(ValueError): RunStore.open(store.path,IDENTITY)

@@ -241,7 +241,7 @@ def calibration_diagnostics(blocks, procedure, resamples, seed, planned_count=No
 
 
 def _draft_for_pilot(config, result, versions):
-    from .records import to_json_record
+    from .records import to_json_record, content_hash
     from .protocol import BASELINE, JOINT
     from .tasks import RNG_SPEC
     record=to_json_record(config)
@@ -260,7 +260,8 @@ def _draft_for_pilot(config, result, versions):
         'precision':{'target_half_width':float(INITIAL_HALF_WIDTH)},'generator':RNG_SPEC,
         'versions':versions,'stop_rule':'fixed_counts_invariants_only',
         'assets':{'prior':'refit_each_replication','preprocessing':'identity'}},
-        'operational':{'batch_size':1,'reserve_memory_fraction':.5}}
+        'operational':{'batch_size':1,'reserve_memory_fraction':.5,'thread_policy':result['runtime_identity']['thread_environment'],
+                       'blas_policy':content_hash(result['runtime_identity']['builds'])}}
 
 
 
@@ -308,7 +309,7 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     from pathlib import Path
     from .records import content_hash, to_json_record
     from .specs import validate_config
-    from .protocol import BASELINE, JOINT, checkout_identity, scientific_contract
+    from .protocol import BASELINE, JOINT, checkout_identity, scientific_contract, runtime_identity, project_runtime
     from .runner import RunStore
     validate_config(config,False)
     sample=config.sample_plan
@@ -330,22 +331,25 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     if not workloads or workloads[0]!='W0' or len(set(workloads))!=len(workloads) or set(workloads)-{'W0','W1','W2'}: raise ValueError('calibrate W0 before representative W1/W2')
     if type(resamples)!=int or resamples<100 or not math.isfinite(threshold) or threshold<=0 or not math.isfinite(max_seconds) or max_seconds<=0: raise ValueError('invalid pilot policy')
     selectors={'baseline':list(BASELINE),'joint':list(JOINT)}
-    versions,dirty=checkout_identity(selectors,to_json_record(config.numerics.get('fitting_candidates',{})))
+    runtime=runtime_identity()
+    versions,dirty=checkout_identity(selectors,to_json_record(config.numerics.get('fitting_candidates',{})),runtime=runtime)
     available=_available_memory(); budget=available//2
     if available<=0: raise ValueError('available memory measurement required')
     started=time.perf_counter_ns()
     run_id='pilot-'+content_hash({'config':config,'versions':versions,'started_ns':started})[:20]
     run={'schema_version':1,'run_id':run_id,'phase':'exploration','git_commit':versions['git_commit'],'dirty_diff_sha256':dirty,
          'scientific_config_sha256':content_hash(config),'operational_config_sha256':content_hash({'memory_budget_bytes':budget,'batch_size':1}),
-         'analysis_mode':sample.analysis_mode,'protocol_sha256':content_hash({'exploratory_schedule':settings,'config':config}),
+         'analysis_mode':sample.analysis_mode,'protocol_sha256':content_hash({'exploratory_schedule':settings,'config':config,'runtime_sha256':versions['runtime_sha256']}),
          'dependency_lock_sha256':versions['dependency_lock_sha256'],'hardware_record':'hardware.json',
          'data_manifest_sha256':None,'prior_asset_sha256':None,'information_access':'estimated',
          'timing_boundaries':{'generation':'observations only','preparation':'all candidate fitting and held-out validation','serialization':'candidate JSON and immutable block publication'},
-         'status':'running','pairing_spec':{'preparation_risks':{'unit_fields':['outer_replication'],'method_ids':['baseline','joint']}}}
+         'status':'running','thread_policy':runtime['thread_environment'],'blas_policy':content_hash(runtime['builds']),
+         'runtime_sha256':versions['runtime_sha256'],'pairing_spec':{'preparation_risks':{'unit_fields':['outer_replication'],'method_ids':['baseline','joint']}}}
     store=RunStore.create(Path(output),run)
     _write_json(store.path/'hardware.json',{'platform':platform.platform(),'available_memory_bytes':available,'memory_budget_bytes':budget,
         'peak_rss_unit':'bytes','peak_scope':'cumulative process high water; no per-method peak claim',
-        'power_thermal_condition':'unmeasured','thread_policy':'inherited environment; same process for all timings'})
+        'power_thermal_condition':'unmeasured','runtime_identity':runtime,'runtime_sha256':versions['runtime_sha256'],
+        'thread_policy':runtime['thread_environment'],'blas_policy':content_hash(runtime['builds'])})
     all_results=[]; curves=[]; block_rows={}; failures=[]; stop=None; outer=0
     for level,(training,validation) in enumerate(zip(levels,validations)):
         local=replace(config,sample_plan=replace(sample,source_training_tasks=training,source_validation_tasks=validation))
@@ -387,7 +391,7 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
                     'prediction_boundary':'candidate validation plus separately measured fixed diagnostic prediction','serialization_boundary':'candidate JSON and RunStore block',
                     'repetitions':1,'wall_time_ns':result['generation_ns']+result['preparation_ns']+serialization_ns+result['diagnostic_generation_ns']+result['diagnostic_adaptation_ns']+result['diagnostic_prediction_ns'],
                     'peak_rss':result['peak_rss_bytes'],'peak_rss_unit':'bytes','power_thermal_condition':'unmeasured',
-                    'timing_stratum':'CPU float64 inherited BLAS/thread policy','gpu_metadata':None,'null_reasons':{'gpu_metadata':'CPU only'},
+                    'timing_stratum':'CPU float64 runtime '+versions['runtime_sha256'],'gpu_metadata':None,'null_reasons':{'gpu_metadata':'CPU only'},
                     'generation_ns':result['generation_ns'],'preparation_ns':result['preparation_ns'],'serialization_ns':serialization_ns,
                     'diagnostic_adaptation_ns':result['diagnostic_adaptation_ns'],'diagnostic_prediction_ns':result['diagnostic_prediction_ns'],'diagnostic_generation_ns':result['diagnostic_generation_ns']}
                 store.commit_block(f'timing-{outer}',[timing],{})
@@ -428,9 +432,12 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
     stable=plan['decision']=='provisional' and calibration['status']=='adequate'
     precision={'status':'stable' if stable else 'extend_pilot','planned_outer_replicates':plan['outer_replicates'],
         'target_half_width':float(INITIAL_HALF_WIDTH),'alpha':.05,'coverage':'approximate','planning_details':plan}
-    cost_values=[(r['generation_ns']+r['preparation_ns']+r['serialization_ns']+r['diagnostic_generation_ns']+r['diagnostic_adaptation_ns']+r['diagnostic_prediction_ns'])/1e9 for r in all_results if r['level']==selected_level]
+    cost_values=[(r['generation_ns']+r['preparation_ns']+r['serialization_ns'])/1e9 for r in all_results if r['level']==selected_level]
+    check_costs=[(r['diagnostic_generation_ns']+r['diagnostic_adaptation_ns']+r['diagnostic_prediction_ns'])/1e9 for r in all_results if r['level']==selected_level and len(r['selected'])==2]
+    update_schedule={'outer_replications':[0],'tasks_per_replication':2}
     mean_cost=float(np.mean(cost_values)) if cost_values else None
-    count=plan['outer_replicates']; estimate=mean_cost*count if mean_cost is not None and count is not None else None
+    count=plan['outer_replicates']
+    estimate=project_runtime({'replication_seconds':cost_values,'update_check_seconds':check_costs},count,update_schedule) if count is not None and len(cost_values)>=2 and len(check_costs)>=2 else None
     scaling=[]
     if not stop:
         for index,name in enumerate(workloads[1:]):
@@ -449,13 +456,14 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
             outer+=1
     resource={'status':'feasible' if estimate is not None and estimate<=max_seconds and _rss_bytes()<=budget and not stop else 'unresolved',
         'preparation_seconds':chosen['preparation_seconds'] if chosen else None,'estimated_total_seconds':estimate,
-        'estimated_total_seconds_interval':[float(np.quantile(cost_values,.1))*count,float(np.quantile(cost_values,.9))*count] if count and cost_values else None,
+        'replication_seconds':cost_values,'update_check_seconds':check_costs,
+        'estimated_total_seconds_interval':[float(np.quantile(cost_values,q))*count+float(np.quantile(check_costs,q))*2 for q in (.1,.9)] if count and cost_values and check_costs else None,
         'estimate_qualification':'empirical 10–90% per-replication throughput range, not a runtime confidence interval',
         'peak_rss_bytes':_rss_bytes(),'available_memory_bytes':available,'memory_budget_bytes':budget,
         'rss_scope':'cumulative process high water, not method-isolated','max_seconds':max_seconds,
         'measured_total_seconds':(time.perf_counter_ns()-started)/1e9,'scaling':scaling}
-    result={'schema_version':1,'phase':'exploration','status':'completed' if not stop and not failures else 'incomplete',
-        'run_path':str(store.path),'versions':versions,'dirty_diff_sha256':dirty,'excluded_roots':[root],
+    result={'schema_version':1,'phase':'exploration','status':'failed' if failures else ('incomplete' if stop else 'completed'),
+        'run_path':str(store.path),'runtime_identity':runtime,'versions':versions,'dirty_diff_sha256':dirty,'excluded_roots':[root],
         'blocks':pilot_blocks,'uncertainty':uncertainty,'source_curve':curves,'source_count_decision':source_decision,
         'precision_diagnostics':precision,'calibration':calibration,'resources':resource,
         'tuning_resolution':'resolved' if all_results and all(r['tuning_resolution']=='resolved' for r in all_results) else 'unresolved',
@@ -495,4 +503,5 @@ def run_pilot(config: RunConfig, output: Path) -> JsonRecord:
         'decision':code,'rationale':'; '.join(reasons) or 'pilot diagnostics and resource criteria met; freeze still required',
         'affected_claim_ids':['primary_learned_mechanism'],'next_action':result['gate']['next_action'],
         'methodological_amendment_required':False,'fresh_confirmation_required':True}],{})
+    store.finalize(result['status'])
     return result

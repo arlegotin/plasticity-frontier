@@ -45,25 +45,28 @@ class RunStore:
 
     @classmethod
     def create(cls, root: Path, run: JsonRecord) -> "RunStore":
+        run={**run,'lifecycle_version':1}
         validate_run_record(run)
         if not isinstance(run['run_id'], str) or not run['run_id'] or Path(run['run_id']).name != run['run_id'] or run['run_id'] in ('.', '..'): raise ValueError('invalid run id')
         path = Path(root) / run['run_id']; path.mkdir(parents=True, exist_ok=False)
-        (path / 'blocks').mkdir(); (path / 'journal').mkdir(); _write(path / 'run.json', _bytes(run)); _write(path / 'run.sha256', _hash(path / 'run.json').encode()); _syncdir(path)
+        (path / 'blocks').mkdir(); (path / 'journal').mkdir(); _write(path / 'run.json', _bytes(run)); _write(path / 'run.sha256', _hash(path / 'run.json').encode());
+        _write(path / 'initial_run.json', _bytes({'run':run,'sha256':_hash(path / 'run.json')})); _syncdir(path)
         return cls(path)
 
     @classmethod
     def open(cls, path: Path, expected_identity: JsonRecord) -> "RunStore":
         path = Path(path)
-        if _hash(path / 'run.json') != (path / 'run.sha256').read_text(): raise ValueError('run metadata corrupt')
-        run = json.loads((path / 'run.json').read_text())
-        if any(k not in expected_identity or expected_identity[k] != run.get(k) for k in IDENTITY_FIELDS): raise ValueError('run identity mismatch')
-        if expected_identity.get('operational_config_sha256', run['operational_config_sha256']) != run['operational_config_sha256'] and any(k not in run or k not in expected_identity for k in ('thread_policy', 'blas_policy')):
-            raise ValueError('operational changes require declared thread policy')
-        for key in ('thread_policy', 'blas_policy'):
-            if key in expected_identity and expected_identity[key] != run.get(key):
-                raise ValueError('thread or BLAS changes require verified equivalence evidence; unsupported')
         obj = cls(path)
         with obj._lock():
+            obj._recover_lifecycle()
+            if _hash(path/'run.json')!=(path/'run.sha256').read_text(): raise ValueError('run metadata corrupt')
+            run = json.loads((path / 'run.json').read_text())
+            if any(k not in expected_identity or expected_identity[k] != run.get(k) for k in IDENTITY_FIELDS): raise ValueError('run identity mismatch')
+            if expected_identity.get('operational_config_sha256', run['operational_config_sha256']) != run['operational_config_sha256'] and any(k not in run or k not in expected_identity for k in ('thread_policy', 'blas_policy')):
+                raise ValueError('operational changes require declared thread policy')
+            for key in ('thread_policy', 'blas_policy'):
+                if key in expected_identity and expected_identity[key] != run.get(key):
+                    raise ValueError('thread or BLAS changes require verified equivalence evidence; unsupported')
             obj._reconcile()
             operational = expected_identity.get('operational_config_sha256')
             if operational is not None and operational != run['operational_config_sha256']:
@@ -81,6 +84,63 @@ class RunStore:
             try: yield
             finally: fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
+    def _replace_metadata(self, name, data):
+        fd,pending=tempfile.mkstemp(prefix='.lifecycle-',dir=self.path)
+        try:
+            with os.fdopen(fd,'wb') as file:
+                file.write(data); file.flush(); os.fsync(file.fileno())
+            os.replace(pending,self.path/name); _syncdir(self.path)
+        finally:
+            if Path(pending).exists(): Path(pending).unlink()
+
+    def _recover_lifecycle(self):
+        """Replay only a verified terminal receipt, never repair arbitrary metadata."""
+        initial_path=self.path/'initial_run.json'; terminal_path=self.path/'terminal.json'
+        if not initial_path.exists():
+            if terminal_path.exists() or json.loads((self.path/'run.json').read_text()).get('lifecycle_version') is not None:
+                raise ValueError('lifecycle initial identity is missing')
+            return  # Read-only compatibility with pre-lifecycle stores.
+        try:
+            initial=json.loads(initial_path.read_text()); initial_bytes=_bytes(initial['run'])
+            if hashlib.sha256(initial_bytes).hexdigest()!=initial['sha256']: raise ValueError('initial metadata corrupt')
+            validate_run_record(initial['run'])
+            current=(self.path/'run.json').read_bytes(); checksum=(self.path/'run.sha256').read_text()
+            if not terminal_path.exists():
+                if current!=initial_bytes or checksum!=initial['sha256']: raise ValueError('run metadata changed without lifecycle receipt')
+                return
+            receipt=json.loads(terminal_path.read_text()); payload=receipt['payload']
+            if hashlib.sha256(_bytes(payload)).hexdigest()!=receipt['sha256'] or payload['initial_sha256']!=initial['sha256']: raise ValueError('terminal receipt corrupt')
+            terminal=payload['run']; validate_run_record(terminal)
+            if terminal['status'] not in ('completed','incomplete','failed','invalid','interrupted') or {**terminal,'status':initial['run']['status']}!=initial['run']: raise ValueError('terminal receipt changes scientific metadata')
+            actual={p.name:_hash(p) for p in (self.path/'journal').iterdir() if not p.name.startswith('.pending-')}
+            if actual!=payload['block_receipts']: raise ValueError('terminal block inventory changed')
+            terminal_bytes=_bytes(terminal); terminal_hash=hashlib.sha256(terminal_bytes).hexdigest()
+            if current not in (initial_bytes,terminal_bytes) or checksum not in (initial['sha256'],terminal_hash): raise ValueError('run metadata corrupt')
+        except (OSError,KeyError,TypeError,json.JSONDecodeError) as exc:
+            raise ValueError('corrupt lifecycle metadata') from exc
+        if current!=terminal_bytes: self._replace_metadata('run.json',terminal_bytes)
+        if checksum!=terminal_hash: self._replace_metadata('run.sha256',terminal_hash.encode())
+
+    def finalize(self, status: str) -> None:
+        """Durably seal blocks and publish terminal status under the store lock.
+
+        The receipt is committed first; interruption while replacing the two
+        metadata files is recovered from their verified initial/final versions.
+        """
+        if status not in ('completed','incomplete','failed','invalid','interrupted'): raise ValueError('invalid terminal status')
+        with self._lock():
+            self._reconcile()
+            run=json.loads((self.path/'run.json').read_text())
+            if (self.path/'terminal.json').exists():
+                if run['status']!=status: raise ValueError('terminal status is immutable')
+                return
+            if not (self.path/'initial_run.json').exists(): raise ValueError('legacy store has no lifecycle identity; retain unchanged')
+            payload={'initial_sha256':_hash(self.path/'run.json'),'run':{**run,'status':status},
+                     'block_receipts':{p.name:_hash(p) for p in (self.path/'journal').iterdir()}}
+            receipt={'payload':payload,'sha256':hashlib.sha256(_bytes(payload)).hexdigest()}
+            self._replace_metadata('terminal.json',_bytes(receipt))
+            self._recover_lifecycle()
+
     def _verify(self, block, marker=None):
         try:
             if marker is None: marker = json.loads((block / 'commit.json').read_text())
@@ -95,6 +155,7 @@ class RunStore:
         except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc: raise ValueError('corrupt committed block') from exc
 
     def _reconcile(self):
+        self._recover_lifecycle()
         if _hash(self.path / 'run.json') != (self.path / 'run.sha256').read_text(): raise ValueError('run metadata corrupt')
         blocks = self.path / 'blocks'; journal = self.path / 'journal'
         for entry in journal.iterdir():
@@ -165,6 +226,7 @@ class RunStore:
     def commit_block(self, block_key: str, records: Sequence[JsonRecord], assets: Mapping[str, Array]) -> None:
         with self._lock():
             self._reconcile()
+            if (self.path/'terminal.json').exists(): raise ValueError('terminal run cannot accept new blocks')
             self._commit_block(block_key, list(records), assets)
 
     def _commit_block(self, block_key, records, assets):

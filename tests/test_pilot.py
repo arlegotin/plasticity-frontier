@@ -74,6 +74,8 @@ class PilotIntegrationTests(unittest.TestCase):
             self.assertTrue(all(row['risk_evaluator_version']==evaluator_hash for row in rows))
             timings=RunStore(path).read_records('timing_blocks')
             self.assertTrue(all(r['diagnostic_adaptation_ns']>0 and r['diagnostic_prediction_ns']>0 and r['serialization_ns']>0 for r in timings))
+            self.assertEqual(json.loads((path/'run.json').read_text())['status'],result['status'])
+            self.assertEqual(json.loads((path/'hardware.json').read_text())['runtime_identity'],result['runtime_identity'])
             self.assertTrue((path/'pilot_report.md').is_file())
             self.assertTrue((path/'power_precision.json').is_file())
             self.assertEqual(json.loads((path/'pilot.json').read_text())['gate'],result['gate'])
@@ -181,3 +183,18 @@ class PilotIntegrationTests(unittest.TestCase):
         curves[2]['relative_covariance_error_upper_diagnostic']=.8
         _,status=pilot.choose_source_level(curves,.5,60)
         self.assertEqual(status,'extend_pilot')
+
+
+    def test_resource_stop_publishes_incomplete_terminal_run(self):
+        import json
+        import tempfile
+        from dataclasses import replace
+        from pathlib import Path
+        from prepared_learning.pilot import run_pilot
+        config=self.config(); numerics=dict(config.numerics)
+        numerics['pilot']={**dict(numerics['pilot']),'max_seconds':1e-12}
+        with tempfile.TemporaryDirectory() as root:
+            result=run_pilot(replace(config,numerics=numerics),Path(root))
+            self.assertEqual(result['status'],'incomplete')
+            self.assertEqual(result['gate']['code'],'LOCAL_RESOURCE_LIMIT')
+            self.assertEqual(json.loads((Path(result['run_path'])/'run.json').read_text())['status'],'incomplete')

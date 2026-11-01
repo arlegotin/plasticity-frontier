@@ -42,7 +42,7 @@ class ImmutableArrays:
         for field in fields(self): object.__setattr__(self, field.name, _freeze(getattr(self, field.name)))
 
 class Status(str, Enum):
-    RUNNING = 'running'; COMPLETED = 'completed'; INTERRUPTED = 'interrupted'; INVALID = 'invalid'; FAILED = 'failed'
+    RUNNING = 'running'; COMPLETED = 'completed'; INCOMPLETE = 'incomplete'; INTERRUPTED = 'interrupted'; INVALID = 'invalid'; FAILED = 'failed'
 
 @dataclass(frozen=True)
 class BudgetSpec(ImmutableArrays):
@@ -174,7 +174,7 @@ def validate_run_record(run: JsonRecord) -> None:
     for name in ('run_id', 'hardware_record'): _text(run[name], name)
     if not isinstance(run['timing_boundaries'], dict) or not run['timing_boundaries']: raise ValueError('timing boundaries required')
     if any(not isinstance(k, str) or not k or not isinstance(v, str) or not v for k,v in run['timing_boundaries'].items()): raise ValueError('invalid timing boundaries')
-    if run['phase'] not in ('exploration', 'confirmation') or run['status'] not in ('running', 'completed', 'interrupted', 'invalid', 'failed') or run['information_access'] not in ('oracle', 'estimated', 'none') or run['analysis_mode'] not in ('deterministic_frontier', 'conditional_risk_over_preparations', 'fixed_prior_task_simulation', 'nested_task_simulation'): raise ValueError('invalid run enum')
+    if run['phase'] not in ('exploration', 'confirmation') or run['status'] not in ('running', 'completed', 'incomplete', 'interrupted', 'invalid', 'failed') or run['information_access'] not in ('oracle', 'estimated', 'none') or run['analysis_mode'] not in ('deterministic_frontier', 'conditional_risk_over_preparations', 'fixed_prior_task_simulation', 'nested_task_simulation'): raise ValueError('invalid run enum')
     specs = run['pairing_spec']; expected = {'task_metrics':['outer_replication','task_id'], 'preparation_risks':['outer_replication']}
     if not isinstance(specs, dict): raise ValueError('invalid pairing spec')
     for kind, spec in specs.items():
