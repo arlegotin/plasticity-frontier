@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "workload": {
+    "spectrum": [
+      0.5,
+      0.25,
+      0.15,
+      0.07,
+      0.02,
+      0.01
+    ],
+    "sigma2": 1.0,
+    "population_seed": 73
+  },
+  "budget": {
+    "depth": 2,
+    "initialization_norm_cap": 0.6,
+    "trainable_parameter_cap": 21,
+    "learning_rate": 1.0
+  },
+  "preparation": {
+    "target_context_size": 4,
+    "input_dimension": 6,
+    "input_law": "gaussian_isotropic",
+    "loss_normalization": "squared_error_over_2n",
+    "task_second_moment_trace": 1.0
+  },
+  "numerics": {
+    "dtype": "float64",
+    "fitting_candidates": {
+      "gammas": [
+        0.0,
+        1.0
+      ],
+      "regularization": [
+        0.0,
+        0.01
+      ]
+    }
+  },
+  "access": {
+    "prior": "oracle",
+    "selection": "oracle_reference",
+    "noise_access": "known",
+    "permitted_noise_variance": 1.0
+  },
+  "methods": [
+    "B03",
+    "B04"
+  ],
+  "keys": {
+    "exploration": 4242
+  },
+  "sample_plan": {
+    "analysis_mode": "conditional_risk_over_preparations",
+    "outer_replicates": 3,
+    "tasks_per_replicate": 24,
+    "source_training_tasks": 8,
+    "source_validation_tasks": 2,
+    "source_block_size": 4
+  },
+  "confirmation": {},
+  "selected_arms": [
+    "no_floor",
+    "isotropy",
+    "actual_counts",
+    "same_map",
+    "wrong_basis",
+    "prior_uncertainty",
+    "prior_rotation",
+    "leakage",
+    "mean_shift",
+    "anisotropic",
+    "student10",
+    "student3",
+    "orthogonal_coordinates",
+    "nonorthogonal_coordinates",
+    "free_eta",
+    "depth_one",
+    "fixed_feature",
+    "approximate_width",
+    "float32",
+    "extreme_scale",
+    "second_step",
+    "noncanonical",
+    "degeneracy",
+    "information",
+    "shared_optimizations",
+    "resume_error"
+  ],
+  "purpose": "Tiny exploratory mechanism fixtures only; no production pilot or confirmation",
+  "diagnostic_policy": {
+    "status": "prespecified_exploration_only",
+    "uncertainty": "descriptive diagnostics; no confirmation CI; float64 computations are not certificates",
+    "resource_matching": "same norm/parameter caps and actual canonical resources reported; depth-one/fixed-feature/free-eta/coordinate/width changes explicitly declared per arm",
+    "information_matching": "oracle geometry references; observed-only finite-source estimates; same source data within replication; explicitly known shared noise",
+    "amendments": "protocol/robustness.json records each selected intervention before execution",
+    "confirmation_status": "unperformed; new or retained claims require fresh scenario-specific pilot/freeze/confirmation",
+    "original_primary_result": "unchanged"
+  }
+}

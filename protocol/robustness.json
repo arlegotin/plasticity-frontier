@@ -1,0 +1,2785 @@
+{
+  "schema_version": 1,
+  "phase": "exploration",
+  "purpose": "prespecified tiny fixture diagnostics; no production campaign",
+  "base_config": {
+    "schema_version": 1,
+    "workload": {
+      "spectrum": [
+        0.5,
+        0.25,
+        0.15,
+        0.07,
+        0.02,
+        0.01
+      ],
+      "sigma2": 1.0,
+      "population_seed": 73
+    },
+    "budget": {
+      "depth": 2,
+      "initialization_norm_cap": 0.6,
+      "trainable_parameter_cap": 21,
+      "learning_rate": 1.0
+    },
+    "preparation": {
+      "target_context_size": 4,
+      "input_dimension": 6,
+      "input_law": "gaussian_isotropic",
+      "loss_normalization": "squared_error_over_2n",
+      "task_second_moment_trace": 1.0
+    },
+    "numerics": {
+      "dtype": "float64",
+      "fitting_candidates": {
+        "gammas": [
+          0.0,
+          1.0
+        ],
+        "regularization": [
+          0.0,
+          0.01
+        ]
+      }
+    },
+    "access": {
+      "prior": "oracle",
+      "selection": "oracle_reference",
+      "noise_access": "known",
+      "permitted_noise_variance": 1.0
+    },
+    "methods": [
+      "B03",
+      "B04"
+    ],
+    "keys": {
+      "exploration": 4242
+    },
+    "sample_plan": {
+      "analysis_mode": "conditional_risk_over_preparations",
+      "outer_replicates": 3,
+      "tasks_per_replicate": 24,
+      "source_training_tasks": 8,
+      "source_validation_tasks": 2,
+      "source_block_size": 4
+    },
+    "confirmation": {}
+  },
+  "selected_arms": [
+    "no_floor",
+    "isotropy",
+    "actual_counts",
+    "same_map",
+    "wrong_basis",
+    "prior_uncertainty",
+    "prior_rotation",
+    "leakage",
+    "mean_shift",
+    "anisotropic",
+    "student10",
+    "student3",
+    "orthogonal_coordinates",
+    "nonorthogonal_coordinates",
+    "free_eta",
+    "depth_one",
+    "fixed_feature",
+    "approximate_width",
+    "float32",
+    "extreme_scale",
+    "second_step",
+    "noncanonical",
+    "degeneracy",
+    "information",
+    "shared_optimizations",
+    "resume_error"
+  ],
+  "arm_declarations": [
+    {
+      "arm": "no_floor",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "no_floor",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does the floor improve feasible allocation?",
+      "changes": "Solve F and Z independently at identical caps; additionally report infeasible unchanged-gain b=0 control."
+    },
+    {
+      "arm": "isotropy",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "isotropy",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does specialization beat scalar gain?",
+      "changes": "Optimize scalar min(k, 1/((n+1)/n+d*(1+sigma2)/n)); width one."
+    },
+    {
+      "arm": "actual_counts",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "actual_counts",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Are caps masking different minimum counts?",
+      "changes": "Richer spectrum at k=0.6 and 0.4, L=2, width cap 3; zero-pad allocated width to 3 and report minimum counts separately."
+    },
+    {
+      "arm": "same_map",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "same_map",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does representation alter the first update?",
+      "changes": "Canonical network, final-zero-head construction, and compact Gz; identical map and context, separate actual storage/counts."
+    },
+    {
+      "arm": "wrong_basis",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "wrong_basis",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Is orientation informative beyond spectrum?",
+      "changes": "Independent QR rotation of the metric basis; preserve all eigenvalues, caps and actual norm/count."
+    },
+    {
+      "arm": "prior_uncertainty",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "prior_uncertainty",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "What is the finite-source preparation cost?",
+      "changes": "3 independent replications of 8 observed split tasks; shrinkage 0, 0.5, 1 and empirical F/Z gains at regularization 0; same observations and known noise; no test selection."
+    },
+    {
+      "arm": "prior_rotation",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "prior_rotation",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does a fixed source/test rotation alter performance?",
+      "changes": "Source flat rank max(1,d//3); test principal angles pi/6; 24 paired test tasks, mean zero and trace one."
+    },
+    {
+      "arm": "leakage",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "leakage",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does off-source task mass alter performance?",
+      "changes": "Source flat rank max(1,d//3); test 0.8 source mass plus 0.2 orthogonal-complement mass, trace one; 24 paired tasks."
+    },
+    {
+      "arm": "mean_shift",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "mean_shift",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does an inherited answer confound the interpretation?",
+      "changes": "Test mean 0.5 times first source eigenvector; covariance unchanged; 24 paired tasks; second moment trace rises to 1.25."
+    },
+    {
+      "arm": "anisotropic",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "anisotropic",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "What fails outside input isotropy?",
+      "changes": "Input covariance diag(linspace(0.5,1.5,d)); 24 paired sampled tasks; actual coefficient and prediction loss, no Gaussian analytic risk."
+    },
+    {
+      "arm": "student10",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "student10",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does a finite-moment non-Gaussian law change risk?",
+      "changes": "Independent standardized Student df=10 inputs; 24 paired sampled tasks; finite eighth moment; descriptive-only."
+    },
+    {
+      "arm": "student3",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "student3",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "What fails when input fourth moments do not exist?",
+      "changes": "Independent standardized Student df=3 inputs; 24 paired sampled tasks; infinite fourth moment, no ordinary mean-risk CI."
+    },
+    {
+      "arm": "orthogonal_coordinates",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "orthogonal_coordinates",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Are orthogonal coordinates invariant?",
+      "changes": "QR orthogonal input rotation applied to W; compare transformed tangent and norm with T G T^T."
+    },
+    {
+      "arm": "nonorthogonal_coordinates",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "nonorthogonal_coordinates",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Is Euclidean resource cost coordinate-dependent?",
+      "changes": "Input rescaling diag(linspace(0.5,2,d)) applied to W; report changed norm and tangent; no invariant cost claim."
+    },
+    {
+      "arm": "free_eta",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "free_eta",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does learning-rate freedom destroy norm-only cost?",
+      "changes": "Multiply every layer by 2; eta=2^(-2*(L-1)); initial/post norms and exact null norm identity; initial norm cap deliberately relaxed."
+    },
+    {
+      "arm": "depth_one",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "depth_one",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "What does an outside-class zero linear predictor achieve?",
+      "changes": "One zero d-parameter linear layer, eta=1, identical observed context; norm zero; outside deep architecture."
+    },
+    {
+      "arm": "fixed_feature",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "fixed_feature",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "How does frozen feature accounting change the cost?",
+      "changes": "Z square-root features stored and frozen, zero head alone trained; same map/context; feature storage separate from trainable head count."
+    },
+    {
+      "arm": "approximate_width",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "approximate_width",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Are exact width jumps practically relevant?",
+      "changes": "For every width 1 through cap-1 drop smallest F increments and independently reoptimize both F/Z; exact conditional formula evaluated in float64."
+    },
+    {
+      "arm": "float32",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "float32",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does the literal mechanism survive lower precision?",
+      "changes": "Cast initialized layers to float32, execute float32 gradients and simultaneous updates; double-precision evaluation/accounting separately."
+    },
+    {
+      "arm": "extreme_scale",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "extreme_scale",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Where do finite precision and support fail?",
+      "changes": "Gain scales 1e-30, 1e-14, 1, 1e14, 1e30 at float64 and float32; overflow/support failures are sensitivity outcomes."
+    },
+    {
+      "arm": "second_step",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "second_step",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Where does first-step equivalence end?",
+      "changes": "Depth max(3,L); recompute every second-step derivative including scalar suffixes; compare with fixed initial G recurrence on same context."
+    },
+    {
+      "arm": "noncanonical",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "noncanonical",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does the harness detect nonlinear null-network terms?",
+      "changes": "Rational depth-three scalar counterexample with h=0.2 and four random null products; compare actual simultaneous update to tangent prediction."
+    },
+    {
+      "arm": "degeneracy",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "degeneracy",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Are multiplicity and support precision-sensitive?",
+      "changes": "Rotate an exactly repeated two-dimensional eigenspace; execute float64/float32 near-minimum spectra [0.2,nextafter(0.2,1)]."
+    },
+    {
+      "arm": "information",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "information",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does prior access explain performance?",
+      "changes": "Oracle, observed cross-moment estimate, and no-prior isotropic covariance at shared caps and explicitly known noise; all candidates reported."
+    },
+    {
+      "arm": "shared_optimizations",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "shared_optimizations",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Does shared numerical optimization preserve outputs?",
+      "changes": "Compact/dense F and Z maps, collapsed networks, primal ridge and Cholesky dual ridge with penalty 0.7; same precision/process/BLAS, no timing claim."
+    },
+    {
+      "arm": "resume_error",
+      "phase": "exploration",
+      "base_config": {
+        "schema_version": 1,
+        "workload": {
+          "spectrum": [
+            0.5,
+            0.25,
+            0.15,
+            0.07,
+            0.02,
+            0.01
+          ],
+          "sigma2": 1.0,
+          "population_seed": 73
+        },
+        "budget": {
+          "depth": 2,
+          "initialization_norm_cap": 0.6,
+          "trainable_parameter_cap": 21,
+          "learning_rate": 1.0
+        },
+        "preparation": {
+          "target_context_size": 4,
+          "input_dimension": 6,
+          "input_law": "gaussian_isotropic",
+          "loss_normalization": "squared_error_over_2n",
+          "task_second_moment_trace": 1.0
+        },
+        "numerics": {
+          "dtype": "float64",
+          "fitting_candidates": {
+            "gammas": [
+              0.0,
+              1.0
+            ],
+            "regularization": [
+              0.0,
+              0.01
+            ]
+          }
+        },
+        "access": {
+          "prior": "oracle",
+          "selection": "oracle_reference",
+          "noise_access": "known",
+          "permitted_noise_variance": 1.0
+        },
+        "methods": [
+          "B03",
+          "B04"
+        ],
+        "keys": {
+          "exploration": 4242
+        },
+        "sample_plan": {
+          "analysis_mode": "conditional_risk_over_preparations",
+          "outer_replicates": 3,
+          "tasks_per_replicate": 24,
+          "source_training_tasks": 8,
+          "source_validation_tasks": 2,
+          "source_block_size": 4
+        },
+        "confirmation": {}
+      },
+      "uncertainty": "descriptive diagnostic; no confirmatory CI; float64 values are not certificates",
+      "matching": {
+        "caps": "base caps unless explicitly reported outside-class or reduced-width",
+        "information": "oracle covariance for geometry; observed-only estimates for source arms",
+        "data": "paired target contexts; common source observations within a replication"
+      },
+      "amendment": {
+        "claim_id": "resume_error",
+        "status": "unperformed",
+        "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+        "amendment_status": "declared_before_execution",
+        "confirmation_status": "unperformed",
+        "required_workflow": [
+          "pilot",
+          "freeze_protocol",
+          "run_confirmation"
+        ],
+        "fresh_source_and_test_cohorts_required": true
+      },
+      "question": "Can interruption or failed methods bias retained evidence?",
+      "changes": "Create abandoned corrupt staging block; reopen and replay one pair with one method failure; reject duplicate pair and changed config identity."
+    }
+  ],
+  "old_protected_keys": [],
+  "amendments": [
+    {
+      "claim_id": "no_floor",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "isotropy",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "actual_counts",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "same_map",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "wrong_basis",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "prior_uncertainty",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "prior_rotation",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "leakage",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "mean_shift",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "anisotropic",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "student10",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "student3",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "orthogonal_coordinates",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "nonorthogonal_coordinates",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "free_eta",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "depth_one",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "fixed_feature",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "approximate_width",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "float32",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "extreme_scale",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "second_step",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "noncanonical",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "degeneracy",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "information",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "shared_optimizations",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    },
+    {
+      "claim_id": "resume_error",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true
+    }
+  ],
+  "transfer_confirmations": [
+    {
+      "claim_id": "W1",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true,
+      "scenario_family": {
+        "dimension": 64,
+        "rank": 8,
+        "spectrum": "flat",
+        "n": [
+          4,
+          8,
+          32
+        ],
+        "widths": [
+          1,
+          8,
+          9,
+          64
+        ],
+        "sigma2": 1
+      }
+    },
+    {
+      "claim_id": "W2",
+      "status": "unperformed",
+      "reason": "Awaiting committed dependencies and fresh scenario-specific pilot, freeze, and confirmation.",
+      "amendment_status": "declared_before_execution",
+      "confirmation_status": "unperformed",
+      "required_workflow": [
+        "pilot",
+        "freeze_protocol",
+        "run_confirmation"
+      ],
+      "fresh_source_and_test_cohorts_required": true,
+      "scenario_family": {
+        "dimension": 64,
+        "spectrum": "normalized i^(-3/2)",
+        "n": [
+          8
+        ],
+        "widths": [
+          4,
+          8,
+          16
+        ],
+        "sigma2": 1
+      }
+    }
+  ]
+}

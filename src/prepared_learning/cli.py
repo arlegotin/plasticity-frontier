@@ -48,6 +48,7 @@ def main(argv=None) -> int:
     freeze = sub.add_parser('freeze'); freeze.add_argument('--protocol', required=True); freeze.add_argument('--output'); freeze.set_defaults(handler=command_freeze)
     confirm = sub.add_parser('confirm'); confirm.add_argument('--manifest', required=True); confirm.add_argument('--output', default='runs/confirmation'); confirm.add_argument('--checkpoint-tasks',type=int,default=16); confirm.set_defaults(handler=command_confirm)
     analyze = sub.add_parser('analyze'); analyze.add_argument('--manifest', required=True); analyze.add_argument('--run'); analyze.add_argument('--output', default='runs/confirmation'); analyze.set_defaults(handler=command_analyze)
+    robustness = sub.add_parser('robustness'); robustness.add_argument('--manifest', required=True); robustness.add_argument('--output', default='runs/robustness'); robustness.set_defaults(handler=command_robustness)
     args = parser.parse_args(argv); return args.handler(args)
 
 
@@ -332,3 +333,13 @@ def command_analyze(args: argparse.Namespace) -> int:
         print(json.dumps(result,allow_nan=False)); return 0
     except (ValueError,TypeError,KeyError,OSError,RuntimeError) as exc:
         print(json.dumps({'status':'failed','code':'IMPLEMENTATION_INVALID','error':str(exc)})); return 1
+
+
+def command_robustness(args: argparse.Namespace) -> int:
+    from .robustness import run_robustness
+    try:
+        decision = run_robustness(json.loads(Path(args.manifest).read_text()), Path(args.output))
+        print(json.dumps(to_json_record(decision), allow_nan=False))
+        return 1 if decision.code == GateCode.IMPLEMENTATION_INVALID else 0
+    except (ValueError, KeyError, TypeError, OSError) as exc:
+        print(json.dumps({'status':'failed','error':str(exc)}, allow_nan=False)); return 1
