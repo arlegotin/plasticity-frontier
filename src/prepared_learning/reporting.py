@@ -1293,11 +1293,41 @@ def _comparison_pair_scale(lengths):
             'max_json_bytes':working,'max_semantic_json_bytes':working,'json_working_bytes':working}
 
 
+def _recover_comparison_store(root, run, *, scale, retained_bytes):
+    """Use authoritative public recovery before reading secondary markers.
+
+    No asset map exists in this phase. The complete one-block/inventory/caller
+    reserve precedes open, and RunStore's own callbacks admit each recovery
+    allocation/read before it occurs. Journal validation remains authoritative.
+    """
+    preflight=_resource_check(scale,phase='run_comparison_recovery_before_open',object_bytes=retained_bytes)
+    def check(additional=0):
+        return _resource_check(scale,phase='run_comparison_recovery_before_allocation',
+                               object_bytes=retained_bytes,scalar_bytes=additional)
+    RunStore.open(root,run,resource_check=check)
+    return preflight
+
+
 def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0) -> JsonRecord:
     import sqlite3,shutil,itertools
     left=Path(left); right=Path(right)
     preflight=_guard_paths((path for root in (left,right) for path in _store_paths(root)),
                             phase='run_comparison_before_open',streaming=True,object_bytes=retained_bytes)
+    scale={key:preflight[key] for key in _empty_scale()}
+    left_run=_read(left/'run.json',retained_bytes=retained_bytes)
+    right_run=_read(right/'run.json',retained_bytes=retained_bytes+_object_bytes(left_run))
+    for key in IDENTITY_FIELDS:
+        if left_run[key]!=right_run[key]: raise ValueError('replay run identity mismatch: '+key)
+    recovery=[]; controls=_object_bytes(left_run)+_object_bytes(right_run)
+    for root,run in ((left,left_run),(right,right_run)):
+        recovery.append(_recover_comparison_store(root,run,scale=scale,
+            retained_bytes=retained_bytes+controls+_object_bytes(recovery)))
+    del left_run,right_run,run
+    retained_bytes+=_object_bytes(recovery)
+    # Recovery may publish journal-backed secondary markers or discard an
+    # unpublished orphan. Admit the resulting complete inventory afresh.
+    preflight=_guard_paths((path for root in (left,right) for path in _store_paths(root)),
+        phase='run_comparison_after_recovery',streaming=True,object_bytes=retained_bytes)
     scale={key:preflight[key] for key in _empty_scale()}
     plan=_comparison_map_plan(left,right,scale=scale,retained_bytes=retained_bytes)
     map_bytes=plan['native_bytes']
@@ -1305,13 +1335,9 @@ def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0)
     def admit(phase, *, objects=0, working_scale=scale):
         return _resource_check(working_scale,phase=phase,object_bytes=retained_bytes+map_bytes+objects,
                                scalar_bytes=buffers)
-    preflight={**admit('run_comparison_maps_before_open'),'native_map_projection':plan}
+    preflight={**admit('run_comparison_maps_before_open'),'native_map_projection':plan,
+               'recovery_preflight':recovery}
     arrays=[]; count=0
-    left_run=_read(left/'run.json',retained_bytes=retained_bytes+map_bytes)
-    right_run=_read(right/'run.json',retained_bytes=retained_bytes+map_bytes+_object_bytes(left_run))
-    for key in IDENTITY_FIELDS:
-        if left_run[key]!=right_run[key]: raise ValueError('replay run identity mismatch: '+key)
-    del left_run,right_run
     # Payloads and their order index live on disk. RAM holds one verified raw
     # block and one record pair, independent of J and checkpoint layout.
     with tempfile.TemporaryDirectory(prefix='prepared-replay-index-') as temporary:

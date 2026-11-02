@@ -637,7 +637,7 @@ class PhasedReplayMemory(unittest.TestCase):
             gc.collect(); self.assertGreaterEqual(len(refs),8)
             self.assertTrue(all(ref() is None for ref in refs))
 
-    def test_protected_caller_and_prospective_maps_refuse_before_open(self):
+    def test_protected_caller_and_prospective_maps_refuse_before_comparison_allocation(self):
         api=reporting(self)
         import inspect
         self.assertIn("retained_bytes",inspect.signature(api.compare_run_stores).parameters)
@@ -652,8 +652,10 @@ class PhasedReplayMemory(unittest.TestCase):
             # A large path/key inventory must be reserved before building maps.
             folder=next((run/'blocks').iterdir())/'assets'
             for index in range(3000): (folder/(str(index)+'-'+'x'*180+'.npy')).touch()
-            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
-                    patch.object(RunStore,'open',side_effect=AssertionError('opened before map admission')):
+            # Authoritative recovery is separately admitted before map sizing;
+            # index/full-map allocation must still wait for prospective sizing.
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(160*1024**2)}), \
+                    patch('sqlite3.connect',side_effect=AssertionError('comparison index allocated before map admission')):
                 with self.assertRaises(api.ReportingResourceLimit):
                     api.compare_run_stores(run,run,rtol=1e-10,atol=1e-12)
 
@@ -906,7 +908,7 @@ class CompleteComparatorCapacity(unittest.TestCase):
         def guarded(scale,**kwargs):
             result=guard(scale,**kwargs); phase_evidence.append(result); return result
         def fixture_paths(values,**kwargs):
-            if kwargs['phase']=='run_comparison_before_open':
+            if kwargs['phase'] in ('run_comparison_before_open','run_comparison_after_recovery'):
                 return guarded(self.scale(),phase=kwargs['phase'],object_bytes=kwargs['object_bytes'])
             return paths(values,**kwargs)
         def planned(*args,**kwargs):
@@ -1015,3 +1017,107 @@ class CompleteComparatorCapacity(unittest.TestCase):
                     api._comparison_map_plan(*stores,scale=self.scale(),retained_bytes=0)
             self.assertEqual(caught.exception.evidence['phase'],'json_before_parse')
             self.assertEqual(caught.exception.evidence['policy']['json_expansion_factor'],64)
+
+
+class ComparatorRecoveryAdmission(unittest.TestCase):
+    def setUp(self):
+        available=patch('prepared_learning.pilot._available_memory',return_value=4*1024**3)
+        available.start(); self.addCleanup(available.stop)
+
+    def store(self, root):
+        from prepared_learning.runner import RunStore
+        from tests.test_runner import RUN,task_row
+        store=RunStore.create(root,RUN)
+        store.commit_block('x',[task_row('a'),task_row('b')],{})
+        return store
+
+    def recovery_case(self, state):
+        from prepared_learning import reporting as api
+        with tempfile.TemporaryDirectory() as tmp:
+            store=self.store(Path(tmp)); block=next((store.path/'blocks').iterdir())
+            rows=(block/'records.json').read_bytes(); journal=next((store.path/'journal').iterdir())
+            journal_bytes=journal.read_bytes(); marker=block/'commit.json'
+            orphan=store.path/'blocks'/'.tmp-interrupted-fixture'
+            if state=='missing_secondary_marker': marker.unlink()
+            else: orphan.mkdir()
+            try: result=api.compare_run_stores(store.path,store.path,rtol=1e-10,atol=1e-12)
+            except FileNotFoundError as exc: self.fail('comparator bypassed authoritative recovery: '+str(exc))
+            self.assertEqual(result['status'],'matched')
+            self.assertEqual(result['scientific_records_compared'],2)
+            self.assertEqual(result['arrays_compared'],0)
+            self.assertEqual((block/'records.json').read_bytes(),rows)
+            self.assertEqual(journal.read_bytes(),journal_bytes)
+            self.assertEqual(marker.read_bytes(),journal_bytes)
+            self.assertFalse(orphan.exists())
+
+    def test_journal_backed_missing_secondary_marker_recovers_before_projection(self):
+        self.recovery_case('missing_secondary_marker')
+
+    def test_unpublished_orphan_recovers_before_projection(self):
+        self.recovery_case('unpublished_orphan')
+
+    def test_corrupt_authority_and_committed_evidence_are_not_recovered(self):
+        from prepared_learning import reporting as api
+        from prepared_learning.runner import _bytes
+        import hashlib
+        for state in ('journal','marker','records','missing_journal','identity'):
+            with self.subTest(state=state),tempfile.TemporaryDirectory() as tmp:
+                store=self.store(Path(tmp)); block=next((store.path/'blocks').iterdir())
+                journal=next((store.path/'journal').iterdir())
+                if state=='journal': journal.write_text('{invalid')
+                elif state=='marker': (block/'commit.json').write_text('{}')
+                elif state=='records': (block/'records.json').write_text('[]')
+                elif state=='missing_journal': journal.unlink()
+                else:
+                    run=json.loads((store.path/'run.json').read_text()); run['git_commit']='b'*40
+                    encoded=_bytes(run); (store.path/'run.json').write_bytes(encoded)
+                    (store.path/'run.sha256').write_text(hashlib.sha256(encoded).hexdigest())
+                with self.assertRaises(ValueError):
+                    api.compare_run_stores(store.path,store.path,rtol=1e-10,atol=1e-12)
+                self.assertTrue(block.exists(),'corrupt committed evidence was silently discarded')
+                if state=='missing_journal': self.assertFalse(journal.exists())
+
+    def test_initial_caller_guard_precedes_any_recovery_or_mutation(self):
+        from prepared_learning import reporting as api
+        from prepared_learning.runner import RunStore
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            store=self.store(Path(tmp)); marker=next(store.path.glob('blocks/*/commit.json')); marker.unlink()
+            orphan=store.path/'blocks'/'.tmp-interrupted-fixture'; orphan.mkdir()
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(RunStore,'open',side_effect=AssertionError('recovery opened before caller admission')):
+                with self.assertRaises(api.ReportingResourceLimit):
+                    api.compare_run_stores(store.path,store.path,rtol=1e-10,atol=1e-12,retained_bytes=8*1024**2)
+            self.assertFalse(marker.exists()); self.assertTrue(orphan.exists())
+
+    def test_recovery_internal_guard_precedes_its_json_reads(self):
+        from prepared_learning import reporting as api
+        from prepared_learning.runner import RunStore
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            store=self.store(Path(tmp)); marker=next(store.path.glob('blocks/*/commit.json')); marker.unlink()
+            initial=api._guard_paths((path for _ in (0,1) for path in api._store_paths(store.path)),
+                                     phase='recovery_test_initial',streaming=True)
+            # The initial complete input estimate fits; the separately charged
+            # RunStore recovery workspace does not fit this extra512KiB margin.
+            cap=initial['estimated_peak_bytes']+512*1024
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(cap)}), \
+                    patch.object(RunStore,'_read_json',side_effect=AssertionError('recovery decoded before internal admission')):
+                try:
+                    with self.assertRaises(api.ReportingResourceLimit) as caught:
+                        api.compare_run_stores(store.path,store.path,rtol=1e-10,atol=1e-12)
+                except FileNotFoundError as exc: self.fail('missing admitted recovery phase: '+str(exc))
+            self.assertEqual(caught.exception.evidence['phase'],'run_comparison_recovery_before_allocation')
+            self.assertGreater(caught.exception.evidence['scalar_and_key_working_bytes'],1024**2)
+            self.assertFalse(marker.exists())
+
+    def test_cross_store_identity_mismatch_precedes_recovery(self):
+        from prepared_learning import reporting as api
+        from prepared_learning.runner import RunStore
+        from tests.test_runner import RUN
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); left=self.store(root/'left')
+            right=RunStore.create(root/'right',{**RUN,'git_commit':'b'*40})
+            with patch.object(RunStore,'open',side_effect=AssertionError('mismatched source entered recovery')):
+                with self.assertRaisesRegex(ValueError,'identity'):
+                    api.compare_run_stores(left.path,right.path,rtol=1e-10,atol=1e-12)
