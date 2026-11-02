@@ -434,6 +434,7 @@ def command_robustness(args: argparse.Namespace) -> int:
 def command_benchmark(args: argparse.Namespace) -> int:
     import subprocess
     from .benchmark import benchmark_methods
+    from .reporting import ReportingResourceLimit
     from .methods import make_method
     from ._benchmark_worker import generated_config
     try:
@@ -448,5 +449,9 @@ def command_benchmark(args: argparse.Namespace) -> int:
             (Path(manifest.get('output','runs/benchmark'))/'natural_inputs.json').write_text(json.dumps(optional_result(manifest['natural_inputs']), indent=2, allow_nan=False)+'\n')
         print(json.dumps({'status':result['status'],'output':str(manifest.get('output','runs/benchmark'))}))
         return 0
+    except ReportingResourceLimit as exc:
+        # Do not create the fixed output: the identical frozen campaign can retry.
+        print(json.dumps({'code':'LOCAL_RESOURCE_LIMIT','status':'not_completed',
+                          'evidence':exc.evidence,'recovery':exc.evidence['recovery']})); return 1
     except (ValueError, KeyError, OSError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({'status':'failed','error':str(exc)})); return 1

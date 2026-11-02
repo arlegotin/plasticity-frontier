@@ -85,23 +85,35 @@ def _resource_check(scale, *, phase, copies=1, object_bytes=0, scalar_bytes=0, j
 
 def _empty_scale():
     return {'files_scanned':0,'json_bytes':0,'max_json_bytes':0,'json_working_bytes':0,'array_bytes':0,'max_array_bytes':0,
+            'hash_only_files':0,'hash_only_bytes':0,'semantic_json_bytes':0,'max_semantic_json_bytes':0,
             'inventory_bytes':0,'largest_file_bytes':0,'largest_file':None,'inventory_complete':True}
 
 
 def _guard_paths(paths, *, phase, copies=1, object_bytes=0, streaming=False, json_factor=REPORT_JSON_FACTOR):
+    return _guard_assets(((path,'semantic') for path in paths),phase=phase,copies=copies,
+                         object_bytes=object_bytes,streaming=streaming,json_factor=json_factor)
+
+
+def _guard_assets(assets, *, phase, copies=1, object_bytes=0, streaming=False, json_factor=REPORT_JSON_FACTOR) -> dict:
     scale=_empty_scale()
-    for value in paths:
+    for value,role in assets:
+        if role not in ('semantic','hash_only'): raise ValueError('invalid report asset role')
         path=Path(value); size=path.stat().st_size
+        if role=='hash_only':
+            scale['hash_only_files']+=1; scale['hash_only_bytes']+=size
         scale['files_scanned']+=1
         scale['inventory_bytes']+=4096+16*len(os.fsencode(path))
         if path.suffix in ('.json','.jsonl'):
             scale['json_bytes']+=size
             scale['max_json_bytes']=max(scale['max_json_bytes'],size)
+            if role=='semantic':
+                scale['semantic_json_bytes']+=size
+                scale['max_semantic_json_bytes']=max(scale['max_semantic_json_bytes'],size)
         elif path.suffix=='.npy':
             scale['array_bytes']+=size; scale['max_array_bytes']=max(scale['max_array_bytes'],size)
         if size>scale['largest_file_bytes']:
             scale['largest_file_bytes']=size; scale['largest_file']=str(path)
-    scale['json_working_bytes']=scale['max_json_bytes'] if streaming else scale['json_bytes']
+    scale['json_working_bytes']=scale['max_semantic_json_bytes'] if streaming else scale['semantic_json_bytes']
     return _resource_check(scale,phase=phase,copies=copies,object_bytes=object_bytes,json_factor=json_factor)
 
 
@@ -124,26 +136,37 @@ def _store_paths(root):
 
 
 def _input_paths(entry, *, retained_bytes=0):
-    yield Path(entry['descriptor_path'])
+    for path,_ in _input_assets(entry,retained_bytes=retained_bytes): yield path
+
+
+def _input_assets(entry, *, retained_bytes=0):
+    yield Path(entry['descriptor_path']),'semantic'
     kind=entry['kind']
     if kind=='confirmation':
-        yield from _store_paths(entry['run_path'])
-        yield Path(entry['protocol_path'])
+        for path in _store_paths(entry['run_path']): yield path,'semantic'
+        yield Path(entry['protocol_path']),'semantic'
     elif kind=='benchmark':
-        root=Path(entry['run_path']); yield root/'inputs.json'
-        for folder in ('blocks','requests'): yield from _walk_files(root/folder)
-        if (root/'failure.json').exists(): yield root/'failure.json'
+        root=Path(entry['run_path']); yield root/'inputs.json','semantic'
+        for folder in ('blocks','requests'):
+            for path in _walk_files(root/folder): yield path,'semantic'
+        if (root/'failure.json').exists(): yield root/'failure.json','semantic'
         # This bounded control JSON locates a second raw inventory. Its own
         # read guard runs before parsing; no worker ledger is read here.
         _guard_paths((root/'inputs.json',),phase='benchmark_control_before_parse',object_bytes=retained_bytes)
         config=_read(root/'inputs.json')['inputs'].get('manifest',{})
         if config.get('phase')=='finalized':
+            from .benchmark import _verify_calibration_control
+            verified=_verify_calibration_control(config['frozen'])
             calibration=Path(config['frozen']['calibration_path'])
-            yield calibration; yield calibration.parent/'inputs.json'
-            for folder in ('blocks','requests'): yield from _walk_files(calibration.parent/folder)
-    elif kind!='not_run': yield Path(entry['raw_path'])
-    if 'process_path' in entry: yield Path(entry['process_path'])
-    for asset in entry.get('assets',[]): yield Path(asset)
+            if verified:
+                for path in verified: yield path,'hash_only'
+            else: yield calibration,'semantic'
+            yield calibration.parent/'inputs.json','semantic'
+            for folder in ('blocks','requests'):
+                for path in _walk_files(calibration.parent/folder): yield path,'semantic'
+    elif kind!='not_run': yield Path(entry['raw_path']),'semantic'
+    if 'process_path' in entry: yield Path(entry['process_path']),'semantic'
+    for asset in entry.get('assets',[]): yield Path(asset),'semantic'
 
 
 def _object_bytes(value):
@@ -167,13 +190,13 @@ def _guard_inputs(manifest, *, replay=False, retained_bytes=0):
     scale=_empty_scale(); largest_streamed=0; retained_json=0; scalars=0
     for entry in manifest['inputs']:
         streamed=entry['kind'] in ('confirmation','benchmark')
-        measured=_guard_paths(_input_paths(entry,retained_bytes=retained_bytes),phase='input_before_store_open',streaming=streamed,object_bytes=retained_bytes)
-        for key in ('files_scanned','json_bytes','array_bytes','inventory_bytes'): scale[key]+=measured[key]
-        for key in ('max_json_bytes','max_array_bytes'): scale[key]=max(scale[key],measured[key])
+        measured=_guard_assets(_input_assets(entry,retained_bytes=retained_bytes),phase='input_before_store_open',streaming=streamed,object_bytes=retained_bytes)
+        for key in ('files_scanned','json_bytes','array_bytes','inventory_bytes','hash_only_files','hash_only_bytes','semantic_json_bytes'): scale[key]+=measured[key]
+        for key in ('max_json_bytes','max_array_bytes','max_semantic_json_bytes'): scale[key]=max(scale[key],measured[key])
         if measured['largest_file_bytes']>scale['largest_file_bytes']:
             scale['largest_file_bytes']=measured['largest_file_bytes']; scale['largest_file']=measured['largest_file']
         if streamed:
-            largest_streamed=max(largest_streamed,measured['max_json_bytes'])
+            largest_streamed=max(largest_streamed,measured['json_working_bytes'])
             if not replay and entry['kind']=='confirmation':
                 scientific=_read(entry['protocol_path'])['scientific']; plan=scientific['config']['sample_plan']
                 j=_declared_count(plan['outer_replicates']) or 1
@@ -185,7 +208,7 @@ def _guard_inputs(manifest, *, replay=False, retained_bytes=0):
                 # Scalar task dictionaries, paired roles/family losses, source
                 # and task key sets, completion indices and inference buffers.
                 scalars+=8192*tasks+2048*tasks*len(scientific['secondary_family']['contrasts'])+512*keys+8192*j
-        else: retained_json+=measured['json_bytes']
+        else: retained_json+=measured['json_working_bytes']
     scale['json_working_bytes']=largest_streamed+retained_json
     return _resource_check(scale,phase='replay_inputs' if replay else 'report_inputs',
                            copies=2 if replay else 1,object_bytes=retained_bytes+_object_bytes(manifest),scalar_bytes=scalars)
@@ -233,7 +256,7 @@ def _path(value, base):
 
 def _raw_files(entry):
     """Canonical inventory deliberately excludes rebuildable summaries."""
-    _guard_paths(_input_paths(entry),phase='raw_inventory_before_store_open',streaming=entry['kind'] in ('confirmation','benchmark'))
+    _guard_assets(_input_assets(entry),phase='raw_inventory_before_store_open',streaming=entry['kind'] in ('confirmation','benchmark'))
     files = {Path(entry['descriptor_path'])}
     kind = entry['kind']
     if kind == 'confirmation':
@@ -252,6 +275,9 @@ def _raw_files(entry):
         config=_read(root/'inputs.json')['inputs'].get('manifest',{})
         if config.get('phase')=='finalized':
             calibration=Path(config['frozen']['calibration_path'])
+            from .benchmark import _verify_calibration_control
+            verified=_verify_calibration_control(config['frozen'])
+            if verified: files.update(verified)
             files.add(calibration); files.add(calibration.parent/'inputs.json')
             files.update(p for folder in ('blocks','requests') for p in (calibration.parent/folder).glob('*.json'))
     elif kind != 'not_run':
@@ -697,8 +723,8 @@ def _validate_benchmark_worker(worker, frozen=None):
 
 def _benchmark(entry, *, output, emit=lambda row:None, retained_bytes=lambda:0):
     """Reconstruct unchanged science with detached summaries and verified full workers."""
-    from .benchmark import comparison_table, _campaign_configuration, _fixed_schedule
-    _guard_paths(_input_paths(entry,retained_bytes=retained_bytes()),phase='benchmark_before_raw_allocation',streaming=True,object_bytes=retained_bytes())
+    from .benchmark import comparison_table, _campaign_configuration, _fixed_schedule, _verify_calibration_control
+    _guard_assets(_input_assets(entry,retained_bytes=retained_bytes()),phase='benchmark_before_raw_allocation',streaming=True,object_bytes=retained_bytes())
     root=Path(entry['run_path']); inputs=_read(root/'inputs.json')
     generated=inputs['inputs'].get('manifest',{}); campaign=generated.get('phase')=='finalized'
     rows=[]; seen=set(); resources={}; conditions=None; pilots=[]; calibration_blocks=set()
@@ -712,10 +738,11 @@ def _benchmark(entry, *, output, emit=lambda row:None, retained_bytes=lambda:0):
         if content_hash(_campaign_configuration(generated))!=frozen['configuration_sha256']:
             raise ValueError('benchmark frozen scientific inputs changed')
         calibration_path=Path(frozen['calibration_path'])
-        _guard_paths((calibration_path,),phase='benchmark_calibration_before_parse',object_bytes=reserve())
-        calibration=_read(calibration_path)
-        if content_hash(calibration)!=frozen['calibration_sha256']: raise ValueError('benchmark calibration identity changed')
-        del calibration
+        if _verify_calibration_control(frozen) is None:
+            _guard_paths((calibration_path,),phase='benchmark_calibration_before_parse',object_bytes=reserve())
+            calibration=_read(calibration_path)
+            if content_hash(calibration)!=frozen['calibration_sha256']: raise ValueError('benchmark calibration identity changed')
+            del calibration
         calibration_inputs=_read(calibration_path.parent/'inputs.json')
         calibration_config=calibration_inputs['inputs']['manifest']
         if _campaign_configuration(calibration_config)!=_campaign_configuration(generated):
@@ -946,7 +973,7 @@ def regenerate_tables(manifest: JsonRecord, output: Path) -> JsonRecord:
         writer.writeheader()
         for entry in manifest['inputs']:
             kind=entry['kind']
-            _guard_paths(_input_paths(entry,retained_bytes=reserve()),phase='report_next_input',streaming=kind in ('benchmark','confirmation'),object_bytes=reserve())
+            _guard_assets(_input_assets(entry,retained_bytes=reserve()),phase='report_next_input',streaming=kind in ('benchmark','confirmation'),object_bytes=reserve())
             if kind=='confirmation':
                 def emit(row):
                     record={'input_id':entry['input_id'],**row}; raw.write(record)

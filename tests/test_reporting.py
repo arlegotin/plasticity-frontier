@@ -462,6 +462,49 @@ def benchmark_input(root, *, blocks=4, padding=0):
     return descriptor,run
 
 
+
+def calibration_source(root, *, padding=0):
+    """Hand-built balanced synthetic control; never executed scientific evidence."""
+    root=Path(root).resolve()
+    descriptor,run=benchmark_input(root)
+    inputs=json.loads((run/'inputs.json').read_text())
+    inputs['inputs']['manifest']['schema_version']=1
+    (run/'inputs.json').write_text(json.dumps(inputs))
+    workers=[w for p in sorted((run/'blocks').glob('*.json')) for w in json.loads(p.read_text())]
+    identity={'versions':{'fixture':True},'dirty_diff_sha256':None,'runtime':{'fixture':True}}
+    evidence={'schema_version':1,'status':'exploratory','config':inputs['inputs']['manifest'],
+              'identity':identity,'comparison_gate':{'status':'pass','missing_recommended_controls':[]},
+              'pilot':[w['pilot'] for w in workers],'schedule':{'balanced_blocks':4},
+              'resources':[w['resource'] for w in workers[:4]],'conditions':workers[0]['conditions'],
+              'unknown_control':{'unicode':'雪', 'escapes':'"\\\n', 'numbers':[-0.0,1e-90,1e90], 'payload':'x'*padding}}
+    path=run/'benchmark.json'; path.write_text(json.dumps(evidence,indent=2,ensure_ascii=False))
+    return descriptor,run,evidence
+
+
+def finalized_benchmark_input(root, *, padding=0):
+    """Synthetic raw workers plus public finalization with fixture-only identity."""
+    import shutil
+    from prepared_learning import benchmark as b
+    root=Path(root).resolve()
+    descriptor,calibration,evidence=calibration_source(root,padding=padding)
+    campaign=root/'campaign'; shutil.copytree(calibration,campaign)
+    with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
+        config=b.finalize_benchmark_manifest(calibration/'benchmark.json',root/'frozen.json',campaign)
+    inputs=json.loads((campaign/'inputs.json').read_text()); inputs['inputs']['manifest']=config
+    (campaign/'inputs.json').write_text(json.dumps(inputs))
+    for path in (campaign/'blocks').glob('*.json'):
+        workers=json.loads(path.read_text())
+        for worker in workers:
+            for row in worker['rows']: row['method_order']=config['frozen']['orders'][row['block']]
+        path.write_text(json.dumps(workers))
+    for path in (campaign/'requests').glob('*.json'):
+        request=json.loads(path.read_text()); request['method_order']=config['frozen']['orders'][request['block']]
+        request['position']=request['method_order'].index(request['method']['method_id'])
+        path.write_text(json.dumps(request))
+    descriptor.write_text(json.dumps({'kind':'benchmark','run_path':str(campaign),'fixture':True,'label':'synthetic finalized benchmark'}))
+    return descriptor,campaign,config
+
+
 def eager_benchmark(entry):
     """Small test-only reference for the original retained scientific outputs."""
     import copy
@@ -483,6 +526,137 @@ def eager_benchmark(entry):
 
 
 class BoundedBenchmarkReporting(unittest.TestCase):
+    def test_canonical_controls_are_hash_only_and_fully_inventoried(self):
+        import os
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp,patch('prepared_learning.pilot._available_memory',return_value=8*1024**3):
+            root=Path(tmp)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
+                descriptor,run,config=finalized_benchmark_input(root,padding=4*1024**2)
+            controls={Path(config['frozen']['calibration_path']),Path(config['frozen']['calibration_control']['path'])}
+            ordinary=root/'ordinary.json'; ordinary.write_text(json.dumps({'value':'retained semantic payload'*1000}))
+            other=root/'other.json'; other.write_text(json.dumps({'kind':'diagnostic','raw_path':str(ordinary),'fixture':True}))
+            read=api._read; decode=json.loads
+            def no_control_decode(value,*args,**kwargs):
+                marker=b'"unknown_control"' if isinstance(value,(bytes,bytearray)) else '"unknown_control"'
+                self.assertNotIn(marker,value,'aggregate control decoder attempted')
+                return decode(value,*args,**kwargs)
+            def no_controls(path):
+                self.assertNotIn(Path(path),controls,'control decoded by report')
+                return read(path)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}),patch.object(api,'_read',side_effect=no_controls),patch.object(json,'loads',side_effect=no_control_decode):
+                manifest=api.build_report_inputs([descriptor,other]); entry=manifest['inputs'][0]
+                preflight=api._verify_inputs(manifest,replay=True)
+                result=api._benchmark(entry,output=root/'report')
+                tables=api.regenerate_tables(manifest,root/'tables')
+                self.assertEqual(tables['benchmarks'][0]['rows'],result['rows'])
+                self.assertEqual(preflight,api._guard_inputs(manifest,replay=True))
+                assets=list(api._input_assets(entry)); paths=[p for p,_ in assets]
+                self.assertEqual({p for p,role in assets if role=='hash_only'},controls)
+                self.assertEqual(list(api._input_paths(entry)),paths)
+                for control in controls: self.assertEqual(entry['inventory'][str(control)],api._sha(control))
+                expected=set(paths)
+                self.assertEqual(set(entry['inventory']),{str(p) for p in expected})
+                self.assertTrue(all(str(p) in entry['inventory'] for p in run.rglob('*.json') if p.parent.name in ('blocks','requests')))
+                all_assets=assets+list(api._input_assets(manifest['inputs'][1]))
+                self.assertEqual(preflight['files_scanned'],47)
+                self.assertEqual(preflight['files_scanned'],len(all_assets))
+                self.assertEqual(preflight['json_bytes'],sum(p.stat().st_size for p,_ in all_assets))
+                self.assertEqual(preflight['hash_only_files'],2)
+                self.assertEqual(preflight['hash_only_bytes'],sum(p.stat().st_size for p in controls))
+                self.assertEqual(preflight['semantic_json_bytes'],sum(p.stat().st_size for p,r in all_assets if r=='semantic'))
+                self.assertEqual(preflight['max_json_bytes'],max(p.stat().st_size for p,_ in all_assets))
+                self.assertEqual(preflight['max_semantic_json_bytes'],max(p.stat().st_size for p,r in all_assets if r=='semantic'))
+                working=max(p.stat().st_size for p,r in assets if r=='semantic')+ordinary.stat().st_size+other.stat().st_size
+                self.assertEqual(preflight['json_working_bytes'],working)
+                self.assertEqual(preflight['inventory_bytes'],sum(4096+16*len(os.fsencode(p)) for p,_ in all_assets))
+                self.assertEqual(preflight['retained_copies'],2)
+                self.assertEqual(preflight['policy']['json_expansion_factor'],256)
+                self.assertEqual(preflight['largest_file_bytes'],max(p.stat().st_size for p,_ in all_assets))
+                for key,source in (('worker_records_ref',run),('calibration_worker_records_ref',next(p for p in controls if p.name=='benchmark.json').parent)):
+                    package=root/'report'; index=api._load_worker_index(result[key],package)
+                    full=[api._load_worker_ref(ref,package) for ref in index['records']]
+                    expected_workers=[w for p in sorted((source/'blocks').glob('*.json')) for w in json.loads(p.read_text())]
+                    self.assertEqual(full,expected_workers); self.assertEqual(len(full),16)
+
+    def test_canonical_control_does_not_exempt_semantic_workers(self):
+        import os
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp,patch('prepared_learning.pilot._available_memory',return_value=8*1024**3):
+            root=Path(tmp)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
+                descriptor,run,config=finalized_benchmark_input(root,padding=4*1024**2)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}):
+                manifest=api.build_report_inputs([descriptor]); entry=manifest['inputs'][0]
+                with patch.object(api,'_retain_benchmark_workers',side_effect=AssertionError('worker allocated before guard')):
+                    with self.assertRaises(api.ReportingResourceLimit): api._benchmark(entry,output=root/'retained',retained_bytes=lambda:8*1024**2)
+                block=next((run/'blocks').glob('*.json')); before=block.read_bytes()
+                with block.open('wb') as stream: stream.truncate(1024**2)
+                read=api._read
+                def no_block(path):
+                    self.assertNotEqual(Path(path),block,'oversized semantic worker parsed')
+                    return read(path)
+                with patch.object(api,'_read',side_effect=no_block):
+                    for action in (lambda:api.build_report_inputs([descriptor]),lambda:api._verify_inputs(manifest),
+                                   lambda:api._benchmark(entry,output=root/'worker'),lambda:api._guard_inputs(manifest,replay=True)):
+                        with self.assertRaises(api.ReportingResourceLimit): action()
+                block.write_bytes(before)
+                inputs=json.loads((run/'inputs.json').read_text()); del inputs['inputs']['manifest']['frozen']['calibration_control']
+                (run/'inputs.json').write_text(json.dumps(inputs))
+                with self.assertRaises(api.ReportingResourceLimit): api.build_report_inputs([descriptor])
+
+    def test_new_and_legacy_calibration_reconstruct_identical_science(self):
+        import copy
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run,config=finalized_benchmark_input(root)
+            manifest=api.build_report_inputs([descriptor]); entry=manifest['inputs'][0]
+            new=api.regenerate_tables(manifest,root/'new')
+            source_path=Path(config['frozen']['calibration_path']); sidecar=Path(config['frozen']['calibration_control']['path'])
+            # Byte-only integrity is required at every consumer entry point.
+            for control in (source_path,sidecar):
+                before=control.read_bytes(); control.write_bytes(before+b' ')
+                for action in (lambda:api.build_report_inputs([descriptor]),lambda:api._verify_inputs(manifest),
+                               lambda:api._benchmark(entry,output=root/'invalid'),lambda:api._guard_inputs(manifest,replay=True)):
+                    with self.assertRaises(ValueError): action()
+                control.write_bytes(before)
+            inputs_path=run/'inputs.json'; inputs=json.loads(inputs_path.read_text()); original=inputs_path.read_bytes()
+            del inputs['inputs']['manifest']['frozen']['calibration_control']; inputs_path.write_text(json.dumps(inputs))
+            legacy_manifest=api.build_report_inputs([descriptor]); legacy=api.regenerate_tables(legacy_manifest,root/'legacy')
+            for key in ('rows','conditions','pareto','status','missing_controls','energy','accelerator'):
+                self.assertEqual(new['benchmarks'][0][key],legacy['benchmarks'][0][key])
+            new_claims=api._claims(manifest,new); legacy_claims=api._claims(legacy_manifest,legacy)
+            for claim in new_claims:
+                self.assertIn(str(sidecar),claim['evidence_paths'])
+                claim['evidence_paths'].remove(str(sidecar))
+            self.assertEqual(new_claims,legacy_claims)
+            def resources(summary):
+                return [{k:v for k,v in resource.items() if k not in ('resource_ref','selection_ref','candidate_records_ref')} for resource in summary['resources']]
+            self.assertEqual(resources(new['benchmarks'][0]),resources(legacy['benchmarks'][0]))
+            for key in ('worker_records_ref','calibration_worker_records_ref'):
+                full=[]
+                for name,tables in (('new',new),('legacy',legacy)):
+                    package=root/name; index=api._load_worker_index(tables['benchmarks'][0][key],package)
+                    full.append([api._load_worker_ref(ref,package) for ref in index['records']])
+                self.assertEqual(full[0],full[1]); self.assertEqual(len(full[0]),16)
+            before=source_path.read_bytes(); source_path.write_text(json.dumps({'changed':True}))
+            with self.assertRaises(ValueError): api._benchmark(legacy_manifest['inputs'][0],output=root/'bad-legacy')
+            source_path.write_bytes(before); inputs_path.write_bytes(original)
+            pilot_path=next((source_path.parent/'blocks').glob('*.json')); before=pilot_path.read_bytes()
+            for change in (lambda w:w['pilot'].update(capped=True),lambda w:w['pilot'].update(desired_repetitions=99)):
+                workers=json.loads(before); change(workers[0]); pilot_path.write_text(json.dumps(workers))
+                with self.assertRaises(ValueError): api._benchmark(entry,output=root/'pilot-bad')
+            pilot_path.write_bytes(before)
+            for change in (lambda f:f['repetitions'].update(B01=99),lambda f:f['orders'][0].reverse()):
+                changed=json.loads(original); change(changed['inputs']['manifest']['frozen']); inputs_path.write_text(json.dumps(changed))
+                with self.assertRaises(ValueError): api._benchmark(entry,output=root/'schedule-bad')
+            inputs_path.write_bytes(original)
+            block=next((run/'blocks').glob('*.json')); before=block.read_bytes()
+            for change in (lambda w:w['resource'].update(selected_execution_hash='changed'),lambda w:w['conditions'].update(cpu='changed'),lambda w:w['rows'][0].update(repetitions=99)):
+                workers=json.loads(before); change(workers[0]); block.write_text(json.dumps(workers))
+                with self.assertRaises(ValueError): api._benchmark(entry,output=root/'campaign-bad')
+            block.write_bytes(before)
+
     def test_benchmark_streaming_matches_eager_tables_and_claims(self):
         api=reporting(self)
         with tempfile.TemporaryDirectory() as tmp:

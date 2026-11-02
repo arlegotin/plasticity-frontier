@@ -199,6 +199,12 @@ class BoundedBenchmarkReplay(unittest.TestCase):
                 self.assertEqual(record['stdout']['sha256'],api._sha(stdout)); self.assertNotIn('x'*1000,json.dumps(record))
 
     def test_benchmark_replay_pairs_without_cohort_retention(self):
+        self._benchmark_replay_pairs(canonical=False)
+
+    def test_canonical_control_replay_preserves_pairs_and_requests(self):
+        self._benchmark_replay_pairs(canonical=True)
+
+    def _benchmark_replay_pairs(self, *, canonical):
         from prepared_learning import _replay as api
         from prepared_learning import reporting as report
         from prepared_learning.benchmark import _campaign_configuration, _fixed_schedule
@@ -228,6 +234,11 @@ class BoundedBenchmarkReplay(unittest.TestCase):
             frozen['configuration_sha256']=content_hash(_campaign_configuration(config))
             frozen['calibration_path']=str(calibration/'benchmark.json')
             frozen['calibration_sha256']=content_hash(json.loads((calibration/'benchmark.json').read_text()))
+            if canonical:
+                from prepared_learning.benchmark import _write_canonical_calibration
+                source=calibration/'benchmark.json'; sidecar=source.with_suffix('.canonical.json')
+                _write_canonical_calibration(json.loads(source.read_text()),sidecar,frozen['calibration_sha256'])
+                frozen['calibration_control']={'format':'prepared_calibration_canonical_v1','path':str(sidecar),'source_sha256':report._sha(source)}
             config.update(phase='finalized',frozen=frozen)
             (run/'inputs.json').write_text(json.dumps(inputs))
             entry={'run_path':str(run),'input_id':0,'source':{'fixture':True},'label':'fixture',
@@ -236,6 +247,7 @@ class BoundedBenchmarkReplay(unittest.TestCase):
             project=api._benchmark_scientific
             class Tracked(dict): pass
             def read(path):
+                if canonical: self.assertNotIn(Path(path),(source,sidecar),'control decoded during replay')
                 value=original(path)
                 if isinstance(value,dict) and 'resource' in value:
                     value=Tracked(value); refs.append(weakref.ref(value))
@@ -291,6 +303,14 @@ class BoundedBenchmarkReplay(unittest.TestCase):
                     with self.assertRaises((ValueError,FileNotFoundError)): report._load_worker_ref(reference,moved)
                     path.write_bytes(original_bytes)
             gc.collect(); self.assertTrue(all(ref() is None for ref in refs))
+
+            if canonical:
+                for control in (source,sidecar):
+                    before=control.read_bytes(); control.write_bytes(before+b' ')
+                    target=root/('corrupt-'+control.name); target.mkdir()
+                    with patch.object(api,'_run_file',side_effect=AssertionError('corrupt control executed')):
+                        with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
+                    control.write_bytes(before)
 
             # Missing, duplicate, wrong-key and changed requests cannot run a
             # different worker set and still receive a matched result.

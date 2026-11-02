@@ -20,6 +20,187 @@ class BenchmarkTests(unittest.TestCase):
                        'thread_policy': 'environment', 'thermal': 'unknown', 'power': 'unknown',
                        'measure_memory': False}
 
+    def test_finalizer_exports_complete_canonical_control(self):
+        import json,hashlib
+        from unittest.mock import patch
+        from tests.test_reporting import calibration_source
+        from prepared_learning import benchmark as b
+        from prepared_learning.records import content_hash,to_json_record
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run,evidence=calibration_source(root)
+            source=run/'benchmark.json'; original=source.read_bytes()
+            with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
+                result=b.finalize_benchmark_manifest(source,root/'frozen.json',root/'campaign')
+                self.assertIn('calibration_control',result['frozen'])
+                binding=result['frozen']['calibration_control']; sidecar=source.with_suffix('.canonical.json')
+                self.assertEqual(binding,{'format':'prepared_calibration_canonical_v1','path':str(sidecar),
+                    'source_sha256':hashlib.sha256(original).hexdigest()})
+                expected=json.dumps(to_json_record(evidence),sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+                self.assertEqual(sidecar.read_bytes(),expected)
+                self.assertEqual(json.loads(sidecar.read_bytes()),evidence)
+                self.assertEqual(hashlib.sha256(expected).hexdigest(),content_hash(evidence))
+                self.assertEqual(result['frozen']['calibration_sha256'],content_hash(evidence))
+                self.assertEqual(b.validate_campaign_manifest(result)['status'],'pass')
+                self.assertEqual(source.read_bytes(),original)
+                for i,value in enumerate((float('nan'),float('inf'),float('-inf'))):
+                    evidence['nonfinite']=value; source.write_text(json.dumps(evidence))
+                    with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,root/f'bad-{i}.json',root/'unused')
+                    self.assertFalse((root/f'bad-{i}.json').exists())
+
+    def test_calibration_control_binding_and_publication_fail_closed(self):
+        import copy,json
+        from unittest.mock import patch
+        from tests.test_reporting import calibration_source
+        from prepared_learning import benchmark as b
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run,evidence=calibration_source(root)
+            source=run/'benchmark.json'; original=source.read_bytes(); sidecar=source.with_suffix('.canonical.json')
+            target=root/'frozen.json'
+            with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
+                result=b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertIn('calibration_control',result['frozen'])
+                canonical=sidecar.read_bytes(); manifest_bytes=target.read_bytes()
+                for path in (source,sidecar):
+                    before=path.read_bytes()
+                    for replacement in (before+b' ',json.dumps({**evidence,'unknown':1}).encode()):
+                        path.write_bytes(replacement)
+                        with self.assertRaises(ValueError): b.validate_campaign_manifest(result)
+                    path.unlink()
+                    with self.assertRaises((ValueError,FileNotFoundError)): b.validate_campaign_manifest(result)
+                    path.write_bytes(before)
+                for encoded in (json.dumps(evidence).encode(),json.dumps(evidence,sort_keys=True,indent=2).encode(),canonical+b'\n'):
+                    sidecar.write_bytes(encoded)
+                    with self.assertRaises(ValueError): b.validate_campaign_manifest(result)
+                sidecar.write_bytes(canonical)
+                binding=result['frozen']['calibration_control']
+                for bad in (None,{}, {'format':binding['format']}, {**binding,'format':'unknown'},
+                            {**binding,'source_sha256':'0'*64},{**binding,'source_sha256':'A'*64},
+                            {**binding,'path':'benchmark.canonical.json'},{**binding,'path':str(root/'other.json')},
+                            {**binding,'extra':True}):
+                    changed=copy.deepcopy(result); changed['frozen']['calibration_control']=bad
+                    with self.assertRaises(ValueError): b.validate_campaign_manifest(changed)
+                for digest in ('0'*64,'A'*64,None):
+                    changed=copy.deepcopy(result); changed['frozen']['calibration_sha256']=digest
+                    with self.assertRaises(ValueError): b.validate_campaign_manifest(changed)
+                with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertEqual(target.read_bytes(),manifest_bytes)
+                target.unlink(); sidecar.write_bytes(b'conflict')
+                with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertEqual(sidecar.read_bytes(),b'conflict'); self.assertFalse(target.exists())
+                sidecar.unlink()
+                # Export/hash failures clean owned temporaries and cannot publish authority.
+                for boundary in ('fsync','link'):
+                    with patch.object(b.os,boundary,side_effect=OSError('injected publication failure')):
+                        with self.assertRaises(OSError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                    self.assertFalse(target.exists()); self.assertFalse(sidecar.exists())
+                    self.assertEqual(list(run.glob('*.tmp')),[])
+                    self.assertEqual(list(run.glob('.calibration-*')),[])
+                from prepared_learning import reporting as report
+                sha=report._sha
+                def bad_export_hash(path):
+                    return '0'*64 if str(path).endswith('.tmp') else sha(path)
+                with patch.object(report,'_sha',side_effect=bad_export_hash):
+                    with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertFalse(target.exists()); self.assertFalse(sidecar.exists())
+                link=b.os.link
+                def fail_manifest(src,dst):
+                    if Path(dst)==target: raise OSError('manifest publication failed')
+                    return link(src,dst)
+                with patch.object(b.os,'link',side_effect=fail_manifest):
+                    with self.assertRaises(OSError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertFalse(target.exists()); self.assertEqual(sidecar.read_bytes(),canonical)
+                inode=sidecar.stat().st_ino
+                b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertEqual(sidecar.stat().st_ino,inode)
+                self.assertEqual(source.read_bytes(),original)
+                # A concurrent creator must win at either publication boundary.
+                for destination in (sidecar,target):
+                    target.unlink(); sidecar.unlink(missing_ok=True)
+                    def race(src,dst):
+                        if Path(dst)==destination: destination.write_bytes(b'concurrent owner')
+                        return link(src,dst)
+                    with patch.object(b.os,'link',side_effect=race):
+                        with self.assertRaises((ValueError,FileExistsError)): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                    self.assertEqual(destination.read_bytes(),b'concurrent owner')
+                    if destination==sidecar: self.assertFalse(target.exists()); target.write_bytes(b'cleanup')
+
+    def test_calibration_native_parse_is_admitted(self):
+        import copy,json,os
+        from unittest.mock import patch
+        from tests.test_reporting import calibration_source
+        from prepared_learning import benchmark as b, reporting as report
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run,evidence=calibration_source(root); source=run/'benchmark.json'; target=root/'frozen.json'
+            with patch.object(b,'_benchmark_identity',return_value=evidence['identity']),patch('prepared_learning.pilot._available_memory',return_value=4*1024**3):
+                with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(64*1024**2)}),patch.object(b.json,'loads',side_effect=AssertionError('decode before admission')):
+                    with self.assertRaises(report.ReportingResourceLimit) as refused: b.finalize_benchmark_manifest(source,target,root/'campaign')
+                    self.assertEqual(refused.exception.evidence['policy']['json_expansion_factor'],64)
+                self.assertFalse(target.exists())
+                with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
+                    result=b.finalize_benchmark_manifest(source,target,root/'campaign')
+                with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(64*1024**2)}),patch.object(b.json,'loads',side_effect=AssertionError('decode before admission')):
+                    with self.assertRaises(report.ReportingResourceLimit) as refused: b.validate_campaign_manifest(result)
+                    self.assertEqual(refused.exception.evidence['policy']['json_expansion_factor'],64)
+                for change in (lambda m:m.update(dimension=3),lambda m:m['frozen']['repetitions'].update(B01=99),
+                               lambda m:m['frozen']['selected_execution_hashes'].update(B01='wrong'),
+                               lambda m:m['frozen'].update(condition_hash='wrong'),lambda m:m['frozen']['identity'].update(runtime={} )):
+                    changed=copy.deepcopy(result); change(changed)
+                    with self.assertRaises(ValueError): b.validate_campaign_manifest(changed)
+                original=source.read_bytes(); target.unlink(); source.with_suffix('.canonical.json').unlink()
+                writer=b._write_canonical_calibration
+                def mutate(*args):
+                    writer(*args); source.write_bytes(original+b' ')
+                with patch.object(b,'_write_canonical_calibration',side_effect=mutate):
+                    with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertFalse(target.exists())
+                source.write_bytes(original)
+                read=Path.read_text
+                def mutate_read(path,*args,**kwargs):
+                    value=read(path,*args,**kwargs)
+                    if path==source: source.write_bytes(original+b' ')
+                    return value
+                with patch.object(Path,'read_text',new=mutate_read):
+                    with self.assertRaises(ValueError): b.finalize_benchmark_manifest(source,target,root/'campaign')
+                self.assertFalse(target.exists())
+                source.write_bytes(original)
+                result=b.finalize_benchmark_manifest(source,target,root/'campaign')
+                with patch.object(Path,'read_text',new=mutate_read):
+                    with self.assertRaises(ValueError): b.validate_campaign_manifest(result)
+                source.write_bytes(original)
+
+    def test_cli_calibration_native_limit_is_retryable(self):
+        import json
+        from unittest.mock import patch
+        from tests.test_reporting import calibration_source
+        from prepared_learning import benchmark as b, reporting as report
+        from prepared_learning.cli import main
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run,evidence=calibration_source(root)
+            # The subprocess is a hand-built worker double; no science is executed.
+            evidence['resources'][1]['selected_execution_hash']=evidence['resources'][0]['selected_execution_hash']
+            (run/'benchmark.json').write_text(json.dumps(evidence))
+            with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
+                target=root/'frozen.json'; output=root/'fixed'
+                manifest=b.finalize_benchmark_manifest(run/'benchmark.json',target,output); original=target.read_bytes()
+                stdout=io.StringIO()
+                with patch.object(b,'validate_campaign_manifest',side_effect=report.ReportingResourceLimit({'recovery':'retry identical inputs'})),contextlib.redirect_stdout(stdout):
+                    self.assertEqual(main(['benchmark','--manifest',str(target)]),1)
+                self.assertEqual(json.loads(stdout.getvalue())['code'],'LOCAL_RESOURCE_LIMIT')
+                self.assertEqual(target.read_bytes(),original); self.assertFalse(output.exists())
+                def worker(request,*args):
+                    mid=request['method']['method_id']; resource=next(r for r in evidence['resources'] if r['method_id']==mid)
+                    rows=[]
+                    for temperature in ('cold','warm'):
+                        row={s+'_ns':1 for s in b.STAGES}
+                        row.update({k:1 for k in ('source_generation_ns','prepared_serialization_ns','target_generation_ns','adapted_serialization_ns')})
+                        row.update(method_id=mid,block=request['block'],timing_stratum=temperature,end_to_end_ns=10,repetitions=1,repetition_samples=[{'generation_ns':1}])
+                        rows.append(row)
+                    return {'resource':resource,'rows':rows,'conditions':evidence['conditions'],'pilot':{'status':'frozen_no_recalibration'}}
+                stdout=io.StringIO()
+                with patch.object(b,'_subprocess_block',side_effect=worker),contextlib.redirect_stdout(stdout):
+                    self.assertEqual(main(['benchmark','--manifest',str(target)]),0,stdout.getvalue())
+                self.assertTrue((output/'benchmark.json').exists()); self.assertEqual(target.read_bytes(),original)
+
     def test_rss_units(self):
         self.assertEqual(normalize_peak_rss(1024, 'Darwin'), 1024)
         self.assertEqual(normalize_peak_rss(1024, 'Linux'), 1048576)

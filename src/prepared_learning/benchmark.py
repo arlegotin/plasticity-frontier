@@ -12,10 +12,12 @@ import math
 import os
 import platform
 import random
+import re
 import resource
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 import warnings
 from collections.abc import Mapping, Sequence
@@ -273,13 +275,65 @@ def _fixed_schedule(evidence):
     return {'blocks':count,'orders':balanced_orders(ids,count,int(config.get('seed',0))^71313),'repetitions':repetitions}
 
 
+def _canonical_calibration_path(calibration_path: Path) -> Path:
+    return calibration_path.with_suffix('.canonical.json')
+
+
+def _write_canonical_calibration(evidence: dict, path: Path, expected_sha256: str) -> None:
+    """Stream the complete native JSON tree, verify it, then publish without replacement."""
+    from .reporting import _sha
+    path=Path(path); path.parent.mkdir(parents=True,exist_ok=True)
+    temporary=None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=path.parent,
+                                         prefix='.'+path.name+'-',suffix='.tmp',delete=False) as stream:
+            temporary=Path(stream.name)
+            encoder=json.JSONEncoder(sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
+            for chunk in encoder.iterencode(evidence): stream.write(chunk)
+            stream.flush(); os.fsync(stream.fileno())
+        if _sha(temporary)!=expected_sha256: raise ValueError('canonical calibration hash mismatch')
+        # A pre-existence check or replace/rename would lose a concurrent creator.
+        os.link(temporary,path)
+    finally:
+        if temporary is not None: temporary.unlink(missing_ok=True)
+
+
+def _verify_calibration_control(frozen: dict) -> tuple[Path, Path] | None:
+    """Only a known complete binding with both byte proofs permits hash-only reads."""
+    from .reporting import _sha
+    if 'calibration_control' not in frozen: return None
+    binding=frozen['calibration_control']
+    if (not isinstance(binding,dict) or set(binding)!={'format','path','source_sha256'} or
+            binding['format']!='prepared_calibration_canonical_v1'):
+        raise ValueError('invalid calibration control binding')
+    for digest in (binding['source_sha256'],frozen.get('calibration_sha256')):
+        if not isinstance(digest,str) or re.fullmatch('[0-9a-f]{64}',digest) is None:
+            raise ValueError('invalid calibration control digest')
+    original=frozen.get('calibration_path')
+    if not isinstance(original,str) or not Path(original).is_absolute():
+        raise ValueError('invalid original calibration path')
+    original=Path(original); canonical=_canonical_calibration_path(original)
+    if (not isinstance(binding['path'],str) or not Path(binding['path']).is_absolute() or
+            binding['path']!=str(canonical) or canonical==original):
+        raise ValueError('invalid canonical calibration path')
+    if _sha(original)!=binding['source_sha256']: raise ValueError('original calibration bytes changed')
+    if _sha(canonical)!=frozen['calibration_sha256']: raise ValueError('canonical calibration bytes changed')
+    return original,canonical
+
+
 def finalize_benchmark_manifest(calibration_path, manifest_path, campaign_output):
     """Freeze a measured operational schedule; does not run the campaign.
 
     Calibration and campaign use the same fixed source-selected assets. Timing
     samples are disjoint fresh executions. This is not new preparation inference.
     """
-    calibration_path=Path(calibration_path).resolve(); evidence=json.loads(calibration_path.read_text())
+    from .reporting import _guard_paths, _sha, REPORT_PARSE_FACTOR
+    manifest_path=Path(manifest_path)
+    if manifest_path.exists() or manifest_path.is_symlink(): raise ValueError('finalized manifest already exists')
+    calibration_path=Path(calibration_path).resolve()
+    _guard_paths((calibration_path,),phase='calibration_finalize_before_parse',json_factor=REPORT_PARSE_FACTOR)
+    source_sha256=_sha(calibration_path)
+    evidence=json.loads(calibration_path.read_text())
     if evidence.get('status')!='exploratory' or evidence.get('config',{}).get('workflow')!='generated': raise ValueError('generated exploratory calibration required')
     if evidence['comparison_gate']['status']!='pass' or evidence['comparison_gate']['missing_recommended_controls']: raise ValueError('equality/risk and direct/ridge/EB controls required')
     identity=_benchmark_identity(evidence['config'])
@@ -290,9 +344,22 @@ def finalize_benchmark_manifest(calibration_path, manifest_path, campaign_output
                         'configuration_sha256':content_hash(_campaign_configuration(manifest)),
                         'identity':identity,'selected_execution_hashes':{r['method_id']:r['selected_execution_hash'] for r in evidence['resources']},
                         'condition_hash':content_hash(evidence['conditions'])}
-    manifest_path=Path(manifest_path)
-    if manifest_path.exists(): raise ValueError('finalized manifest already exists')
-    _atomic_json(manifest_path,manifest)
+    canonical=_canonical_calibration_path(calibration_path)
+    manifest['frozen']['calibration_control']={'format':'prepared_calibration_canonical_v1',
+        'path':str(canonical),'source_sha256':source_sha256}
+    # Stage beside the source, but publish neither authority until the source
+    # has survived the complete parse, semantic checks and canonical export.
+    with tempfile.TemporaryDirectory(prefix='.calibration-',dir=calibration_path.parent) as temporary:
+        staged=Path(temporary)/'control.json'
+        _write_canonical_calibration(evidence,staged,manifest['frozen']['calibration_sha256'])
+        if _sha(calibration_path)!=source_sha256: raise ValueError('calibration changed during finalization')
+        try:
+            os.link(staged,canonical)
+        except FileExistsError:
+            if _sha(canonical)!=manifest['frozen']['calibration_sha256']:
+                raise ValueError('conflicting canonical calibration already exists')
+        # A matching orphan sidecar supports retry. The manifest is always new.
+        _write_canonical_calibration(manifest,manifest_path,content_hash(manifest))
     return manifest
 
 
@@ -315,7 +382,13 @@ def validate_campaign_manifest(manifest, *, manifest_path=None):
     frozen=manifest.get('frozen',{})
     if manifest.get('phase')!='finalized': raise ValueError('finalized phase required')
     if content_hash(_campaign_configuration(manifest))!=frozen.get('configuration_sha256'): raise ValueError('campaign configuration changed')
-    evidence=json.loads(Path(frozen['calibration_path']).read_text())
+    from .reporting import _guard_paths, _sha, REPORT_PARSE_FACTOR
+    calibration_path=Path(frozen['calibration_path'])
+    _guard_paths((calibration_path,),phase='calibration_validate_before_parse',json_factor=REPORT_PARSE_FACTOR)
+    source_sha256=_sha(calibration_path)
+    _verify_calibration_control(frozen)
+    evidence=json.loads(calibration_path.read_text())
+    if _sha(calibration_path)!=source_sha256: raise ValueError('calibration changed during validation')
     if content_hash(evidence)!=frozen['calibration_sha256']: raise ValueError('calibration evidence changed')
     schedule=_fixed_schedule(evidence)
     if any(frozen.get(k)!=v for k,v in schedule.items()): raise ValueError('frozen schedule differs from measured calibration')
