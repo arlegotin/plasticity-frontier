@@ -504,6 +504,36 @@ def _package_path(package, relative):
     return result
 
 
+def _verify_package_file(reference, package):
+    """Verify generated package evidence without loading its contents."""
+    path=_package_path(package,reference['path'])
+    if 'size_bytes' in reference and path.stat().st_size!=reference['size_bytes']:
+        raise ValueError('package evidence size changed')
+    if _sha(path)!=reference['sha256']: raise ValueError('package evidence hash changed')
+    return path
+
+
+def _verify_worker_source(reference, package, *, retained_bytes=0):
+    # Historical external source paths are preserved provenance, not portable
+    # package dependencies. Generated replay evidence has an explicit scope.
+    scope=reference.get('source_scope','external_provenance')
+    if scope=='external_provenance':
+        if 'process_ref' in reference: raise ValueError('generated process evidence requires package source scope')
+        return
+    if scope!='package' or reference['source_json_pointer']!='':
+        raise ValueError('invalid generated worker source binding')
+    process_ref=reference.get('process_ref')
+    if not isinstance(process_ref,dict): raise ValueError('generated worker process reference missing')
+    process_path=_package_path(package,process_ref['path'])
+    _guard_paths((process_path,),phase='benchmark_process_evidence_before_parse',object_bytes=retained_bytes)
+    _verify_package_file(process_ref,package)
+    process=_read(process_path)
+    if (process['returncode']!=0 or process['stdout']['path']!=reference['source_block_path'] or
+            process['stdout']['sha256']!=reference['source_block_sha256']):
+        raise ValueError('generated worker/process source binding changed')
+    for name in ('stdout','stderr'): _verify_package_file(process[name],package)
+
+
 def _load_worker_index(reference, package, *, retained_bytes=0):
     path=_package_path(package,reference['path'])
     _guard_paths((path,),phase='benchmark_index_before_parse',object_bytes=retained_bytes)
@@ -519,6 +549,13 @@ def _load_worker_index(reference, package, *, retained_bytes=0):
         if record['ordinal']!=ordinal or record['path'] in paths: raise ValueError('benchmark index order/path changed')
         _package_path(package,record['path'])
         source=record['source_block_path']; digest=record['source_block_sha256']
+        scope=record.get('source_scope','external_provenance')
+        if scope=='package':
+            _package_path(package,source)
+            if not isinstance(record.get('process_ref'),dict): raise ValueError('generated worker process reference missing')
+            _package_path(package,record['process_ref']['path'])
+        elif scope!='external_provenance' or 'process_ref' in record:
+            raise ValueError('invalid benchmark source scope')
         if source in sources and sources[source]!=digest: raise ValueError('inconsistent benchmark source binding')
         pointer=(source,record['source_json_pointer'])
         if pointer in pointers: raise ValueError('duplicate benchmark source pointer')
@@ -548,6 +585,7 @@ def _load_worker_ref(reference, package, *, retained_bytes=0):
     if 'record_count' in reference and reference['record_count']!=reference.get('candidate_count'):
         raise ValueError('benchmark reference candidate count changed')
     del recorded,index
+    _verify_worker_source(reference,package,retained_bytes=retained_bytes)
     worker=_read(path)
     if _worker_key(worker)!=reference['worker_key']: raise ValueError('benchmark reference worker key changed')
     candidates=worker['resource'].get('selection',{}).get('candidate_records')
@@ -556,12 +594,20 @@ def _load_worker_ref(reference, package, *, retained_bytes=0):
     return worker
 
 
-def _publish_worker(worker, output, directory, ordinal, *, source_path, source_sha256, source_pointer):
+def _publish_worker(worker, output, directory, ordinal, *, source_path, source_sha256, source_pointer,
+                    source_scope="external_provenance", process_ref=None):
+    if source_scope=='package':
+        source_path=Path(source_path).resolve().relative_to(Path(output).resolve()).as_posix()
+        if not isinstance(process_ref,dict): raise ValueError('generated worker process reference missing')
+        _package_path(output,process_ref['path'])
+    elif source_scope!='external_provenance' or process_ref is not None:
+        raise ValueError('invalid benchmark source scope')
     relative=directory/f'{ordinal:08d}.json'
     _write(output/relative,worker)
     reference={'ordinal':ordinal,'worker_key':_worker_key(worker),'path':relative.as_posix(),
                'sha256':_sha(output/relative),'source_block_path':str(source_path),
                'source_block_sha256':source_sha256,'source_json_pointer':source_pointer}
+    if source_scope=='package': reference.update(source_scope='package',process_ref=dict(process_ref))
     candidates=worker['resource'].get('selection',{}).get('candidate_records')
     if candidates is not None: reference['candidate_count']=len(candidates)
     return reference

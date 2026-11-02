@@ -118,7 +118,10 @@ def _replay_benchmark(entry, destination, root, replay, config, *, retained_byte
             old_science=_benchmark_scientific(old); new_science=_benchmark_scientific(new)
             compare_scientific(old_science,new_science,rtol=replay['rtol'],atol=replay['atol'])
             new_reference=_publish_worker(new,destination,directory,ordinal,source_path=stdout,
-                                          source_sha256=_sha(stdout),source_pointer='')
+                                          source_sha256=_sha(stdout),source_pointer='',source_scope='package',
+                                          process_ref={'path':process.with_suffix('.process.json').relative_to(destination).as_posix(),
+                                                       'sha256':_sha(process.with_suffix('.process.json')),
+                                                       'size_bytes':process.with_suffix('.process.json').stat().st_size})
             new_refs.append(new_reference); aggregate.write(new)
             del old,new,old_science,new_science,reference,new_reference
     new_index_ref=_publish_worker_index(new_refs,destination,directory)

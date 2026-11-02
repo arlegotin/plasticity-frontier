@@ -699,3 +699,47 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                     patch.object(api,'_compact_benchmark_resource',side_effect=AssertionError('oversized risk copied')):
                 with self.assertRaises(api.ReportingResourceLimit) as caught: api._benchmark(entry,output=root/'report')
             self.assertEqual(caught.exception.evidence['phase'],'benchmark_summary_before_copy')
+
+
+    def test_historical_source_provenance_does_not_require_external_files(self):
+        api=reporting(self)
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run=benchmark_input(root)
+            entry=api.build_report_inputs([descriptor])['inputs'][0]
+            summary=api._benchmark(entry,output=root/'report')
+            index=api._load_worker_index(summary['worker_records_ref'],root/'report')
+            reference=index['records'][0]
+            expected=api._load_worker_ref(reference,root/'report')
+            self.assertEqual(reference.get('source_scope','external_provenance'),'external_provenance')
+            shutil.rmtree(run)
+            self.assertEqual(api._load_worker_ref(reference,root/'report'),expected)
+
+    def test_generated_source_corruption_is_rejected_before_worker_parse(self):
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run=benchmark_input(root)
+            worker=json.loads(sorted((run/'blocks').glob('*.json'))[0].read_text())[0]
+            package=root/'package'; stdout=package/'processes/worker.stdout.json'; stderr=package/'processes/worker.stderr.txt'
+            api._write(stdout,worker); stderr.write_text('complete stderr')
+            process=package/'processes/worker.process.json'
+            def reference(path):
+                return {'path':path.relative_to(package).as_posix(),'sha256':api._sha(path),'size_bytes':path.stat().st_size}
+            api._write(process,{'returncode':0,'stdout':reference(stdout),'stderr':reference(stderr)})
+            record=api._publish_worker(worker,package,Path('remeasured'),0,source_path=stdout,
+                source_sha256=api._sha(stdout),source_pointer='')
+            record.update(source_scope='package',source_block_path=stdout.relative_to(package).as_posix(),process_ref=reference(process))
+            api._publish_worker_index([record],package,Path('remeasured'))
+            original=api._read
+            def read(path):
+                self.assertNotEqual(Path(path).resolve(),(package/record['path']).resolve(),'copied worker parsed before source verification')
+                return original(path)
+            for path in (stdout,stderr,process):
+                saved=path.read_bytes()
+                for missing in (False,True):
+                    with self.subTest(path=path.name,missing=missing):
+                        if missing: path.unlink()
+                        else: path.write_bytes(saved+b'corrupt')
+                        with patch.object(api,'_read',side_effect=read):
+                            with self.assertRaises((ValueError,FileNotFoundError)): api._load_worker_ref(record,package)
+                        path.write_bytes(saved)

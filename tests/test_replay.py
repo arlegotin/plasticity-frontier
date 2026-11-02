@@ -250,6 +250,11 @@ class BoundedBenchmarkReplay(unittest.TestCase):
                 for row in new['rows']: row['end_to_end_ns']+=700
                 if mutation is not None: mutation(new)
                 report._write(kw['stdout_path'],new); kw['stderr_path'].write_text('')
+                def output_ref(path):
+                    return {'path':path.relative_to(kw['package']).as_posix(),
+                            'sha256':report._sha(path),'size_bytes':path.stat().st_size}
+                report._write(kw['log'],{'command':command,'cwd':str(kw['cwd']),'returncode':0,
+                    'stdout':output_ref(kw['stdout_path']),'stderr':output_ref(kw['stderr_path'])})
                 return kw['stdout_path']
             destination=root/'replay'; destination.mkdir()
             with patch.object(api,'_run_file',side_effect=run_file),patch.object(report,'_read',side_effect=read),patch.object(api,'_read',side_effect=read),patch.object(api,'_benchmark_scientific',new=tracked_projection):
@@ -259,10 +264,32 @@ class BoundedBenchmarkReplay(unittest.TestCase):
             self.assertEqual(len(measured),16); self.assertEqual(measured[0]['rows'][0]['end_to_end_ns'],1700)
             self.assertEqual(result['timing_stratum'],'technical_replay')
             self.assertEqual(result['report_schema_version'],'benchmark_raw_refs_v2')
-            moved=root/'moved-package'; shutil.copytree(destination,moved)
+            moved=root/'moved-package'; shutil.move(destination,moved)
+            self.assertFalse(destination.exists())
             index=report._load_worker_index(result['remeasured_worker_records_ref'],moved)
             for reference,expected_worker in zip(index['records'],measured):
                 self.assertEqual(report._load_worker_ref(reference,moved),expected_worker)
+                self.assertEqual(reference.get('source_scope'),'package')
+                self.assertFalse(Path(reference['source_block_path']).is_absolute())
+                self.assertEqual(report._sha(moved/reference['source_block_path']),reference['source_block_sha256'])
+                process_ref=reference['process_ref']
+                self.assertEqual(report._sha(moved/process_ref['path']),process_ref['sha256'])
+                process=report._read(moved/process_ref['path'])
+                for name in ('stdout','stderr'):
+                    self.assertFalse(Path(process[name]['path']).is_absolute())
+                    self.assertEqual(report._sha(moved/process[name]['path']),process[name]['sha256'])
+                self.assertEqual(process['stdout']['path'],reference['source_block_path'])
+            # A copied worker must not conceal missing or changed generated
+            # stdout/stderr/receipt evidence, even after the old base is gone.
+            reference=index['records'][0]; process=report._read(moved/reference['process_ref']['path'])
+            for relative in (reference['source_block_path'],process['stderr']['path'],reference['process_ref']['path']):
+                path=moved/relative; original_bytes=path.read_bytes()
+                with self.subTest(evidence=relative):
+                    path.write_bytes(original_bytes+b'changed')
+                    with self.assertRaises(ValueError): report._load_worker_ref(reference,moved)
+                    path.unlink()
+                    with self.assertRaises((ValueError,FileNotFoundError)): report._load_worker_ref(reference,moved)
+                    path.write_bytes(original_bytes)
             gc.collect(); self.assertTrue(all(ref() is None for ref in refs))
 
             # Missing, duplicate, wrong-key and changed requests cannot run a
