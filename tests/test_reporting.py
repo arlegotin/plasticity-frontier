@@ -481,15 +481,17 @@ def calibration_source(root, *, padding=0):
     return descriptor,run,evidence
 
 
-def finalized_benchmark_input(root, *, padding=0):
+def finalized_benchmark_input(root, *, padding=0, calibration_name="benchmark.json"):
     """Synthetic raw workers plus public finalization with fixture-only identity."""
     import shutil
     from prepared_learning import benchmark as b
     root=Path(root).resolve()
     descriptor,calibration,evidence=calibration_source(root,padding=padding)
     campaign=root/'campaign'; shutil.copytree(calibration,campaign)
+    source=calibration/calibration_name
+    if source.name!='benchmark.json': (calibration/'benchmark.json').rename(source)
     with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
-        config=b.finalize_benchmark_manifest(calibration/'benchmark.json',root/'frozen.json',campaign)
+        config=b.finalize_benchmark_manifest(source,root/'frozen.json',campaign)
     inputs=json.loads((campaign/'inputs.json').read_text()); inputs['inputs']['manifest']=config
     (campaign/'inputs.json').write_text(json.dumps(inputs))
     for path in (campaign/'blocks').glob('*.json'):
@@ -527,12 +529,19 @@ def eager_benchmark(entry):
 
 class BoundedBenchmarkReporting(unittest.TestCase):
     def test_canonical_controls_are_hash_only_and_fully_inventoried(self):
+        self._canonical_control_inventory('benchmark.json')
+
+    def test_canonical_control_accounting_is_independent_of_filename(self):
+        for name in ('control.dat','control','control.JSON','control.npy'):
+            with self.subTest(calibration_name=name): self._canonical_control_inventory(name)
+
+    def _canonical_control_inventory(self, calibration_name):
         import os
         api=reporting(self)
         with tempfile.TemporaryDirectory() as tmp,patch('prepared_learning.pilot._available_memory',return_value=8*1024**3):
-            root=Path(tmp)
+            root=Path(tmp).resolve()
             with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1024**3)}):
-                descriptor,run,config=finalized_benchmark_input(root,padding=4*1024**2)
+                descriptor,run,config=finalized_benchmark_input(root,padding=4*1024**2,calibration_name=calibration_name)
             controls={Path(config['frozen']['calibration_path']),Path(config['frozen']['calibration_control']['path'])}
             ordinary=root/'ordinary.json'; ordinary.write_text(json.dumps({'value':'retained semantic payload'*1000}))
             other=root/'other.json'; other.write_text(json.dumps({'kind':'diagnostic','raw_path':str(ordinary),'fixture':True}))
@@ -546,6 +555,7 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                 return read(path)
             with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}),patch.object(api,'_read',side_effect=no_controls),patch.object(json,'loads',side_effect=no_control_decode):
                 manifest=api.build_report_inputs([descriptor,other]); entry=manifest['inputs'][0]
+                report_preflight=api._verify_inputs(manifest)
                 preflight=api._verify_inputs(manifest,replay=True)
                 result=api._benchmark(entry,output=root/'report')
                 tables=api.regenerate_tables(manifest,root/'tables')
@@ -562,6 +572,16 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                 self.assertEqual(preflight['files_scanned'],47)
                 self.assertEqual(preflight['files_scanned'],len(all_assets))
                 self.assertEqual(preflight['json_bytes'],sum(p.stat().st_size for p,_ in all_assets))
+                for scale in (report_preflight,preflight):
+                    self.assertEqual(scale['array_bytes'],0)
+                    self.assertEqual(scale['max_array_bytes'],0)
+                    self.assertEqual(scale['json_bytes'],sum(p.stat().st_size for p,_ in all_assets))
+                    self.assertEqual(scale['max_json_bytes'],max(p.stat().st_size for p,_ in all_assets))
+                    self.assertEqual(scale['semantic_json_bytes'],sum(p.stat().st_size for p,r in all_assets if r=='semantic'))
+                    self.assertEqual(scale['hash_only_files'],2)
+                    self.assertEqual(scale['hash_only_bytes'],sum(p.stat().st_size for p in controls))
+                    self.assertEqual(scale['inventory_bytes'],sum(4096+16*len(os.fsencode(p)) for p,_ in all_assets))
+                self.assertEqual(report_preflight['retained_copies'],1)
                 self.assertEqual(preflight['hash_only_files'],2)
                 self.assertEqual(preflight['hash_only_bytes'],sum(p.stat().st_size for p in controls))
                 self.assertEqual(preflight['semantic_json_bytes'],sum(p.stat().st_size for p,r in all_assets if r=='semantic'))
@@ -573,11 +593,32 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                 self.assertEqual(preflight['retained_copies'],2)
                 self.assertEqual(preflight['policy']['json_expansion_factor'],256)
                 self.assertEqual(preflight['largest_file_bytes'],max(p.stat().st_size for p,_ in all_assets))
-                for key,source in (('worker_records_ref',run),('calibration_worker_records_ref',next(p for p in controls if p.name=='benchmark.json').parent)):
+                for key,source in (('worker_records_ref',run),('calibration_worker_records_ref',Path(config['frozen']['calibration_path']).parent)):
                     package=root/'report'; index=api._load_worker_index(result[key],package)
                     full=[api._load_worker_ref(ref,package) for ref in index['records']]
                     expected_workers=[w for p in sorted((source/'blocks').glob('*.json')) for w in json.loads(p.read_text())]
                     self.assertEqual(full,expected_workers); self.assertEqual(len(full),16)
+                # Real semantic array assets retain their unchanged workspace charge.
+                import numpy as np
+                array=root/'actual-array.npy'; np.save(array,np.zeros(512*1024,dtype=np.float64))
+                value=json.loads(descriptor.read_text()); value['assets']=[str(array)]
+                descriptor.write_text(json.dumps(value))
+                with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024**2)}):
+                    with_array=api.build_report_inputs([descriptor,other])
+                    for replay in (False,True):
+                        scale=api._verify_inputs(with_array,replay=replay)
+                        assets_with_array=[(p,r) for entry in with_array['inputs'] for p,r in api._input_assets(entry)]
+                        self.assertEqual(scale['files_scanned'],48)
+                        self.assertEqual(scale['array_bytes'],array.stat().st_size)
+                        self.assertEqual(scale['max_array_bytes'],array.stat().st_size)
+                        self.assertEqual(scale['json_bytes'],sum(p.stat().st_size for p,_ in assets_with_array if p!=array))
+                        self.assertEqual(scale['hash_only_files'],2)
+                        self.assertEqual(scale['hash_only_bytes'],sum(p.stat().st_size for p in controls))
+                        self.assertEqual(scale['inventory_bytes'],sum(4096+16*len(os.fsencode(p)) for p,_ in assets_with_array))
+                        expected=64*1024**2+(2 if replay else 1)*(256*scale['json_working_bytes']+scale['inventory_bytes'])+16*array.stat().st_size+16*scale['object_bytes']
+                        self.assertEqual(scale['estimated_peak_bytes'],expected)
+                for replay in (False,True):
+                    with self.assertRaises(api.ReportingResourceLimit): api._guard_inputs(with_array,replay=replay)
 
     def test_canonical_control_does_not_exempt_semantic_workers(self):
         import os

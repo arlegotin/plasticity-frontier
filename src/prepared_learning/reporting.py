@@ -103,7 +103,8 @@ def _guard_assets(assets, *, phase, copies=1, object_bytes=0, streaming=False, j
             scale['hash_only_files']+=1; scale['hash_only_bytes']+=size
         scale['files_scanned']+=1
         scale['inventory_bytes']+=4096+16*len(os.fsencode(path))
-        if path.suffix in ('.json','.jsonl'):
+        # Verified hash-only controls are JSON regardless of their original suffix.
+        if role=='hash_only' or path.suffix in ('.json','.jsonl'):
             scale['json_bytes']+=size
             scale['max_json_bytes']=max(scale['max_json_bytes'],size)
             if role=='semantic':
