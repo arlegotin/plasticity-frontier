@@ -75,3 +75,18 @@ class FrontierTests(unittest.TestCase):
   self.assertEqual(r.selection_status,'unresolved')
   for branch in (r.F,r.Z):
    self.assertEqual(branch.status,'failed'); self.assertTrue(np.all(np.isfinite(branch.variables)))
+ def test_final_gate_rejects_bad_quality_despite_success_label(self):
+  from dataclasses import replace
+  from prepared_learning.frontier import solve_frontier
+  from prepared_learning.quadratic import solve_qp
+  # Independent final checks must not trust a solver's success flag.
+  for section,key,value in (('dual','minimum_multiplier',-1e-16),
+                            ('kkt','stationarity_inf',1e-9),
+                            ('kkt','complementarity_inf',1e-9),
+                            ('feasibility','minimum_slack',-6.01e-11)):
+   def bad(qp,scale):
+    x,diag=solve_qp(qp,scale)
+    return x,replace(diag,**{section:{**getattr(diag,section),key:value}})
+   with self.subTest(section=section,key=key), patch('prepared_learning.frontier.solve_qp',side_effect=bad):
+    result=solve_frontier(*fixture())
+    for branch in (result.F,result.Z): self.assertEqual(branch.status,'failed')

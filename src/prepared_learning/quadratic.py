@@ -32,7 +32,17 @@ def diagnose_qp(qp,x):
 
 
 def solve_qp(qp, variable_scale):
+    """Return a candidate and original-unit diagnostics, including admission.
+
+    Polish is optional. A nonzero-budget solve succeeds only when the native
+    solve succeeds and the final repaired point passes the frontier KKT gate.
+    The independent Z rank comparison remains the frontier's responsibility.
+    """
     if not np.isfinite(variable_scale) or variable_scale<0: raise ValueError('invalid variable scale')
+    active=np.array([],dtype=int); multipliers=np.array([]); candidate=None
+    rejection_reasons=[]; reconstructed=np.array([],dtype=int)
+    face_repair=0.; feasibility_repair=0.; polish_valid=True
+    origin='zero_budget'; native_iterate=None
     if variable_scale==0:
         x=np.zeros(len(qp.linear)); result=None; repair=0.
     else:
@@ -43,12 +53,12 @@ def solve_qp(qp, variable_scale):
         y=np.asarray(result.x,dtype=float)
         if y.shape!=qp.linear.shape or not np.all(np.isfinite(y)):
             raise ValueError('nonfinite or invalid solver iterate: '+str(result.message))
+        native_iterate=y.copy(); origin='native'
         # Test the diagonal unconstrained minimizer directly before treating any
         # near-zero slack as active. This retains very weak positive directions.
         unconstrained=-qp.linear/(2*np.diag(qp.hessian))/scale
-        polish_valid=True
         if np.all(np.isfinite(unconstrained)) and np.all(A@unconstrained+offset>=0):
-            y=unconstrained
+            y=unconstrained; origin='unconstrained'
         else:
             active=np.flatnonzero(A@y+offset < 1e-8)
             H=2*qp.hessian*scale*scale/magnitude; l=qp.linear*scale/magnitude; C=A[active]
@@ -56,20 +66,61 @@ def solve_qp(qp, variable_scale):
             try:
                 solution=np.linalg.solve(K,np.r_[-l,-offset[active]])
                 candidate=solution[:len(y)]; multipliers=solution[len(y):]
-                polish_valid=(np.all(np.isfinite(solution)) and np.all(multipliers>=0)
-                              and np.min(A@candidate+offset)>=-1e-12)
-                if polish_valid: y=candidate
+                if not np.all(np.isfinite(solution)): rejection_reasons.append('nonfinite_solution')
+                if np.any(multipliers<0): rejection_reasons.append('negative_multiplier')
+                if np.min(A@candidate+offset)<-1e-12: rejection_reasons.append('infeasible_candidate')
+                polish_valid=not rejection_reasons
+                if polish_valid: y=candidate; origin='active_set_polish'
             except np.linalg.LinAlgError:
-                polish_valid=False
+                polish_valid=False; rejection_reasons.append('linear_solve_failure')
         x=scale*y; before=x.copy()
         # Constraints encode either F or Z; remove rounding-scale violations.
         if len(qp.A)==len(x)+1 and np.all(qp.A[:-1]==np.eye(len(x))):
+            # Positive production-polish lower-bound multipliers force zeros
+            # by complementarity. Do not infer support from a gain cutoff or
+            # the independent rank oracle. Zero multipliers do not select a face.
+            if origin=='active_set_polish':
+                reconstructed=active[(active<len(x)) & (multipliers>0)]
+                x[reconstructed]=0.
+                face_repair=float(np.max(np.abs(x-before),initial=0))
+            after_face=x.copy()
             x=np.maximum(x,0); total=x.sum()
         else:
+            after_face=x.copy()
             x[-1]=max(0.,x[-1]); x[:-1]=np.maximum(x[:-1],x[-1]); total=x[:-1].sum()-(len(x)-2)*x[-1]
         if total>qp.offset[-1]: x*=qp.offset[-1]/total
+        feasibility_repair=float(np.max(np.abs(x-after_face),initial=0))
         repair=float(np.max(np.abs(x-before),initial=0))
     diagnostic=diagnose_qp(qp,x)
+    quality=qp_quality_passes(diagnostic,qp.offset[-1])
     from dataclasses import replace
-    diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,'solver_success':True if result is None else bool(result.success and polish_valid),'solver_message':'zero budget' if result is None else str(result.message),'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,'repair_inf':repair,'active_set_polish_valid':True if result is None else bool(polish_valid)})
+    diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,
+        'solver_success':bool(quality and (result is None or result.success)),
+        'solver_message':'zero budget' if result is None else str(result.message),
+        'native_solver_success':None if result is None else bool(result.success),
+        'native_solver_status':None if result is None else int(result.status),
+        'native_scaled_iterate':native_iterate,
+        'candidate_origin':origin,'final_quality_passed':quality,
+        'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,
+        # Total change from the admitted candidate, including face reconstruction.
+        'repair_inf':repair,'feasibility_repair_inf':feasibility_repair,
+        'active_set_polish_valid':bool(polish_valid),
+        'active_set_polish_rejection_reasons':rejection_reasons,
+        'active_set_polish_constraints':active.tolist(),
+        # Rejected nonfinite entries are explicit nulls, so failure diagnostics
+        # remain JSON-serializable without concealing the rejection reason.
+        'active_set_polish_candidate_scaled':None if candidate is None else [float(v) if np.isfinite(v) else None for v in candidate],
+        'active_set_polish_multipliers_scaled':[float(v) if np.isfinite(v) else None for v in multipliers],
+        'active_face_reconstruction_indices':reconstructed.tolist(),
+        'active_face_reconstruction_size':len(reconstructed),
+        'active_face_reconstruction_inf':face_repair})
     return x,diagnostic
+
+
+def qp_quality_passes(diagnostic,k):
+    """The shared final original-unit gate; ordinary float64 diagnostics only."""
+    return bool(diagnostic.feasibility['minimum_slack']>=-1e-10*max(min(k,1.),1e-300)
+                and diagnostic.dual['minimum_multiplier']>=0
+                and np.all(np.isfinite(diagnostic.dual['multipliers']))
+                and 0<=diagnostic.kkt['stationarity_inf']<1e-9
+                and 0<=diagnostic.kkt['complementarity_inf']<1e-9)
