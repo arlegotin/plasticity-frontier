@@ -345,7 +345,11 @@ class FullArtifactReplay(unittest.TestCase):
             stale = subprocess.CompletedProcess([], recorded['returncode'], recorded['stdout'], recorded['stderr'])
             real_run = subprocess.run
             def no_write(command, **kwargs):
-                return stale if command[1:3]==['-m', 'prepared_learning'] else real_run(command, **kwargs)
+                if command[1:3]==['-m', 'prepared_learning']:
+                    kwargs['stdout'].write(recorded['stdout'].encode())
+                    kwargs['stderr'].write(recorded['stderr'].encode())
+                    return stale
+                return real_run(command, **kwargs)
             with patch('prepared_learning._replay._validate_source'), patch('prepared_learning._replay.subprocess.run', side_effect=no_write):
                 with self.assertRaisesRegex(ValueError, 'fresh|artifact|output'):
                     worker({'manifest': manifest, 'output': str(root/'stale')})
@@ -369,7 +373,8 @@ class FullArtifactReplay(unittest.TestCase):
                 def run_then_change(command, **kwargs):
                     run = real_run(command, **kwargs)
                     if command[1:3]==['-m', 'prepared_learning']:
-                        fresh = Path(json.loads(run.stdout)['attempt_path'])/'frontier.json'
+                        stdout=run.stdout if run.stdout is not None else Path(kwargs['stdout'].name).read_text()
+                        fresh = Path(json.loads(stdout)['attempt_path'])/'frontier.json'
                         if mutation=='missing':
                             fresh.unlink()
                         elif mutation=='symlink':

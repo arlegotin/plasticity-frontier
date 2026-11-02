@@ -189,9 +189,12 @@ def _declared_count(value):
 
 def _guard_inputs(manifest, *, replay=False, retained_bytes=0):
     scale=_empty_scale(); largest_streamed=0; retained_json=0; scalars=0
+    retained=retained_bytes+_object_bytes(manifest)
     for entry in manifest['inputs']:
         streamed=entry['kind'] in ('confirmation','benchmark')
-        measured=_guard_assets(_input_assets(entry,retained_bytes=retained_bytes),phase='input_before_store_open',streaming=streamed,object_bytes=retained_bytes)
+        measured=_guard_assets(_input_assets(entry,retained_bytes=retained),phase='input_before_store_open',
+            streaming=streamed,object_bytes=retained,copies=2 if replay else 1,
+            json_factor=REPORT_PARSE_FACTOR if replay else REPORT_JSON_FACTOR)
         for key in ('files_scanned','json_bytes','array_bytes','inventory_bytes','hash_only_files','hash_only_bytes','semantic_json_bytes'): scale[key]+=measured[key]
         for key in ('max_json_bytes','max_array_bytes','max_semantic_json_bytes'): scale[key]=max(scale[key],measured[key])
         if measured['largest_file_bytes']>scale['largest_file_bytes']:
@@ -212,7 +215,8 @@ def _guard_inputs(manifest, *, replay=False, retained_bytes=0):
         else: retained_json+=measured['json_working_bytes']
     scale['json_working_bytes']=largest_streamed+retained_json
     return _resource_check(scale,phase='replay_inputs' if replay else 'report_inputs',
-                           copies=2 if replay else 1,object_bytes=retained_bytes+_object_bytes(manifest),scalar_bytes=scalars)
+                           copies=2 if replay else 1,object_bytes=retained,scalar_bytes=scalars,
+                           json_factor=REPORT_PARSE_FACTOR if replay else REPORT_JSON_FACTOR)
 
 
 def resource_limit_decision(exc, output):
@@ -226,11 +230,11 @@ def resource_limit_decision(exc, output):
     return decision
 
 
-def _read(path):
+def _read(path, *, retained_bytes=0):
     # Parsing a native JSON tree does not allocate analysis/plot workspaces.
     # In particular, inventory manifests grow with J but contain mostly paths
     # and hashes. Raw semantic consumers have the separate 256x admission above.
-    _guard_paths((Path(path),),phase='json_before_parse',json_factor=REPORT_PARSE_FACTOR)
+    _guard_paths((Path(path),),phase='json_before_parse',json_factor=REPORT_PARSE_FACTOR,object_bytes=retained_bytes)
     return json.loads(Path(path).read_text())
 
 
@@ -255,9 +259,10 @@ def _path(value, base):
     return (base/path).resolve() if not path.is_absolute() else path.resolve()
 
 
-def _raw_files(entry):
+def _raw_files(entry, *, retained_bytes=0):
     """Canonical inventory deliberately excludes rebuildable summaries."""
-    _guard_assets(_input_assets(entry),phase='raw_inventory_before_store_open',streaming=entry['kind'] in ('confirmation','benchmark'))
+    _guard_assets(_input_assets(entry,retained_bytes=retained_bytes),phase='raw_inventory_before_store_open',
+                  streaming=entry['kind'] in ('confirmation','benchmark'),object_bytes=retained_bytes)
     files = {Path(entry['descriptor_path'])}
     kind = entry['kind']
     if kind == 'confirmation':
@@ -302,7 +307,7 @@ def _artifact_summary(command, process):
     return artifact, summary
 
 
-def _validate_output_artifact(entry, source_root):
+def _validate_output_artifact(entry, source_root, *, retained_bytes=0):
     command=entry.get('command')
     if (entry['kind']!='diagnostic' or not isinstance(command,list)
             or not all(isinstance(arg,str) for arg in command) or len(command) not in (3,5)):
@@ -320,7 +325,8 @@ def _validate_output_artifact(entry, source_root):
         raise ValueError('output artifact configuration must be an inventoried repository asset')
     if not entry.get('process_path') or entry['process_path'] not in entry['inventory']:
         raise ValueError('output artifact requires an inventoried process record')
-    process=_read(entry['process_path'])
+    _guard_paths((entry['process_path'],),phase='diagnostic_process_before_parse',object_bytes=retained_bytes)
+    process=_read(entry['process_path'],retained_bytes=retained_bytes)
     if set(process)!={'command','returncode','stdout','stderr'} or not isinstance(process['stderr'],str):
         raise ValueError('complete diagnostic process record required')
     if process.get('command')!=command:
@@ -391,23 +397,25 @@ def build_report_inputs(run_paths: Sequence[Path]) -> JsonRecord:
             'input_order_sha256':content_hash(inputs)}
 
 
-def _verify_inputs(manifest, *, replay=False):
+def _verify_inputs(manifest, *, replay=False, retained_bytes=0):
     if manifest.get('schema_version') != 1 or not manifest.get('inputs'): raise ValueError('invalid report manifest')
-    preflight=_guard_inputs(manifest,replay=replay)
+    preflight=_guard_inputs(manifest,replay=replay,retained_bytes=retained_bytes)
     if content_hash(manifest['inputs']) != manifest.get('input_order_sha256'): raise ValueError('input manifest identity changed')
     scientific_runs=set()
     for index, entry in enumerate(manifest['inputs']):
+        retained=retained_bytes+_object_bytes(manifest)+_object_bytes(scientific_runs)
         if entry['input_id'] != index: raise ValueError('input order changed')
-        if _raw_files(entry) != entry['inventory']: raise ValueError('raw inventory hash changed')
+        if _raw_files(entry,retained_bytes=retained) != entry['inventory']: raise ValueError('raw inventory hash changed')
         if 'output_artifact' in entry:
-            _validate_output_artifact(entry,manifest['replay']['source_root'])
+            _validate_output_artifact(entry,manifest['replay']['source_root'],retained_bytes=retained)
         if entry['kind']=='exact':
             from .exact_evidence import verify_export
-            verify_export(_read(entry['raw_path']),entry,manifest['replay']['source_root'])
+            verify_export(_read(entry['raw_path'],retained_bytes=retained),entry,manifest['replay']['source_root'])
         if entry['kind']=='confirmation':
             run=_read(Path(entry['run_path'])/'run.json'); identity=tuple(run[k] for k in IDENTITY_FIELDS)
             if identity in scientific_runs: raise ValueError('duplicate scientific run cannot add independent samples')
             scientific_runs.add(identity)
+            del run,identity
     return preflight
 
 
@@ -1095,6 +1103,8 @@ def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
     output=Path(output)
     tables=regenerate_tables(manifest,output)
     ledger=_claims(manifest,tables)
+    _resource_check(_empty_scale(),phase='report_ledger_before_write',
+                    object_bytes=sum(_object_bytes(v) for v in (manifest,tables,ledger)),scalar_bytes=64*1024)
     _csv(output/'claim_ledger.csv',ledger)
     introduction=['# Scoped execution report','',
            'Raw records and assets were verified against the ordered input manifest. Cached summaries were not used.',
@@ -1118,10 +1128,12 @@ def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
     for figure in tables['figures']:
         lines.append(f"- [{figure['path']}]({figure['path']}); [{figure['csv']}]({figure['csv']}); units {figure['x_unit']} / {figure['y_unit']}; {figure['evaluation']}; independent n={figure['independent_n']}.")
     receipt=manifest.get('replay',{}).get('receipt'); replay=None
+    def reserve():
+        return sum(_object_bytes(v) for v in (manifest,tables,ledger,introduction,sections,lines,replay))
     if receipt:
         path=Path(receipt['path'])
         if _sha(path)!=receipt['sha256']: raise ValueError('clean replay receipt hash changed')
-        replay=_read(path)
+        replay=_read(path,retained_bytes=reserve())
         if replay.get('input_order_sha256')!=manifest['input_order_sha256'] or replay.get('status')!='matched' or not replay.get('clean_environment'):
             raise ValueError('replay evidence does not match these report inputs')
     blocked_claims=[{'claim_id':c['claim_id'],'input_ids':c['unavailable_input_ids']} for c in ledger if c['support_status']=='unavailable']
@@ -1135,6 +1147,8 @@ def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
         'Report reconstruction and clean replay completed in the recorded scope.' if completed else 'Reconstruction retained all outcomes; G10 requires matching nonfixture replay and valid support for its scoped claims.',
         'Retain scoped negative and positive conclusions and unsuccessful history alike.' if completed else 'Complete missing replay or resolve only affected claims; fixtures cannot establish production completion.')
     lines.extend(['','## G10 decision','',json.dumps(to_json_record(decision),indent=2),''])
+    _resource_check(_empty_scale(),phase='report_before_write',
+                    object_bytes=reserve()+_object_bytes(decision)+_object_bytes(blocked_claims),scalar_bytes=64*1024)
     import shutil
     with (output/'results.md').open('w') as stream:
         stream.write('\n'.join(introduction))
@@ -1191,13 +1205,34 @@ def _scientific(value, _measurement_ids=None):
     return value
 
 
-def compare_run_stores(left: Path, right: Path, *, rtol, atol) -> JsonRecord:
+def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0) -> JsonRecord:
     import sqlite3,shutil,itertools
-    preflight=_guard_paths((path for root in (Path(left),Path(right)) for path in _store_paths(root)),
-                            phase='run_comparison_before_open',streaming=True)
+    left=Path(left); right=Path(right)
+    preflight=_guard_paths((path for root in (left,right) for path in _store_paths(root)),
+                            phase='run_comparison_before_open',streaming=True,object_bytes=retained_bytes)
+    # One bounded metadata pass reserves both path maps, logical asset keys,
+    # returned hashes and set-comparison buffers BEFORE any store is opened.
+    # A commit's byte size bounds its logical key, including escaped Unicode.
+    map_bytes=0
+    for root in (left,right):
+        for block in (root/'blocks').iterdir():
+            key_bytes=(block/'commit.json').stat().st_size
+            for asset in (block/'assets').glob('*.npy'):
+                map_bytes+=1024+4*(len(os.fsencode(asset))+key_bytes+128)
+    scale={key:preflight[key] for key in _empty_scale()}
+    # SQLite cache, encoded row/key buffers and array comparison chunks are
+    # additional to the existing one-block semantic workspace, never a cohort.
+    buffers=2*1024*1024+4*65536*8
+    def admit(phase, *, objects=0, scalar_bytes=0):
+        return _resource_check(scale,phase=phase,object_bytes=retained_bytes+map_bytes+objects,
+                               scalar_bytes=buffers+scalar_bytes)
+    preflight=admit('run_comparison_maps_before_open')
     arrays=[]; count=0
+    left_run=_read(left/'run.json',retained_bytes=retained_bytes+map_bytes)
+    right_run=_read(right/'run.json',retained_bytes=retained_bytes+map_bytes+_object_bytes(left_run))
     for key in IDENTITY_FIELDS:
-        if _read(left/'run.json')[key]!=_read(right/'run.json')[key]: raise ValueError('replay run identity mismatch: '+key)
+        if left_run[key]!=right_run[key]: raise ValueError('replay run identity mismatch: '+key)
+    del left_run,right_run
     # Payloads and their order index live on disk. RAM holds one verified raw
     # block and one record pair, independent of J and checkpoint layout.
     with tempfile.TemporaryDirectory(prefix='prepared-replay-index-') as temporary:
@@ -1210,39 +1245,56 @@ def compare_run_stores(left: Path, right: Path, *, rtol, atol) -> JsonRecord:
         try:
             index.execute('PRAGMA cache_size=-2048'); index.execute('PRAGMA temp_store=FILE'); index.execute('PRAGMA threads=1')
             index.execute('CREATE TABLE records (side INTEGER, unit TEXT, payload TEXT)')
-            for side,root in enumerate((Path(left),Path(right))):
-                store=RunStore.open(root,_read(root/'run.json')); assets={}
+            for side,root in enumerate((left,right)):
+                admit('run_comparison_store_before_open')
+                store=RunStore.open(root,_read(root/'run.json',retained_bytes=retained_bytes+map_bytes)); assets={}
                 for block in sorted((root/'blocks').iterdir()):
+                    admit('run_comparison_block_before_parse')
                     store._verify(block)
-                    for row in _read(block/'records.json'):
+                    rows=_read(block/'records.json',retained_bytes=retained_bytes+map_bytes)
+                    for row in rows:
                         if row['kind'] in ('timing_blocks','decisions'): continue
                         scientific=_scientific(row); nested=scientific.get('result',{})
                         key=json.dumps({key:scientific.get(key,nested.get(key)) for key in
                             ('kind','outer_replication','task_id','task_key','method_id','configuration_key','branch','endpoint')},sort_keys=True)
-                        index.execute('INSERT INTO records VALUES (?,?,?)',
-                                      (side,key,json.dumps(scientific,sort_keys=True,allow_nan=False)))
-                    marker=_read(block/'commit.json')
+                        payload=json.dumps(scientific,sort_keys=True,allow_nan=False)
+                        index.execute('INSERT INTO records VALUES (?,?,?)',(side,key,payload))
+                        del scientific,nested,key,payload
+                    del rows
+                    # The loop variable otherwise retains the last full record.
+                    if 'row' in locals(): del row
+                    marker=_read(block/'commit.json',retained_bytes=retained_bytes+map_bytes)
                     for asset in (block/'assets').glob('*.npy'): assets[marker['key']+'/'+asset.name]=asset
+                    del marker
                 arrays.append(assets)
+            del store,assets
             index.commit(); index.execute('CREATE INDEX record_order ON records(side,unit,payload)')
             cursors=[index.execute('SELECT unit,payload FROM records WHERE side=? ORDER BY unit,payload',(side,)) for side in (0,1)]
             for a,b in itertools.zip_longest(*cursors):
                 if a is None or b is None or a[0]!=b[0]: raise ValueError('scientific record keys/count differ')
+                # JSON strings returned by SQLite coexist with both decoded
+                # records. Charge their actual bytes using the cached scale.
+                admit('run_comparison_record_pair_before_parse',objects=_object_bytes((a,b)))
                 compare_scientific(json.loads(a[1]),json.loads(b[1]),rtol=rtol,atol=atol)
                 count+=1
+            if 'a' in locals(): del a,b
         finally: index.close()
+    admit('run_comparison_array_maps')
     if set(arrays[0])!=set(arrays[1]): raise ValueError('scientific array inventory differs')
     hashes={}
     for key,a in arrays[0].items():
+        admit('run_comparison_array_before_load')
         b=arrays[1][key]; aa=np.load(a,allow_pickle=False,mmap_mode='r'); bb=np.load(b,allow_pickle=False,mmap_mode='r')
         if aa.shape!=bb.shape or aa.dtype!=bb.dtype: raise ValueError('scientific array differs: '+key)
         for a_chunk,b_chunk in np.nditer([aa,bb],flags=['external_loop','buffered','zerosize_ok'],
                                          op_flags=[['readonly'],['readonly']],buffersize=65536):
             if not np.allclose(a_chunk,b_chunk,rtol=rtol,atol=atol): raise ValueError('scientific array differs: '+key)
-        # The fixed environment reconstructs the exact frozen assets, independently
-        # of the tolerance for derived arithmetic metrics.
+        # Derived arithmetic uses declared tolerances; frozen assets still
+        # require exact hashes in the fixed environment.
         if _sha(a)!=_sha(b): raise ValueError('frozen asset hash differs: '+key)
         hashes[key]=_sha(a)
+        del aa,bb
+        if 'a_chunk' in locals(): del a_chunk,b_chunk
     return {'status':'matched','scientific_records_compared':count,'arrays_compared':len(hashes),
             'asset_hashes':hashes,'timing_policy':'remeasured_not_equal','rtol':rtol,'atol':atol,
             'resource_preflight':preflight,'record_comparison':'disk index; one raw block and record pair in memory'}

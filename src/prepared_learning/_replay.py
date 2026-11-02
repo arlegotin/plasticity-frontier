@@ -19,7 +19,8 @@ from .records import GateDecision, GateCode, content_hash
 from .reporting import (_read, _write, _sha, _scientific, compare_scientific,
                         compare_run_stores, _verify_inputs, ReportingResourceLimit,
                         _validate_output_artifact, _artifact_summary, _guard_paths,
-                        _object_bytes, _benchmark, _load_worker_index, _load_worker_ref,
+                        _object_bytes, _resource_check, _empty_scale, REPORT_PARSE_FACTOR,
+                        _benchmark, _load_worker_index, _load_worker_ref,
                         _validate_benchmark_worker, _worker_key, _publish_worker,
                         _publish_worker_index, _RecordStream, REPORT_SCHEMA_VERSION)
 
@@ -37,7 +38,7 @@ def _run(command, *, cwd, env=None, log=None):
     return result.stdout
 
 
-def _run_file(command, *, cwd, env, stdout_path, stderr_path, log, package=None):
+def _run_file(command, *, cwd, env, stdout_path, stderr_path, log, package=None, allow_nonzero=False, retained_bytes=0):
     """Keep complete process evidence on disk, including failed worker output."""
     stdout_path=Path(stdout_path); stderr_path=Path(stderr_path)
     stdout_path.parent.mkdir(parents=True,exist_ok=True); stderr_path.parent.mkdir(parents=True,exist_ok=True)
@@ -47,9 +48,10 @@ def _run_file(command, *, cwd, env, stdout_path, stderr_path, log, package=None)
         return {'path':os.path.relpath(path,Path(package) if package is not None else Path(log).parent),'sha256':_sha(path),'size_bytes':path.stat().st_size}
     _write(log,{'command':command,'cwd':str(cwd),'returncode':result.returncode,
                 'stdout':reference(stdout_path),'stderr':reference(stderr_path)})
+    if allow_nonzero: return stdout_path
     if result.returncode==75:
-        _guard_paths((stdout_path,),phase='replay_resource_gate_before_parse')
-        try: limited=_read(stdout_path)
+        _guard_paths((stdout_path,),phase='replay_resource_gate_before_parse',object_bytes=retained_bytes)
+        try: limited=_read(stdout_path,retained_bytes=retained_bytes)
         except ValueError: limited={}
         if limited.get('gate')=='LOCAL_RESOURCE_LIMIT': raise ReportingResourceLimit(limited['evidence'])
     if result.returncode:
@@ -66,13 +68,33 @@ def _benchmark_scientific(worker):
             'schedule':[{k:r[k] for k in ('method_id','block','timing_stratum')} for r in worker['rows']]}
 
 
+def _diagnostic_process_record(destination, command, *, retained_bytes):
+    """Preserve the historical inline process record with bounded encoding RAM."""
+    metadata=_read(destination/'process-reference.json',retained_bytes=retained_bytes())
+    _resource_check(_empty_scale(),phase='diagnostic_process_before_write',
+                    object_bytes=retained_bytes()+_object_bytes(command)+_object_bytes(metadata),scalar_bytes=1024*1024)
+    with (destination/'process.json').open('w') as stream:
+        stream.write('{"command":'); json.dump(command,stream)
+        stream.write(',"returncode":'+str(metadata['returncode']))
+        for name in ('stdout','stderr'):
+            stream.write(',"'+name+'":"')
+            with (destination/(name+'.json')).open() as raw:
+                for chunk in iter(lambda:raw.read(64*1024),''):
+                    stream.write(json.dumps(chunk)[1:-1])
+            stream.write('"')
+        stream.write('}\n')
+    return metadata['returncode']
+
+
 def _replay_benchmark(entry, destination, root, replay, config, *, retained_bytes=lambda:0):
     """Validate/stage original workers, then compare exactly one full pair at a time."""
     from .benchmark import THREAD_ENV, _campaign_configuration
-    summary=_benchmark(entry,output=destination,retained_bytes=retained_bytes)
+    def initial_reserve():
+        return retained_bytes()+_object_bytes(config)
+    summary=_benchmark(entry,output=destination,retained_bytes=initial_reserve)
     if summary['status']!='completed': raise ValueError('benchmark replay requires complete original workers')
     old_index_ref=summary['worker_records_ref']
-    index=_load_worker_index(old_index_ref,destination,retained_bytes=retained_bytes()+_object_bytes(summary))
+    index=_load_worker_index(old_index_ref,destination,retained_bytes=initial_reserve()+_object_bytes(summary))
     old_refs={(r['worker_key']['block'],r['worker_key']['method_id']):r for r in index['records']}
     # Compact report risk vectors/rows are unnecessary for scientific replay.
     del index,summary
@@ -105,7 +127,8 @@ def _replay_benchmark(entry, destination, root, replay, config, *, retained_byte
             process=destination/'processes'/f'{ordinal:08d}'
             stdout=process.with_suffix('.stdout.json'); stderr=process.with_suffix('.stderr.txt')
             _run_file([sys.executable,'-m','prepared_learning._benchmark_worker',str(path)],
-                      cwd=root,env=env,stdout_path=stdout,stderr_path=stderr,log=process.with_suffix('.process.json'),package=destination)
+                      cwd=root,env=env,stdout_path=stdout,stderr_path=stderr,log=process.with_suffix('.process.json'),
+                      package=destination,retained_bytes=reserve()+_object_bytes(record)+_object_bytes(env))
             del record,env
             reference=old_refs[key]; old_path=destination/reference['path']
             # Two full workers plus both complete projections, using the same
@@ -211,11 +234,14 @@ def clean_replay(manifest, output):
         _run([str(interpreter),'-m','pip','install','--no-build-isolation','--no-deps','-e','.'],cwd=clone,env=env,log=output/'editable.json')
         _run([str(interpreter),'-m','pip','check'],cwd=clone,env=env,log=output/'pip-check.json')
         request={'manifest':manifest,'output':str(output/'executions')}
+        def reserve():
+            return sum(_object_bytes(v) for v in (manifest,executable,wheel_manifest,restored,env,runtime,request))
+        _resource_check(_empty_scale(),phase='replay_request_before_write',object_bytes=reserve(),scalar_bytes=64*1024)
         request_path=clone/'runs/replay-request.json'; _write(request_path,request)
         _run([str(interpreter),'-m','prepared_learning._replay',str(request_path)],cwd=clone,env=env,log=output/'worker.json')
-        worker=_read(output/'executions/replay-worker.json')
+        worker=_read(output/'executions/replay-worker.json',retained_bytes=reserve())
         # No mutation during a long run can replace the original authority.
-        preflight=_verify_inputs(manifest,replay=True)
+        preflight=_verify_inputs(manifest,replay=True,retained_bytes=reserve()+_object_bytes(worker))
         receipt={'schema_version':1,'status':'matched','clean_environment':True,'source':source,
                  'fixture':any(e.get('fixture') for e in manifest['inputs']),
                  'input_order_sha256':manifest['input_order_sha256'],'wheel_hashes':wheel_manifest,
@@ -223,6 +249,8 @@ def clean_replay(manifest, output):
                  'restored_assets':restored,'execution_packages_base':'executions','executions':worker,'rtol':rtol,'atol':atol,
                  'timing_policy':'remeasured_not_equal','elapsed_seconds':time.perf_counter()-start,
                  'verification_scope':'same machine, exact committed source and fresh locked editable environment; replay is not a new independent sample; fixtures cannot establish production G10'}
+        _resource_check(_empty_scale(),phase='replay_receipt_before_write',
+                        object_bytes=reserve()+_object_bytes(worker)+_object_bytes(preflight)+_object_bytes(receipt),scalar_bytes=64*1024)
         _write(output/'replay.json',receipt)
     decision=GateDecision(GateCode.SUPPORTED_IN_SCOPE,{'receipt':str(output/'replay.json'),'sha256':_sha(output/'replay.json'),
         'status':'matched','input_order_sha256':manifest['input_order_sha256']},
@@ -232,95 +260,122 @@ def clean_replay(manifest, output):
     return decision
 
 
+def _replay_entry(entry, destination, root, replay, *, retained_bytes):
+    """Only the result/reference escapes; diagnostic/protocol graphs die here."""
+    index=entry['input_id']; kind=entry['kind']
+    if kind=='confirmation':
+        from .confirmation import run_confirmation
+        protocol=_read(entry['protocol_path'],retained_bytes=retained_bytes())
+        # Original scientific bytes and protected keys are unchanged.
+        protocol_path=root/'runs'/f'replay-protocol-{index}.json'; _write(protocol_path,protocol)
+        decision=run_confirmation(protocol,destination,manifest_path=protocol_path,checkpoint_tasks=16)
+        actual=Path(decision.evidence['run_path'])
+        del protocol,decision
+        comparison=compare_run_stores(Path(entry['run_path']),actual,rtol=replay['rtol'],atol=replay['atol'],
+            retained_bytes=retained_bytes())
+        return {'input_id':index,'kind':kind,**comparison,'output':str(actual)}
+    elif kind=='benchmark':
+        from .benchmark import _benchmark_identity
+        config=_read(Path(entry['run_path'])/'inputs.json',retained_bytes=retained_bytes())['inputs'].get('manifest',{})
+        actual=_benchmark_identity(config)
+        if config.get('phase')!='finalized': raise ValueError('clean benchmark replay requires finalized recorded schedule')
+        if actual!=config['frozen']['identity']: raise ValueError('benchmark replay source/runtime identity changed')
+        del actual
+        return _replay_benchmark(entry,destination,root,replay,config,retained_bytes=retained_bytes)
+    elif kind in ('not_run','source','forecast'):
+        return {'input_id':index,'kind':kind,'status':'retained_not_executed'}
+    else:
+        command=entry['command']
+        if not isinstance(command,list) or not command or any(not isinstance(s,str) for s in command): raise ValueError('recorded CLI argument list required')
+        if command[0]=='frontier' and 'output_artifact' not in entry:
+            canonical=(len(command) in (3,4) and command[1]=='--config'
+                       and command[2] and not command[2].startswith('-')
+                       and (len(command)==3 or command[3]=='--certify'))
+            if not canonical:
+                raise ValueError('frontier replay requires canonical --config PATH with optional trailing --certify')
+        relocated=[]
+        for argument in command:
+            path=Path(argument)
+            if path.is_absolute():
+                try: argument=str(root/path.relative_to(Path(replay['source_root'])))
+                except ValueError: raise ValueError('recorded command paths must be inside the source repository')
+            relocated.append(argument)
+        command=relocated
+        artifact_root=None
+        if 'output_artifact' not in entry and (command[0]=='robustness' or
+                (command[0]=='frontier' and 'grid' in _read(command[2]))):
+            raise ValueError('file-producing diagnostics require output_artifact for full scientific replay')
+        if 'output_artifact' in entry:
+            _validate_output_artifact(entry,replay['source_root'],retained_bytes=retained_bytes())
+            artifact_root=destination/'generated'
+            artifact_root.mkdir(exist_ok=False)
+            # Both supported producers accept an operational output override.
+            # Never change their inventoried configuration or reuse old output.
+            command=command[:3]+['--output',str(artifact_root)]
+        # A diagnostic may deliberately fail; retain its exit status and raw
+        # JSON. It is not converted into a successful protected result.
+        stdout=destination/'stdout.json'; stderr=destination/'stderr.json'
+        _run_file([sys.executable,'-m','prepared_learning',*command],cwd=root,env=None,
+                  stdout_path=stdout,stderr_path=stderr,log=destination/'process-reference.json',
+                  package=destination,allow_nonzero=True,retained_bytes=retained_bytes())
+        returncode=_diagnostic_process_record(destination,command,retained_bytes=retained_bytes)
+        # Stdout/stderr remain complete on disk. Admit their actual sizes before
+        # decoding strings, as well as the original artifact and process graph.
+        pair_paths=[Path(entry['raw_path']),stdout,stderr]
+        if 'process_path' in entry: pair_paths.append(Path(entry['process_path']))
+        def admit_pair():
+            return _guard_paths(pair_paths,phase='diagnostic_replay_pair_before_parse',copies=2,
+                                object_bytes=retained_bytes())
+        _guard_paths((stdout,stderr),phase='diagnostic_process_before_decode',json_factor=REPORT_PARSE_FACTOR,
+                     object_bytes=retained_bytes())
+        admit_pair()
+        process={'command':command,'returncode':returncode,
+                 'stdout':stdout.read_text(),'stderr':stderr.read_text()}
+        result={'input_id':index,'kind':kind,'status':'matched','returncode':process['returncode']}
+        if artifact_root is not None:
+            artifact,summary=_artifact_summary(command[0],process)
+            if not artifact.is_absolute(): artifact=root/artifact
+            artifact=artifact.absolute()
+            fresh_root=artifact_root.resolve()
+            if not artifact.resolve().is_relative_to(fresh_root):
+                raise ValueError('output artifact escaped fresh replay directory')
+            relative=artifact.relative_to(artifact_root.absolute())
+            expected_parts=1 if command[0]=='robustness' else 2
+            if (len(relative.parts)!=expected_parts or artifact.name!=entry['output_artifact']['filename']
+                    or any(path.is_symlink() for path in (artifact,*artifact.parents))
+                    or not artifact.is_file()):
+                raise ValueError('missing or unsafe fresh output artifact')
+            expected_process,expected_summary=_validate_output_artifact(entry,replay['source_root'],
+                retained_bytes=retained_bytes()+_object_bytes(process))
+            if process['returncode']!=expected_process['returncode']:
+                raise ValueError('diagnostic process returncode changed')
+            compare_scientific(expected_summary,summary,rtol=replay['rtol'],atol=replay['atol'])
+            pair_paths.append(artifact); admit_pair()
+            actual=_read(artifact,retained_bytes=retained_bytes()+_object_bytes(process)+_object_bytes(expected_process))
+            result.update(artifact_path=str(artifact),artifact_sha256=_sha(artifact),
+                          comparison_scope='complete scientific output artifact and process summary/status')
+        else:
+            actual=json.loads(process['stdout'])
+        expected=_read(entry['raw_path'],retained_bytes=retained_bytes()+_object_bytes(process)+_object_bytes(actual))
+        if kind=='exact':
+            compare_scientific(expected,actual,rtol=0,atol=0)
+            result['comparison_scope']='exact_rational_no_tolerance'
+        else:
+            compare_scientific(_scientific(expected),_scientific(actual),rtol=replay['rtol'],atol=replay['atol'])
+        return result
+
+
 def worker(request):
     manifest=request['manifest']; _verify_inputs(manifest,replay=True)
     output=Path(request['output']); output.mkdir(parents=True,exist_ok=False)
     root=Path(__file__).resolve().parents[2]; replay=manifest['replay']; results=[]
     _validate_source(root,replay['source'])
+    def reserve():
+        return _object_bytes(manifest)+_object_bytes(results)
     for entry in manifest['inputs']:
-        index=entry['input_id']; destination=output/str(index); destination.mkdir()
-        kind=entry['kind']
-        if kind=='confirmation':
-            from .confirmation import run_confirmation
-            protocol=_read(entry['protocol_path'])
-            # Original scientific bytes and protected keys are unchanged.
-            protocol_path=root/'runs'/f'replay-protocol-{index}.json'; _write(protocol_path,protocol)
-            decision=run_confirmation(protocol,destination,manifest_path=protocol_path,checkpoint_tasks=16)
-            actual=Path(decision.evidence['run_path'])
-            comparison=compare_run_stores(Path(entry['run_path']),actual,rtol=replay['rtol'],atol=replay['atol'])
-            results.append({'input_id':index,'kind':kind,**comparison,'output':str(actual)})
-        elif kind=='benchmark':
-            from .benchmark import _benchmark_identity
-            config=_read(Path(entry['run_path'])/'inputs.json')['inputs'].get('manifest',{})
-            actual=_benchmark_identity(config)
-            if config.get('phase')!='finalized': raise ValueError('clean benchmark replay requires finalized recorded schedule')
-            if actual!=config['frozen']['identity']: raise ValueError('benchmark replay source/runtime identity changed')
-            results.append(_replay_benchmark(entry,destination,root,replay,config,
-                retained_bytes=lambda:_object_bytes(manifest)+_object_bytes(results)))
-        elif kind in ('not_run','source','forecast'):
-            results.append({'input_id':index,'kind':kind,'status':'retained_not_executed'})
-        else:
-            command=entry['command']
-            if not isinstance(command,list) or not command or any(not isinstance(s,str) for s in command): raise ValueError('recorded CLI argument list required')
-            if command[0]=='frontier' and 'output_artifact' not in entry:
-                canonical=(len(command) in (3,4) and command[1]=='--config'
-                           and command[2] and not command[2].startswith('-')
-                           and (len(command)==3 or command[3]=='--certify'))
-                if not canonical:
-                    raise ValueError('frontier replay requires canonical --config PATH with optional trailing --certify')
-            relocated=[]
-            for argument in command:
-                path=Path(argument)
-                if path.is_absolute():
-                    try: argument=str(root/path.relative_to(Path(replay['source_root'])))
-                    except ValueError: raise ValueError('recorded command paths must be inside the source repository')
-                relocated.append(argument)
-            command=relocated
-            artifact_root=None
-            if 'output_artifact' not in entry and (command[0]=='robustness' or
-                    (command[0]=='frontier' and 'grid' in _read(command[2]))):
-                raise ValueError('file-producing diagnostics require output_artifact for full scientific replay')
-            if 'output_artifact' in entry:
-                expected_process,expected_summary=_validate_output_artifact(entry,replay['source_root'])
-                artifact_root=destination/'generated'
-                artifact_root.mkdir(exist_ok=False)
-                # Both supported producers accept an operational output override.
-                # Never change their inventoried configuration or reuse old output.
-                command=command[:3]+['--output',str(artifact_root)]
-            # A diagnostic may deliberately fail; retain its exit status and raw
-            # JSON. It is not converted into a successful protected result.
-            run=subprocess.run([sys.executable,'-m','prepared_learning',*command],cwd=root,capture_output=True,text=True)
-            _write(destination/'process.json',{'command':command,'returncode':run.returncode,'stdout':run.stdout,'stderr':run.stderr})
-            result={'input_id':index,'kind':kind,'status':'matched','returncode':run.returncode}
-            if artifact_root is not None:
-                process={'returncode':run.returncode,'stdout':run.stdout,'stderr':run.stderr}
-                artifact,summary=_artifact_summary(command[0],process)
-                if not artifact.is_absolute(): artifact=root/artifact
-                artifact=artifact.absolute()
-                fresh_root=artifact_root.resolve()
-                if not artifact.resolve().is_relative_to(fresh_root):
-                    raise ValueError('output artifact escaped fresh replay directory')
-                relative=artifact.relative_to(artifact_root.absolute())
-                expected_parts=1 if command[0]=='robustness' else 2
-                if (len(relative.parts)!=expected_parts or artifact.name!=entry['output_artifact']['filename']
-                        or any(path.is_symlink() for path in (artifact,*artifact.parents))
-                        or not artifact.is_file()):
-                    raise ValueError('missing or unsafe fresh output artifact')
-                if run.returncode!=expected_process['returncode']:
-                    raise ValueError('diagnostic process returncode changed')
-                compare_scientific(expected_summary,summary,rtol=replay['rtol'],atol=replay['atol'])
-                actual=_read(artifact)
-                result.update(artifact_path=str(artifact),artifact_sha256=_sha(artifact),
-                              comparison_scope='complete scientific output artifact and process summary/status')
-            else:
-                actual=json.loads(run.stdout)
-            expected=_read(entry['raw_path'])
-            if kind=='exact':
-                compare_scientific(expected,actual,rtol=0,atol=0)
-                result['comparison_scope']='exact_rational_no_tolerance'
-            else:
-                compare_scientific(_scientific(expected),_scientific(actual),rtol=replay['rtol'],atol=replay['atol'])
-            results.append(result)
+        destination=output/str(entry['input_id']); destination.mkdir()
+        results.append(_replay_entry(entry,destination,root,replay,retained_bytes=reserve))
+    _resource_check(_empty_scale(),phase='replay_worker_before_write',object_bytes=reserve(),scalar_bytes=64*1024)
     _write(output/'replay-worker.json',results)
 
 

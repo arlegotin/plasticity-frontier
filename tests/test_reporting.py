@@ -550,9 +550,9 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                 marker=b'"unknown_control"' if isinstance(value,(bytes,bytearray)) else '"unknown_control"'
                 self.assertNotIn(marker,value,'aggregate control decoder attempted')
                 return decode(value,*args,**kwargs)
-            def no_controls(path):
+            def no_controls(path,**kwargs):
                 self.assertNotIn(Path(path),controls,'control decoded by report')
-                return read(path)
+                return read(path,**kwargs)
             with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}),patch.object(api,'_read',side_effect=no_controls),patch.object(json,'loads',side_effect=no_control_decode):
                 manifest=api.build_report_inputs([descriptor,other]); entry=manifest['inputs'][0]
                 report_preflight=api._verify_inputs(manifest)
@@ -591,7 +591,7 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                 self.assertEqual(preflight['json_working_bytes'],working)
                 self.assertEqual(preflight['inventory_bytes'],sum(4096+16*len(os.fsencode(p)) for p,_ in all_assets))
                 self.assertEqual(preflight['retained_copies'],2)
-                self.assertEqual(preflight['policy']['json_expansion_factor'],256)
+                self.assertEqual(preflight['policy']['json_expansion_factor'],64)
                 self.assertEqual(preflight['largest_file_bytes'],max(p.stat().st_size for p,_ in all_assets))
                 for key,source in (('worker_records_ref',run),('calibration_worker_records_ref',Path(config['frozen']['calibration_path']).parent)):
                     package=root/'report'; index=api._load_worker_index(result[key],package)
@@ -615,7 +615,7 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                         self.assertEqual(scale['hash_only_files'],2)
                         self.assertEqual(scale['hash_only_bytes'],sum(p.stat().st_size for p in controls))
                         self.assertEqual(scale['inventory_bytes'],sum(4096+16*len(os.fsencode(p)) for p,_ in assets_with_array))
-                        expected=64*1024**2+(2 if replay else 1)*(256*scale['json_working_bytes']+scale['inventory_bytes'])+16*array.stat().st_size+16*scale['object_bytes']
+                        expected=64*1024**2+(2 if replay else 1)*((64 if replay else 256)*scale['json_working_bytes']+scale['inventory_bytes'])+16*array.stat().st_size+16*scale['object_bytes']
                         self.assertEqual(scale['estimated_peak_bytes'],expected)
                 for replay in (False,True):
                     with self.assertRaises(api.ReportingResourceLimit): api._guard_inputs(with_array,replay=replay)
@@ -958,3 +958,39 @@ class BoundedBenchmarkReporting(unittest.TestCase):
                         with patch.object(api,'_read',side_effect=read):
                             with self.assertRaises((ValueError,FileNotFoundError)): api._load_worker_ref(record,package)
                         path.write_bytes(saved)
+
+
+class PhasedWriterMemory(unittest.TestCase):
+    def test_report_receipt_read_charges_full_tables_ledger_and_sections(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=scoped_report_case(root,api)
+            tables=api.regenerate_tables(manifest,root/'precomputed')
+            tables['diagnostics'].append({'full_unknown':'x'*(4*1024**2)})
+            output=root/'report'; output.mkdir()
+            (output/'adverse_records.json').write_text('[]')
+            read=api._read
+            def guarded_read(path,**kwargs):
+                self.assertGreater(kwargs.get('retained_bytes',0),8*1024**2,
+                                   'receipt read omitted full tables and live sections')
+                return read(path,**kwargs)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(api,'regenerate_tables',return_value=tables),patch.object(api,'_read',side_effect=guarded_read):
+                result=api.write_report(manifest,output)
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertFalse((output/'results.md').exists())
+
+    def test_report_writer_charges_ledger_even_without_receipt(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=scoped_report_case(root,api); manifest['replay']['receipt']=None
+            tables=api.regenerate_tables(manifest,root/'precomputed')
+            output=root/'report'; output.mkdir(); (output/'adverse_records.json').write_text('[]')
+            ledger=[{'claim_id':'full','support_status':'supported','raw':'x'*(8*1024**2)}]
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(api,'regenerate_tables',return_value=tables),patch.object(api,'_claims',return_value=ledger):
+                result=api.write_report(manifest,output)
+            self.assertEqual(result.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertFalse((output/'results.md').exists())

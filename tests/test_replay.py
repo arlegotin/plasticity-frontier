@@ -439,6 +439,25 @@ class BoundedBenchmarkReplay(unittest.TestCase):
                         with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
                     control.write_bytes(before)
 
+            # An unexpectedly large real worker output keeps the existing
+            # semantic256/copies2 pair gate, before decoding either worker.
+            import os
+            mutation=lambda w:w['resource'].update(unexpected_full_output='x'*(512*1024))
+            target=root/'pair-resource-stop'; target.mkdir()
+            def no_large_worker(path,**kwargs):
+                self.assertFalse(str(path).endswith('.stdout.json'),'oversized replay worker decoded')
+                return original(path,**kwargs)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(160*1024**2)}), \
+                    patch.object(api,'_run_file',side_effect=run_file),patch.object(api,'_read',new=no_large_worker):
+                with self.assertRaises(report.ReportingResourceLimit) as caught:
+                    api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config,retained_bytes=lambda:12345)
+            self.assertEqual(caught.exception.evidence['phase'],'benchmark_replay_pair_before_parse')
+            self.assertEqual(caught.exception.evidence['retained_copies'],2)
+            self.assertEqual(caught.exception.evidence['policy']['json_expansion_factor'],256)
+            self.assertGreater(caught.exception.evidence['object_bytes'],12345)
+            self.assertFalse((target/'benchmark-input-0/remeasured/workers.index.json').exists())
+            mutation=None
+
             # Missing, duplicate, wrong-key and changed requests cannot run a
             # different worker set and still receive a matched result.
             request_path=sorted((run/'requests').glob('*.json'))[0]
@@ -474,3 +493,321 @@ class BoundedBenchmarkReplay(unittest.TestCase):
                     with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
                 self.assertTrue((target/'processes/00000000.stdout.json').exists())
                 self.assertFalse((target/'benchmark-input-0/remeasured/workers.index.json').exists())
+
+
+class PhasedReplayMemory(unittest.TestCase):
+    """Native inventory is sequential; real pairs and retained results still cost RAM."""
+    def setUp(self):
+        available=patch("prepared_learning.pilot._available_memory",return_value=4*1024**3)
+        available.start(); self.addCleanup(available.stop)
+
+    def diagnostic_manifest(self, root, *, count=2, padding=0):
+        api=reporting(self); descriptors=[]
+        for index in range(count):
+            raw=root/f'raw-{index}.json'
+            raw.write_text(json.dumps({'status':'failed','index':index,'unknown':{'full':'x'*padding}}))
+            path=root/f'input-{index}.json'; descriptors.append(path)
+            path.write_text(json.dumps({'kind':'diagnostic','fixture':True,'raw_path':str(raw),
+                                        'command':['fixture',str(index)]}))
+        return api.build_report_inputs(descriptors)
+
+    def producer(self, manifest):
+        import subprocess
+        def run(command, **kw):
+            index=int(command[-1]); body=Path(manifest['inputs'][index]['raw_path']).read_text()
+            if 'stdout' in kw:
+                kw['stdout'].write(body.encode()); kw['stderr'].write(b'complete deliberate failure')
+                return subprocess.CompletedProcess(command,1)
+            return subprocess.CompletedProcess(command,1,body,'complete deliberate failure')
+        return run
+
+    def test_full_ordered_native_receipt_fits_sequential_phases(self):
+        from prepared_learning import _replay as replay
+        import os
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=16,padding=256*1024)
+            before=json.dumps(manifest,sort_keys=True)
+            old=api._guard_inputs(manifest)
+            # The old global semantic two-copy reservation needs >2GiB.
+            self.assertGreater(64*1024**2+2*(256*old['json_working_bytes']+old['inventory_bytes']),768*1024**2)
+            def operation(command, **kw):
+                if command[:2]==['git','clone']: Path(command[-1]).mkdir()
+                elif command[1:3]==['-m','prepared_learning._replay']:
+                    replay.worker(api._read(command[-1]))
+                return ''
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(768*1024**2)}), \
+                    patch('prepared_learning.pilot._available_memory',return_value=4*1024**3), \
+                    patch.object(replay,'_validate_source',return_value='a'*40), \
+                    patch.object(replay,'_git_bytes',return_value=b'{}'), \
+                    patch.object(replay,'_run',side_effect=operation), \
+                    patch.object(replay.subprocess,'run',side_effect=self.producer(manifest)):
+                decision=api.replay_run(manifest,root/'replay')
+            self.assertEqual(decision.code,'SUPPORTED_IN_SCOPE',decision.evidence)
+            receipt=api._read(root/'replay/replay.json')
+            self.assertEqual(receipt['input_order_sha256'],manifest['input_order_sha256'])
+            self.assertEqual([r['input_id'] for r in receipt['executions']],list(range(16)))
+            self.assertTrue(all(r['status']=='matched' and r['returncode']==1 for r in receipt['executions']))
+            self.assertEqual(json.dumps(manifest,sort_keys=True),before)
+            for index in range(16):
+                process=api._read(root/f'replay/executions/{index}/process.json')
+                self.assertEqual(json.loads(process['stdout']),api._read(manifest['inputs'][index]['raw_path']))
+                self.assertEqual(process['stderr'],'complete deliberate failure')
+            self.assertEqual(len(list((root/'replay').glob('replay.json'))),1)
+
+    def test_native_validation_and_read_charge_caller_before_parse(self):
+        api=reporting(self)
+        import inspect
+        for function in (api._read,api._verify_inputs): self.assertIn("retained_bytes",inspect.signature(function).parameters)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,padding=1024)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(api.json,'loads',side_effect=AssertionError('parsed before caller admission')):
+                for operation in (lambda:api._read(root/'raw-0.json',retained_bytes=8*1024**2),
+                                  lambda:api._verify_inputs(manifest,replay=True,retained_bytes=8*1024**2)):
+                    with self.assertRaises(api.ReportingResourceLimit): operation()
+
+    def test_diagnostic_pair_refuses_before_raw_decode(self):
+        api=reporting(self)
+        from prepared_learning import _replay as replay
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1,padding=128*1024)
+            # Native validation fits; actual two-artifact semantic pair does not.
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(160*1024**2)}), \
+                    patch.object(replay,'_validate_source'), \
+                    patch.object(replay.subprocess,'run',side_effect=self.producer(manifest)):
+                with self.assertRaises(api.ReportingResourceLimit) as caught:
+                    replay.worker({'manifest':manifest,'output':str(root/'replay')})
+            self.assertEqual(caught.exception.evidence['phase'],'diagnostic_replay_pair_before_parse')
+            self.assertEqual(caught.exception.evidence['retained_copies'],2)
+            self.assertEqual(caught.exception.evidence['policy']['json_expansion_factor'],256)
+            self.assertFalse((root/'replay/replay-worker.json').exists())
+            self.assertTrue((root/'replay/0/stdout.json').exists())
+            self.assertTrue((root/'replay/0/process.json').exists(),'resource stop lost complete process.json')
+            process=api._read(root/'replay/0/process.json')
+            self.assertEqual(json.loads(process['stdout'])['index'],0)
+            self.assertEqual(process['stderr'],'complete deliberate failure')
+
+    def test_diagnostic_graphs_die_before_next_diagnostic_and_g9(self):
+        from prepared_learning import _replay as replay
+        import gc,weakref
+        api=reporting(self)
+        class Tracked(dict): pass
+        refs=[]; decode=json.loads; project=replay._scientific
+        def tracked_decode(*args,**kwargs):
+            value=decode(*args,**kwargs)
+            if isinstance(value,dict) and 'unknown' in value:
+                value=Tracked(value); refs.append(weakref.ref(value))
+            return value
+        def projection(value):
+            value=Tracked(project(value)); refs.append(weakref.ref(value)); return value
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=2,padding=100)
+            manifest['inputs'].append({'input_id':2,'kind':'benchmark','run_path':str(root/'g9')})
+            (root/'g9').mkdir(); (root/'g9/inputs.json').write_text(json.dumps({'inputs':{'manifest':{'phase':'finalized','frozen':{'identity':{}}}}}))
+            producer=self.producer(manifest)
+            def run(command,**kw):
+                gc.collect(); self.assertTrue(all(ref() is None for ref in refs),'previous diagnostic graph retained')
+                return producer(command,**kw)
+            def benchmark(*args,**kw):
+                gc.collect(); self.assertTrue(all(ref() is None for ref in refs),'G8 graph retained into G9')
+                self.assertGreater(kw['retained_bytes'](),api._object_bytes(manifest))
+                return {'input_id':2,'kind':'benchmark','status':'matched'}
+            with patch.object(replay,'_verify_inputs'),patch.object(replay,'_validate_source'), \
+                    patch.object(replay.subprocess,'run',side_effect=run),patch.object(json,'loads',side_effect=tracked_decode), \
+                    patch.object(replay,'_scientific',new=projection), \
+                    patch('prepared_learning.benchmark._benchmark_identity',return_value={}), \
+                    patch.object(replay,'_replay_benchmark',side_effect=benchmark):
+                replay.worker({'manifest':manifest,'output':str(root/'replay')})
+            gc.collect(); self.assertGreaterEqual(len(refs),8)
+            self.assertTrue(all(ref() is None for ref in refs))
+
+    def test_protected_caller_and_prospective_maps_refuse_before_open(self):
+        api=reporting(self)
+        import inspect
+        self.assertIn("retained_bytes",inspect.signature(api.compare_run_stores).parameters)
+        from prepared_learning.runner import RunStore
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); _,run=confirmation_input(root)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(RunStore,'open',side_effect=AssertionError('opened before caller guard')):
+                with self.assertRaises(api.ReportingResourceLimit):
+                    api.compare_run_stores(run,run,rtol=1e-10,atol=1e-12,retained_bytes=8*1024**2)
+            # A large path/key inventory must be reserved before building maps.
+            folder=next((run/'blocks').iterdir())/'assets'
+            for index in range(600): (folder/(str(index)+'-'+'x'*180+'.npy')).touch()
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(RunStore,'open',side_effect=AssertionError('opened before map admission')):
+                with self.assertRaises(api.ReportingResourceLimit):
+                    api.compare_run_stores(run,run,rtol=1e-10,atol=1e-12)
+
+    def test_native_policy_keeps_two_copies_constants_and_lower_only_half_cap(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1,padding=1024)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(8*1024**3)}):
+                evidence=api._guard_inputs(manifest,replay=True,retained_bytes=12345)
+            self.assertEqual(evidence['policy']['json_expansion_factor'],64)
+            self.assertEqual(evidence['retained_copies'],2)
+            self.assertEqual(evidence['budget_bytes'],2*1024**3)
+            self.assertEqual(evidence['reserve_fraction'],.5)
+            self.assertEqual(evidence['policy']['base_bytes'],64*1024**2)
+            self.assertEqual(evidence['policy']['array_workspace_factor'],16)
+            expected=(64*1024**2+2*(64*evidence['json_working_bytes']+evidence['inventory_bytes'])
+                      +16*evidence['max_array_bytes']+16*(12345+api._object_bytes(manifest)))
+            self.assertEqual(evidence['estimated_peak_bytes'],expected)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(expected-1)}):
+                with self.assertRaises(api.ReportingResourceLimit): api._guard_inputs(manifest,replay=True,retained_bytes=12345)
+            raw=root/'raw-0.json'
+            with raw.open('wb') as stream: stream.truncate(8*1024**2)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(api,'_read',side_effect=AssertionError('oversized native inventory parsed')):
+                decision=api.replay_run(manifest,root/'replay')
+            self.assertEqual(decision.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertFalse((root/'replay/replay.json').exists())
+
+    def test_retained_protected_hashes_stop_the_following_g9_before_read(self):
+        api=reporting(self)
+        from prepared_learning import _replay as replay
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1)
+            manifest['inputs'].append({'input_id':1,'kind':'benchmark','run_path':str(root/'g9')})
+            (root/'g9').mkdir(); (root/'g9/inputs.json').write_text('{}')
+            execute=replay._replay_entry
+            def entry(record,*args,**kwargs):
+                if record['input_id']==0:
+                    return {'input_id':0,'kind':'confirmation','status':'matched','asset_hashes':{'retained':'x'*(8*1024**2)}}
+                return execute(record,*args,**kwargs)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(replay,'_verify_inputs'),patch.object(replay,'_validate_source'), \
+                    patch.object(replay,'_replay_entry',new=entry), \
+                    patch('prepared_learning.benchmark._benchmark_identity',side_effect=AssertionError('G9 allocated despite retained hashes')):
+                with self.assertRaises(api.ReportingResourceLimit): replay.worker({'manifest':manifest,'output':str(root/'replay')})
+            self.assertFalse((root/'replay/replay-worker.json').exists())
+
+    def test_final_worker_writer_reserves_every_result(self):
+        api=reporting(self)
+        from prepared_learning import _replay as replay
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1)
+            def entry(*args,**kwargs):
+                return {'input_id':0,'status':'matched','asset_hashes':{'full':'x'*(8*1024**2)}}
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(replay,'_verify_inputs'),patch.object(replay,'_validate_source'),patch.object(replay,'_replay_entry',new=entry):
+                with self.assertRaises(api.ReportingResourceLimit) as caught:
+                    replay.worker({'manifest':manifest,'output':str(root/'replay')})
+            self.assertEqual(caught.exception.evidence['phase'],'replay_worker_before_write')
+            self.assertFalse((root/'replay/replay-worker.json').exists())
+
+    def coordinate(self, root, manifest, *, worker_result, after_worker=lambda:None):
+        """Only source/environment installation is replaced; final guards are real."""
+        from prepared_learning import _replay as replay
+        api=reporting(self)
+        def operation(command,**kwargs):
+            if command[:2]==['git','clone']: Path(command[-1]).mkdir()
+            elif command[1:3]==['-m','prepared_learning._replay']:
+                api._write(root/'replay/executions/replay-worker.json',worker_result)
+                after_worker()
+            return ''
+        with patch.object(replay,'_validate_source',return_value='a'*40), \
+                patch.object(replay,'_git_bytes',return_value=b'{}'),patch.object(replay,'_run',side_effect=operation):
+            return api.replay_run(manifest,root/'replay')
+
+    def test_final_original_mutation_blocks_receipt_publication(self):
+        api=reporting(self)
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1)
+            def mutate():
+                path=root/'raw-0.json'; path.write_text(path.read_text()+' ')
+            with self.assertRaisesRegex(ValueError,'inventory'):
+                self.coordinate(root,manifest,worker_result=[{'input_id':0,'status':'matched'}],after_worker=mutate)
+            self.assertFalse((root/'replay/replay.json').exists())
+
+    def test_final_worker_result_file_is_admitted_before_decode(self):
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1)
+            read=api._read
+            def guarded(path,**kwargs):
+                if Path(path).name=='replay-worker.json':
+                    self.assertGreater(kwargs.get('retained_bytes',0),api._object_bytes(manifest))
+                return read(path,**kwargs)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch('prepared_learning._replay._read',new=guarded):
+                decision=self.coordinate(root,manifest,worker_result=[{'full':'x'*(2*1024**2)}])
+            self.assertEqual(decision.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertEqual(decision.evidence['phase'],'json_before_parse')
+            self.assertFalse((root/'replay/replay.json').exists())
+
+    def test_final_receipt_writer_charges_native_worker_and_restored_state(self):
+        from prepared_learning import _replay as replay
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); manifest=self.diagnostic_manifest(root,count=1)
+            guard=api._resource_check
+            def limit_writer(scale,**kwargs):
+                if kwargs['phase']=='replay_receipt_before_write':
+                    with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}): return guard(scale,**kwargs)
+                return guard(scale,**kwargs)
+            with patch.object(replay,'_resource_check',new=limit_writer):
+                decision=self.coordinate(root,manifest,worker_result=[{'asset_hashes':{'full':'x'*(8*1024**2)}}])
+            self.assertEqual(decision.code,'LOCAL_RESOURCE_LIMIT')
+            self.assertEqual(decision.evidence['phase'],'replay_receipt_before_write')
+            self.assertFalse((root/'replay/replay.json').exists())
+
+    def test_actual_fresh_artifact_size_is_guarded_before_decode(self):
+        from prepared_learning import _replay as replay
+        from tests.test_final_handoffs import FullArtifactReplay
+        import os
+        api=reporting(self)
+        with tempfile.TemporaryDirectory(dir='runs') as tmp:
+            root=Path(tmp).resolve(); manifest,_=FullArtifactReplay().producer(root,'frontier')
+            execute=replay._run_file; read=replay._read; fresh=[]
+            def grow_output(command,**kwargs):
+                result=execute(command,**kwargs)
+                artifact=Path(json.loads(Path(result).read_text())['attempt_path'])/'frontier.json'
+                with artifact.open('wb') as stream: stream.truncate(8*1024**2)
+                fresh.append(artifact)
+                return result
+            def no_artifact_decode(path,**kwargs):
+                self.assertNotIn(Path(path),fresh,'oversized actual artifact decoded')
+                return read(path,**kwargs)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024**2)}), \
+                    patch.object(replay,'_validate_source'),patch.object(replay,'_run_file',new=grow_output), \
+                    patch.object(replay,'_read',new=no_artifact_decode):
+                with self.assertRaises(api.ReportingResourceLimit) as caught:
+                    replay.worker({'manifest':manifest,'output':str(root/'replay')})
+            self.assertEqual(caught.exception.evidence['phase'],'diagnostic_replay_pair_before_parse')
+            self.assertEqual(caught.exception.evidence['retained_copies'],2)
+            self.assertEqual(fresh[0].stat().st_size,8*1024**2)
+            self.assertTrue((root/'replay/0/process.json').exists())
+            self.assertFalse((root/'replay/replay-worker.json').exists())
+
+    def test_g9_initial_original_validation_retains_supplied_configuration(self):
+        from prepared_learning import _replay as replay
+        from tests.test_reporting import benchmark_input
+        api=reporting(self)
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run=benchmark_input(root)
+            entry={'input_id':0,'kind':'benchmark','run_path':str(run),'descriptor_path':str(descriptor),
+                   'source':{'fixture':True},'fixture':True,'label':'bounded fixture'}
+            config={'retained_unknown_configuration':'x'*(8*1024**2)}
+            read=api._read
+            def no_worker(path,**kwargs):
+                self.assertNotEqual(Path(path).parent,run/'blocks','G9 original parsed while supplied configuration was uncharged')
+                return read(path,**kwargs)
+            destination=root/'replay'; destination.mkdir()
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(api,'_read',new=no_worker):
+                with self.assertRaises(api.ReportingResourceLimit):
+                    replay._replay_benchmark(entry,destination,root,{'rtol':1e-10,'atol':1e-12},config)
+            self.assertFalse((destination/'remeasured-workers.json').exists())
