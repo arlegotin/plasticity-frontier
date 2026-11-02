@@ -4,6 +4,8 @@ This repository preserves the supplied research inputs and builds a local CPU fl
 
 The [1 November local verdict](docs/results/2026-11-01-local-verdict.md) records a verified exact example and a source-tuning gate that stopped protected confirmation. Practical learned performance remains unconfirmed. [Selected evidence and figures](reports/2026-11-01-local/README.md), the [campaign summary](protocol/campaign-2026-11-01-summary.json), and the [execution audit](docs/superpowers/reviews/2026-11-01-execution-audit.md) preserve the executed scope and its limits.
 
+The [tuning follow-up](docs/results/2026-11-01-branch-resolution-followup.md) resolves all 18 reused development preparations while preserving the common candidate maps. The [capacity follow-up](docs/results/2026-11-02-capacity-readiness.md) verifies complete historical report reconstruction under a 2 GiB cap. The [full campaign execution plan](docs/superpowers/plans/2026-11-02-full-campaign-execution.md) continues with fresh independent pilot data; protected confirmation and the full operational panel remain gated.
+
 Bootstrap on a native arm64 macOS Python compatible with the locked wheels (the recorded environment used Python 3.14.6):
 
 ```sh
