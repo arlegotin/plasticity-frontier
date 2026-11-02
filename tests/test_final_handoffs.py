@@ -38,7 +38,7 @@ class FinalizedBenchmarkHandoff(unittest.TestCase):
                      'run_path': str(root/'campaign'), 'source': identity['versions'], 'fixture': True,
                      'descriptor_path': str(root/'input.json')}
             (root/'input.json').write_text(json.dumps(entry))
-            result = reporting._benchmark(entry)
+            result = reporting._benchmark(entry,output=root/'report')
             self.assertEqual(result['status'], 'completed')
             self.assertEqual(result['evidence_level'], 'fixture')
             block = next((root/'campaign/blocks').glob('*.json'))
@@ -46,7 +46,7 @@ class FinalizedBenchmarkHandoff(unittest.TestCase):
             missing = copy.deepcopy(original)
             missing[0]['rows'].pop()
             block.write_text(json.dumps(missing))
-            self.assertEqual(reporting._benchmark(entry)['status'], 'failed_or_incomplete')
+            self.assertEqual(reporting._benchmark(entry,output=root/'report')['status'], 'failed_or_incomplete')
             mutations = (
                 lambda w: w['rows'].append(copy.deepcopy(w['rows'][0])),
                 lambda w: w['rows'][0].update(timing_stratum='changed'),
@@ -55,6 +55,10 @@ class FinalizedBenchmarkHandoff(unittest.TestCase):
                 lambda w: w['rows'][0].update(selected_execution_hash='changed'),
                 lambda w: w['rows'][0].update(method_order=list(reversed(w['rows'][0]['method_order']))),
                 lambda w: w['conditions'].update(thermal='changed'),
+                lambda w: w['rows'][0].update(repetitions=999),
+                lambda w: w['rows'][0].update(block=999),
+                lambda w: w['resource']['memory'].update(isolation='in_process_test_or_callback'),
+                lambda w: w['resource'].update(selected_execution_hash='changed'),
             )
             for mutate in mutations:
                 with self.subTest(mutation=mutate):
@@ -62,8 +66,31 @@ class FinalizedBenchmarkHandoff(unittest.TestCase):
                     mutate(changed[0])
                     block.write_text(json.dumps(changed))
                     with self.assertRaises(ValueError):
-                        reporting._benchmark(entry)
+                        reporting._benchmark(entry,output=root/'report')
             block.write_text(json.dumps(original))
+            controls=root/'campaign/inputs.json'; control_original=json.loads(controls.read_text())
+            for mutate in (
+                lambda v:v['inputs']['manifest']['frozen']['identity'].update(dirty_diff_sha256='dirty'),
+                lambda v:v['inputs']['manifest']['frozen']['identity'].update(versions={'git_commit':'1'*40}),
+                lambda v:v['inputs']['manifest']['frozen'].update(configuration_sha256='changed'),
+                lambda v:v['inputs']['manifest']['frozen'].update(calibration_sha256='changed'),
+                lambda v:v['inputs']['manifest']['frozen'].update(repetitions={mid:999 for mid in config['methods']}),
+            ):
+                changed=copy.deepcopy(control_original); mutate(changed); controls.write_text(json.dumps(changed))
+                with self.assertRaises(ValueError): reporting._benchmark(entry,output=root/'report')
+            controls.write_text(json.dumps(control_original))
+            pilot_path=next((root/'calibration/blocks').glob('*.json')); pilot_original=json.loads(pilot_path.read_text())
+            changed=copy.deepcopy(pilot_original); changed[0]['pilot']['samples_ns']=[-1]
+            pilot_path.write_text(json.dumps(changed))
+            with self.assertRaises(ValueError): reporting._benchmark(entry,output=root/'report')
+            pilot_path.write_text(json.dumps(pilot_original))
+            # Missing direct/ridge/EB controls remain incomplete/exploratory.
+            all_blocks={p:json.loads(p.read_text()) for p in (root/'campaign/blocks').glob('*.json')}
+            for missing_mid in ('B05:B01','B08:ridge','B10:empirical_bayes'):
+                for path,workers in all_blocks.items(): path.write_text(json.dumps([w for w in workers if w['resource']['method_id']!=missing_mid]))
+                result=reporting._benchmark(entry,output=root/'report')
+                self.assertEqual(result['status'],'failed_or_incomplete'); self.assertIn(missing_mid,result['missing_controls'])
+            for path,workers in all_blocks.items(): path.write_text(json.dumps(workers))
 
 
 class OptionalFreezeGrid(unittest.TestCase):

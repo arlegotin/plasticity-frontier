@@ -45,6 +45,7 @@ CONTRACT = ('architecture', 'population', 'baseline', 'metric', 'resource_contra
 # plot objects and serialization. They are deliberately much larger than the
 # on-disk JSON. The guard uses stat/scandir, never a parsed raw ledger or a list
 # of all paths. A local cap can only reduce the live half-available reserve.
+REPORT_SCHEMA_VERSION = "benchmark_raw_refs_v2"
 REPORT_BASE_BYTES = 64*1024*1024
 REPORT_JSON_FACTOR = 256
 REPORT_PARSE_FACTOR = 64
@@ -75,6 +76,7 @@ def _resource_check(scale, *, phase, copies=1, object_bytes=0, scalar_bytes=0, j
               'scalar_and_key_working_bytes':scalar_bytes,'retained_copies':copies,
               'policy':{'base_bytes':REPORT_BASE_BYTES,'json_expansion_factor':json_factor,
                         'array_workspace_factor':REPORT_ARRAY_FACTOR,'inventory_entry_bytes':4096},
+              'qualification':'ordinary resource estimate, not a formal memory bound',
               'scientific_counts':'not inferred from file counts; all raw observations remain unchanged',
               'recovery':'retry the identical inputs with sufficient local reserve; no truncation, sampling or changed scientific identity'}
     if estimate>budget: raise ReportingResourceLimit(evidence)
@@ -121,7 +123,7 @@ def _store_paths(root):
     for folder in ('blocks','journal'): yield from _walk_files(root/folder)
 
 
-def _input_paths(entry):
+def _input_paths(entry, *, retained_bytes=0):
     yield Path(entry['descriptor_path'])
     kind=entry['kind']
     if kind=='confirmation':
@@ -133,6 +135,7 @@ def _input_paths(entry):
         if (root/'failure.json').exists(): yield root/'failure.json'
         # This bounded control JSON locates a second raw inventory. Its own
         # read guard runs before parsing; no worker ledger is read here.
+        _guard_paths((root/'inputs.json',),phase='benchmark_control_before_parse',object_bytes=retained_bytes)
         config=_read(root/'inputs.json')['inputs'].get('manifest',{})
         if config.get('phase')=='finalized':
             calibration=Path(config['frozen']['calibration_path'])
@@ -149,7 +152,7 @@ def _object_bytes(value):
     size=sys.getsizeof(value)
     if isinstance(value,dict):
         for key,child in value.items(): size+=sys.getsizeof(key)+_object_bytes(child)
-    elif isinstance(value,(list,tuple)):
+    elif isinstance(value,(list,tuple,set,frozenset)):
         for child in value: size+=_object_bytes(child)
     return size
 
@@ -160,18 +163,18 @@ def _declared_count(value):
     return value
 
 
-def _guard_inputs(manifest, *, replay=False):
+def _guard_inputs(manifest, *, replay=False, retained_bytes=0):
     scale=_empty_scale(); largest_streamed=0; retained_json=0; scalars=0
     for entry in manifest['inputs']:
-        streamed=entry['kind']=='confirmation'
-        measured=_guard_paths(_input_paths(entry),phase='input_before_store_open',streaming=streamed)
+        streamed=entry['kind'] in ('confirmation','benchmark')
+        measured=_guard_paths(_input_paths(entry,retained_bytes=retained_bytes),phase='input_before_store_open',streaming=streamed,object_bytes=retained_bytes)
         for key in ('files_scanned','json_bytes','array_bytes','inventory_bytes'): scale[key]+=measured[key]
         for key in ('max_json_bytes','max_array_bytes'): scale[key]=max(scale[key],measured[key])
         if measured['largest_file_bytes']>scale['largest_file_bytes']:
             scale['largest_file_bytes']=measured['largest_file_bytes']; scale['largest_file']=measured['largest_file']
         if streamed:
             largest_streamed=max(largest_streamed,measured['max_json_bytes'])
-            if not replay:
+            if not replay and entry['kind']=='confirmation':
                 scientific=_read(entry['protocol_path'])['scientific']; plan=scientific['config']['sample_plan']
                 j=_declared_count(plan['outer_replicates']) or 1
                 tasks=j*_declared_count(plan['tasks_per_replicate'])
@@ -185,7 +188,7 @@ def _guard_inputs(manifest, *, replay=False):
         else: retained_json+=measured['json_bytes']
     scale['json_working_bytes']=largest_streamed+retained_json
     return _resource_check(scale,phase='replay_inputs' if replay else 'report_inputs',
-                           copies=2 if replay else 1,object_bytes=_object_bytes(manifest),scalar_bytes=scalars)
+                           copies=2 if replay else 1,object_bytes=retained_bytes+_object_bytes(manifest),scalar_bytes=scalars)
 
 
 def resource_limit_decision(exc, output):
@@ -230,7 +233,7 @@ def _path(value, base):
 
 def _raw_files(entry):
     """Canonical inventory deliberately excludes rebuildable summaries."""
-    _guard_paths(_input_paths(entry),phase='raw_inventory_before_store_open',streaming=entry['kind']=='confirmation')
+    _guard_paths(_input_paths(entry),phase='raw_inventory_before_store_open',streaming=entry['kind'] in ('confirmation','benchmark'))
     files = {Path(entry['descriptor_path'])}
     kind = entry['kind']
     if kind == 'confirmation':
@@ -245,6 +248,7 @@ def _raw_files(entry):
         files.update(p for folder in ('blocks','requests') for p in (root/folder).glob('*.json'))
         if (root/'failure.json').exists(): files.add(root/'failure.json')
         if not (root/'blocks').exists(): raise ValueError('benchmark raw blocks missing')
+        _guard_paths((root/'inputs.json',),phase='benchmark_control_before_parse')
         config=_read(root/'inputs.json')['inputs'].get('manifest',{})
         if config.get('phase')=='finalized':
             calibration=Path(config['frozen']['calibration_path'])
@@ -401,12 +405,12 @@ def _outcome(analysis):
     return 'positive_in_scope' if interval[0] > 0 else 'inconclusive'
 
 
-def _confirmation(entry, emit=lambda row:None):
+def _confirmation(entry, emit=lambda row:None, *, retained_bytes=0):
     from .confirmation import run_record, analyze_results
     from .protocol import validate_frozen_protocol
     from .records import TaskKey
     from .tasks import CONTEXT, NOISE
-    _guard_inputs({'inputs':[entry]})
+    _guard_inputs({'inputs':[entry]},retained_bytes=retained_bytes)
     protocol = _read(entry['protocol_path']); science = protocol['scientific']
     if not entry.get('fixture'): validate_frozen_protocol(protocol)
     run = _read(Path(entry['run_path'])/'run.json')
@@ -482,91 +486,263 @@ def _confirmation(entry, emit=lambda row:None):
     return analysis, raw_count
 
 
-def _benchmark(entry):
-    """Recompute paired resource comparisons from worker blocks, not benchmark.json."""
+def _worker_key(worker):
+    rows=worker['rows']; mid=worker['resource']['method_id']
+    if not rows: raise ValueError('benchmark worker has no rows')
+    block=rows[0]['block']
+    if type(block)!=int or block<0 or not isinstance(mid,str): raise ValueError('invalid benchmark worker key')
+    if any(row['block']!=block or row['method_id']!=mid for row in rows):
+        raise ValueError('benchmark worker/row key changed')
+    return {'block':block,'method_id':mid}
+
+
+def _package_path(package, relative):
+    path=Path(relative)
+    if path.is_absolute() or '..' in path.parts: raise ValueError('raw reference escapes package')
+    result=(Path(package)/path).resolve()
+    if not result.is_relative_to(Path(package).resolve()): raise ValueError('raw reference escapes package')
+    return result
+
+
+def _load_worker_index(reference, package, *, retained_bytes=0):
+    path=_package_path(package,reference['path'])
+    _guard_paths((path,),phase='benchmark_index_before_parse',object_bytes=retained_bytes)
+    if _sha(path)!=reference['sha256']: raise ValueError('benchmark index hash changed')
+    index=_read(path)
+    if index.get('schema_version')!=1 or index.get('record_count')!=len(index['records']) or (reference['record_count'] is not None and index['record_count']!=reference['record_count']):
+        raise ValueError('benchmark index count changed')
+    seen=set(); sources={}; pointers=set(); paths=set()
+    for ordinal,record in enumerate(index['records']):
+        key=record['worker_key']; pair=(key['block'],key['method_id'])
+        if pair in seen or type(key['block'])!=int or key['block']<0 or not isinstance(key['method_id'],str):
+            raise ValueError('duplicate or invalid benchmark index worker key')
+        if record['ordinal']!=ordinal or record['path'] in paths: raise ValueError('benchmark index order/path changed')
+        _package_path(package,record['path'])
+        source=record['source_block_path']; digest=record['source_block_sha256']
+        if source in sources and sources[source]!=digest: raise ValueError('inconsistent benchmark source binding')
+        pointer=(source,record['source_json_pointer'])
+        if pointer in pointers: raise ValueError('duplicate benchmark source pointer')
+        seen.add(pair); sources[source]=digest; pointers.add(pointer); paths.add(record['path'])
+    return index
+
+
+def _load_worker_ref(reference, package, *, retained_bytes=0):
+    """Resolve a complete semantic worker, with admitted parse and key/count checks."""
+    path=_package_path(package,reference['path'])
+    _guard_paths((path,),phase='benchmark_worker_before_parse',object_bytes=retained_bytes)
+    if _sha(path)!=reference['sha256']: raise ValueError('benchmark worker hash changed')
+    index_ref=reference.get('index_ref')
+    if index_ref is None:
+        # Records read directly from an index carry no circular self-hash.
+        # Still enforce its key/count/source binding. Package consumers should
+        # admit the index with _load_worker_index using the summary's hash first.
+        index_path=path.parent/'workers.index.json'
+        _guard_paths((index_path,),phase='benchmark_reference_index_before_parse',object_bytes=retained_bytes)
+        index_ref={'path':index_path.relative_to(Path(package).resolve()).as_posix(),
+                   'sha256':_sha(index_path),'record_count':None}
+    index=_load_worker_index(index_ref,package,retained_bytes=retained_bytes)
+    ordinal=reference['ordinal']
+    if type(ordinal)!=int or not 0<=ordinal<len(index['records']): raise ValueError('benchmark reference ordinal changed')
+    recorded=index['records'][ordinal]
+    if any(reference.get(k)!=v for k,v in recorded.items()): raise ValueError('benchmark reference/source binding changed')
+    if 'record_count' in reference and reference['record_count']!=reference.get('candidate_count'):
+        raise ValueError('benchmark reference candidate count changed')
+    del recorded,index
+    worker=_read(path)
+    if _worker_key(worker)!=reference['worker_key']: raise ValueError('benchmark reference worker key changed')
+    candidates=worker['resource'].get('selection',{}).get('candidate_records')
+    if (candidates is not None)!=('candidate_count' in reference) or (candidates is not None and len(candidates)!=reference['candidate_count']):
+        raise ValueError('benchmark reference candidate count changed')
+    return worker
+
+
+def _publish_worker(worker, output, directory, ordinal, *, source_path, source_sha256, source_pointer):
+    relative=directory/f'{ordinal:08d}.json'
+    _write(output/relative,worker)
+    reference={'ordinal':ordinal,'worker_key':_worker_key(worker),'path':relative.as_posix(),
+               'sha256':_sha(output/relative),'source_block_path':str(source_path),
+               'source_block_sha256':source_sha256,'source_json_pointer':source_pointer}
+    candidates=worker['resource'].get('selection',{}).get('candidate_records')
+    if candidates is not None: reference['candidate_count']=len(candidates)
+    return reference
+
+
+def _publish_worker_index(records, output, directory):
+    relative=directory/'workers.index.json'
+    _write(output/relative,{'schema_version':1,'record_count':len(records),'records':records})
+    return {'path':relative.as_posix(),'sha256':_sha(output/relative),'record_count':len(records)}
+
+
+def _retain_benchmark_workers(root, output, *, phase, consume, retained_bytes=lambda:0):
+    """Publish complete workers, retaining only references between indivisible blocks.
+
+    output is the per-input package directory. Consumers detach every retained
+    field; neither this loop nor its callback may retain a completed raw block.
+    """
+    if phase not in ('campaign','calibration'): raise ValueError('invalid worker retention phase')
+    output=Path(output); package=output.parent; directory=Path(output.name)/phase
+    index_path=package/directory/'workers.index.json'
+    # A failed rerun must not leave an earlier completed index authoritative.
+    if index_path.exists(): index_path.unlink()
+    records=[]; seen=set()
+    for path in sorted((Path(root)/'blocks').glob('*.json')):
+        reserve=retained_bytes()+_object_bytes(records)+_object_bytes(seen)
+        _guard_paths((path,),phase='benchmark_block_before_parse',object_bytes=reserve)
+        source_hash=_sha(path); block=_read(path)
+        if not isinstance(block,list): raise ValueError('benchmark block must contain a worker list')
+        for position,worker in enumerate(block):
+            key=_worker_key(worker); pair=(key['block'],key['method_id'])
+            if pair in seen: raise ValueError('duplicate benchmark worker key')
+            seen.add(pair)
+            reference=_publish_worker(worker,package,directory,len(records),source_path=path,
+                                      source_sha256=source_hash,source_pointer='/'+str(position))
+            records.append(reference)
+            consume(worker,reference)
+            _guard_paths((path,),phase='benchmark_retained_growth',
+                         object_bytes=retained_bytes()+_object_bytes(records)+_object_bytes(seen))
+            del worker,reference,key
+        del block
+    _resource_check(_empty_scale(),phase='benchmark_index_publication',
+                    object_bytes=retained_bytes()+_object_bytes(records)+_object_bytes(seen))
+    return _publish_worker_index(records,package,directory)
+
+
+def _compact_benchmark_resource(resource, reference):
+    fields=('method_id','initialization_norm','trainable_parameters','runtime_stored_scalars',
+            'runtime_serialized_bytes','execution_hash','selected_execution_hash','equality_status','risk')
+    compact={key:resource[key] for key in fields if key in resource}
+    compact['memory']={key:resource['memory'][key] for key in ('isolation','peak_rss_bytes') if key in resource['memory']}
+    if 'selected_asset' in resource:
+        compact['selected_asset']={key:resource['selected_asset'][key] for key in ('information_access',) if key in resource['selected_asset']}
+    compact['resource_ref']={**reference,'json_pointer':'/resource'}
+    if 'selection' in resource:
+        compact['selection']={key:resource['selection'][key] for key in
+                              ('selected_id','selected_options','source_hash','validation_hash') if key in resource['selection']}
+        compact['selection_ref']={**reference,'json_pointer':'/resource/selection'}
+        if 'candidate_records' in resource['selection']:
+            compact['candidate_records_ref']={**reference,'json_pointer':'/resource/selection/candidate_records',
+                                               'record_count':len(resource['selection']['candidate_records'])}
+    # Native roundtrip detaches subclasses and nested lists from input blocks.
+    return json.loads(json.dumps(compact,allow_nan=False))
+
+
+def _validate_benchmark_worker(worker, frozen=None):
+    resource=worker['resource']; mid=resource['method_id']; _worker_key(worker)
+    for row in worker['rows']:
+        temperature=row['cold_warm']
+        if temperature not in ('cold','warm'): raise ValueError('invalid benchmark temperature')
+        in_process=resource['memory']['isolation']=='in_process_test_or_callback'
+        stratum=content_hash({'conditions':worker['conditions'],'cold_warm':temperature,'in_process':in_process})
+        if row['timing_stratum']!=stratum: raise ValueError('benchmark hashed timing stratum changed')
+        if any(row[field]!=resource[field] for field in ('method_id','execution_hash','selected_execution_hash')):
+            raise ValueError('benchmark worker/row identity changed')
+        if frozen:
+            block=row['block']; orders=frozen['orders']
+            if not 0<=block<len(orders) or row['method_order']!=orders[block] or mid not in orders[block]:
+                raise ValueError('benchmark worker order changed')
+            repetitions=1 if temperature=='cold' else frozen['repetitions'][mid]
+            if row['repetitions']!=repetitions: raise ValueError('benchmark worker repetition schedule changed')
+    if frozen:
+        if resource['selected_execution_hash']!=frozen['selected_execution_hashes'].get(mid):
+            raise ValueError('benchmark selected execution identity changed')
+        if content_hash(worker['conditions'])!=frozen['condition_hash']: raise ValueError('benchmark timing conditions changed')
+        if resource['memory']['isolation']!='fresh_interpreter': raise ValueError('finalized benchmark requires fresh worker isolation')
+
+
+def _benchmark(entry, *, output, emit=lambda row:None, retained_bytes=lambda:0):
+    """Reconstruct unchanged science with detached summaries and verified full workers."""
     from .benchmark import comparison_table, _campaign_configuration, _fixed_schedule
-    _guard_paths(_input_paths(entry),phase='benchmark_before_raw_allocation')
-    root = Path(entry['run_path']); inputs = _read(root/'inputs.json')
-    rows=[]; workers=[]; seen=set(); resources={}
-    for path in sorted((root/'blocks').glob('*.json')):
-        for worker in _read(path):
-            resource = worker['resource']; mid=resource['method_id']
-            for row in worker['rows']:
-                temperature=row['cold_warm']
-                if temperature not in ('cold','warm'):
-                    raise ValueError('invalid benchmark temperature')
-                in_process=resource['memory']['isolation']=='in_process_test_or_callback'
-                stratum=content_hash({'conditions':worker['conditions'],
-                                      'cold_warm':temperature,'in_process':in_process})
-                if row['timing_stratum']!=stratum:
-                    raise ValueError('benchmark hashed timing stratum changed')
-                if any(row[field]!=resource[field] for field in
-                       ('method_id','execution_hash','selected_execution_hash')):
-                    raise ValueError('benchmark worker/row identity changed')
-                key=(mid,row['block'],temperature)
-                if key in seen: raise ValueError('duplicate benchmark worker stratum')
-                seen.add(key); rows.append(row)
-            if mid in resources:
-                old=resources[mid]
-                if any(resource[field]!=old[field] for field in ('selected_execution_hash','execution_hash')):
-                    raise ValueError('benchmark selected asset or execution changed')
-                a,b=old['memory']['peak_rss_bytes'],resource['memory']['peak_rss_bytes']
-                old['memory']['peak_rss_bytes']=max(a,b) if a is not None and b is not None else None
-            else: resources[mid]=json.loads(json.dumps(resource))
-            workers.append(worker)
-    generated=inputs['inputs'].get('manifest', {})
-    campaign=generated.get('phase')=='finalized'
-    declared=[d['method_id'] for d in inputs['methods']]
-    orders=generated.get('frozen',{}).get('orders', [])
-    complete=bool(workers) and set(resources)==set(declared) and not (root/'failure.json').exists()
+    _guard_paths(_input_paths(entry,retained_bytes=retained_bytes()),phase='benchmark_before_raw_allocation',streaming=True,object_bytes=retained_bytes())
+    root=Path(entry['run_path']); inputs=_read(root/'inputs.json')
+    generated=inputs['inputs'].get('manifest',{}); campaign=generated.get('phase')=='finalized'
+    rows=[]; seen=set(); resources={}; conditions=None; pilots=[]; calibration_blocks=set()
+    def reserve():
+        return retained_bytes()+sum(_object_bytes(v) for v in (inputs,rows,seen,resources,conditions,pilots,calibration_blocks))
+    directory=Path(output)/f"benchmark-input-{entry['input_id']}"
+    calibration_ref=None; frozen=generated['frozen'] if campaign else None
     if campaign:
-        frozen=generated['frozen']
         if frozen['identity']['dirty_diff_sha256'] is not None or frozen['identity']['versions']!=entry['source']:
             raise ValueError('benchmark requires clean recorded source identity')
         if content_hash(_campaign_configuration(generated))!=frozen['configuration_sha256']:
             raise ValueError('benchmark frozen scientific inputs changed')
         calibration_path=Path(frozen['calibration_path'])
-        if content_hash(_read(calibration_path))!=frozen['calibration_sha256']:
-            raise ValueError('benchmark calibration identity changed')
+        _guard_paths((calibration_path,),phase='benchmark_calibration_before_parse',object_bytes=reserve())
+        calibration=_read(calibration_path)
+        if content_hash(calibration)!=frozen['calibration_sha256']: raise ValueError('benchmark calibration identity changed')
+        del calibration
         calibration_inputs=_read(calibration_path.parent/'inputs.json')
         calibration_config=calibration_inputs['inputs']['manifest']
         if _campaign_configuration(calibration_config)!=_campaign_configuration(generated):
             raise ValueError('calibration/campaign scientific contract changed')
-        pilots=[]; calibration_blocks=set()
-        for path in sorted((calibration_path.parent/'blocks').glob('*.json')):
-            for worker in _read(path):
-                pilots.append(worker['pilot']); calibration_blocks.update(r['block'] for r in worker['rows'])
-        rebuilt=_fixed_schedule({'config':calibration_config,'pilot':pilots,
-                                 'schedule':{'balanced_blocks':len(calibration_blocks)}})
+        def consume_pilot(worker,reference):
+            # Only the fields consumed by _fixed_schedule survive publication.
+            pilot=worker['pilot']; fields=('method_id','samples_ns','desired_repetitions','capped')
+            _resource_check(_empty_scale(),phase='benchmark_pilot_retention',
+                            object_bytes=reserve()+_object_bytes(pilot))
+            pilots.append(json.loads(json.dumps({k:pilot[k] for k in fields})))
+            calibration_blocks.update(row['block'] for row in worker['rows'])
+        calibration_ref=_retain_benchmark_workers(calibration_path.parent,directory,phase='calibration',
+            consume=consume_pilot,retained_bytes=lambda:reserve()+_object_bytes(calibration_inputs))
+        rebuilt=_fixed_schedule({'config':calibration_config,'pilot':pilots,'schedule':{'balanced_blocks':len(calibration_blocks)}})
         if any(rebuilt[k]!=frozen[k] for k in rebuilt): raise ValueError('frozen timing schedule differs from raw calibration')
-        for worker in workers:
-            resource=worker['resource']
-            if resource['selected_execution_hash']!=frozen['selected_execution_hashes'][resource['method_id']]:
-                raise ValueError('benchmark selected execution identity changed')
-            if content_hash(worker['conditions'])!=frozen['condition_hash']:
-                raise ValueError('benchmark timing conditions changed')
-            if resource['memory']['isolation']!='fresh_interpreter':
-                raise ValueError('finalized benchmark requires fresh worker isolation')
-            for row in worker['rows']:
-                block=row['block']
-                if type(block)!=int or not 0<=block<len(orders) or row['method_order']!=orders[block]:
-                    raise ValueError('benchmark worker order changed')
-                repetitions=1 if row['cold_warm']=='cold' else frozen['repetitions'][resource['method_id']]
-                if row['repetitions']!=repetitions:
-                    raise ValueError('benchmark worker repetition schedule changed')
-        expected={(mid,block,stratum) for block,order in enumerate(orders) for mid in order for stratum in ('cold','warm')}
+        pilots.clear(); calibration_blocks.clear(); del rebuilt,calibration_inputs,calibration_config
+    def consume(worker,reference):
+        nonlocal conditions
+        _validate_benchmark_worker(worker,frozen)
+        resource=worker['resource']; mid=resource['method_id']
+        # Charge prospective retained fields before detaching, while this raw
+        # block is still live. The block guard covers transient raw traversals.
+        growth=_object_bytes(worker['rows'])
+        if conditions is None: growth+=_object_bytes(worker['conditions'])
+        if mid not in resources:
+            growth+=sum(_object_bytes(resource[k]) for k in ('risk','memory') if k in resource)
+            growth+=sum(_object_bytes(resource.get('selection',{}).get(k)) for k in
+                        ('selected_id','selected_options','source_hash','validation_hash'))
+        _guard_paths((Path(reference['source_block_path']),),phase='benchmark_summary_before_copy',object_bytes=reserve()+growth)
+        if conditions is None: conditions=json.loads(json.dumps(worker['conditions']))
+        for row in worker['rows']:
+            key=(mid,row['block'],row['cold_warm'])
+            if key in seen: raise ValueError('duplicate benchmark worker stratum')
+            seen.add(key)
+        rows.extend(json.loads(json.dumps(worker['rows'])))
+        first=mid not in resources
+        if not first:
+            old=resources[mid]
+            if any(resource[field]!=old[field] for field in ('selected_execution_hash','execution_hash')):
+                raise ValueError('benchmark selected asset or execution changed')
+            a,b=old['memory']['peak_rss_bytes'],resource['memory']['peak_rss_bytes']
+            old['memory']['peak_rss_bytes']=max(a,b) if a is not None and b is not None else None
+        else: resources[mid]=_compact_benchmark_resource(resource,reference)
+        # Stream every nested adverse record at its full raw provenance. The
+        # first resource occurrence used to appear separately in the summary.
+        for failed in _adverse_records(worker): emit({'input_id':entry['input_id'],**failed,'resource_ref':reference})
+        if first:
+            for failed in _adverse_records(resource,'resources.'+mid):
+                emit({'input_id':entry['input_id'],**failed,'resource_ref':reference})
+    worker_ref=_retain_benchmark_workers(root,directory,phase='campaign',consume=consume,retained_bytes=reserve)
+    for resource in resources.values():
+        for name in ('resource_ref','selection_ref','candidate_records_ref'):
+            if name in resource: resource[name]['index_ref']=worker_ref
+    declared=[d['method_id'] for d in inputs['methods']]
+    complete=worker_ref['record_count']>0 and set(resources)==set(declared) and not (root/'failure.json').exists()
+    if campaign:
+        expected={(mid,block,stratum) for block,order in enumerate(frozen['orders']) for mid in order for stratum in ('cold','warm')}
         complete &= seen==expected
     required={'B08:ridge','B10:empirical_bayes'} | {'B05:'+mid for mid,r in resources.items() if r['trainable_parameters'] is not None and mid!='B08:gd'}
-    missing=sorted(required-set(resources))
-    equal=all(r['equality_status']=='pass' for r in resources.values())
-    gate={'status':'pass' if complete and equal else 'unavailable'}
-    pareto=comparison_table(rows,list(resources.values()),gate=gate,phase='finalized' if campaign else 'exploratory')
-    # Keep the complete candidate ledgers and failures in raw output, even when
-    # they were not selected, and never count warm repeats as fresh risk samples.
-    return {'input_id':entry['input_id'], 'label':entry['label'], 'status':'completed' if complete else 'failed_or_incomplete',
+    missing=sorted(required-set(resources)); equal=all(r['equality_status']=='pass' for r in resources.values())
+    _resource_check(_empty_scale(),phase='benchmark_comparison_before_allocation',object_bytes=reserve(),
+                    scalar_bytes=8192*len(resources)**2*len({row['timing_stratum'] for row in rows}))
+    pareto=comparison_table(rows,list(resources.values()),gate={'status':'pass' if complete and equal else 'unavailable'},phase='finalized' if campaign else 'exploratory')
+    result={'report_schema_version':REPORT_SCHEMA_VERSION,'input_id':entry['input_id'],'label':entry['label'],
+            'status':'completed' if complete else 'failed_or_incomplete',
             'evidence_level':'fixture' if entry.get('fixture') else ('operational' if campaign and complete and not missing and equal else 'exploratory'),
-            'missing_controls':missing, 'rows':rows, 'resources':list(resources.values()), 'pareto':pareto,
-            'inputs':inputs, 'raw_workers':workers, 'energy':{'status':'not_run'}, 'accelerator':{'status':'not_run'}}
+            'missing_controls':missing,'rows':rows,'resources':list(resources.values()),'pareto':pareto,'conditions':conditions,
+            'inputs':inputs,'worker_records_ref':worker_ref,'energy':{'status':'not_run'},'accelerator':{'status':'not_run'}}
+    if calibration_ref: result['calibration_worker_records_ref']=calibration_ref
+    _resource_check(_empty_scale(),phase='benchmark_summary_complete',object_bytes=retained_bytes()+_object_bytes(result))
+    for failed in _adverse_records({k:v for k,v in result.items() if k not in ('rows','resources','inputs')}):
+        emit({'input_id':entry['input_id'],**failed,'worker_records_ref':worker_ref})
+    return result
 
 
 def _benchmark_contract(benchmark):
@@ -577,7 +753,7 @@ def _benchmark_contract(benchmark):
     return {'architecture':{'class':'declared deep-linear and outside-class operational controls','budget':c['budget']},
             'population':{'workload':c['workload'],'preparation':c['preparation'],'access':c['access']},
             'baseline':c['methods'],'metric':'expected squared coefficient error [coefficient^2]',
-            'resource_contract':{'conditions':benchmark['raw_workers'][0]['conditions'],
+            'resource_contract':{'conditions':benchmark['conditions'],
                 'sample_plan':c['sample_plan'],'scope':benchmark['pareto']['scope'],
                 'timing':'measured enclosing pipeline nanoseconds; preparation and selection included',
                 'memory':'peak process RSS bytes; not incremental workspace',
@@ -717,22 +893,26 @@ def regenerate_tables(manifest: JsonRecord, output: Path) -> JsonRecord:
     preflight=_verify_inputs(manifest)
     output=Path(output); output.mkdir(parents=True,exist_ok=True)
     comparisons=[]; benchmarks=[]; diagnostics=[]; statuses=[]
+    def reserve():
+        return sum(_object_bytes(v) for v in (manifest,comparisons,benchmarks,diagnostics,statuses))
     with _RecordStream(output/'raw_records.json') as raw, _RecordStream(output/'adverse_records.json') as adverse, (output/'raw_records.csv').open('w',newline='') as raw_csv:
         writer=csv.DictWriter(raw_csv,fieldnames=['input_id','kind','outer_replication','task_id','method_id','status','record_json'])
         writer.writeheader()
         for entry in manifest['inputs']:
             kind=entry['kind']
+            _guard_paths(_input_paths(entry,retained_bytes=reserve()),phase='report_next_input',streaming=kind in ('benchmark','confirmation'),object_bytes=reserve())
             if kind=='confirmation':
                 def emit(row):
                     record={'input_id':entry['input_id'],**row}; raw.write(record)
                     writer.writerow({**{key:record.get(key) for key in writer.fieldnames if key!='record_json'},
                                      'record_json':json.dumps(record,allow_nan=False)})
                     for failed in _adverse_records(record): adverse.write(failed)
-                comparison,_=_confirmation(entry,emit); comparisons.append(comparison)
+                comparison,_=_confirmation(entry,emit,retained_bytes=reserve()); comparisons.append(comparison)
                 status=comparison['run_status']
             elif kind=='benchmark':
-                benchmark=_benchmark(entry); benchmarks.append(benchmark); status=benchmark['status']
-                for failed in _adverse_records(benchmark): adverse.write(failed)
+                benchmark=_benchmark(entry,output=output,emit=adverse.write,retained_bytes=reserve)
+                benchmarks.append(benchmark); status=benchmark['status']
+                del benchmark
             elif kind=='not_run': status='not_run'
             else:
                 record=_read(entry['raw_path']); diagnostics.append({'input_id':entry['input_id'],'label':entry['label'],
@@ -742,14 +922,16 @@ def regenerate_tables(manifest: JsonRecord, output: Path) -> JsonRecord:
             statuses.append({'input_id':entry['input_id'],'label':entry['label'],'kind':kind,'status':status,
                              'reason':entry.get('reason'), 'evidence_paths':list(entry['inventory'])})
         raw_count=raw.count; adverse_count=adverse.count
+    _resource_check(_empty_scale(),phase='report_artifacts_before_allocation',object_bytes=reserve())
     _csv(output/'comparisons_table.csv', comparisons)
     _csv(output/'input_status.csv', statuses)
     _csv(output/'family_comparisons.csv', [{'input_id':r['input_id'],'method':mid,**value} for r in comparisons for mid,value in r.get('secondary',{}).items()])
     _csv(output/'pareto_table.csv', [{'input_id':b['input_id'],**row} for b in benchmarks for row in b['pareto']['rows']])
     _write(output/'diagnostics.json',diagnostics)
-    _write(output/'benchmark_workers.json',benchmarks)
+    _write(output/'benchmark_workers.json',{'report_schema_version':REPORT_SCHEMA_VERSION,'benchmarks':[
+        {k:b[k] for k in ('input_id','worker_records_ref','calibration_worker_records_ref') if k in b} for b in benchmarks]})
     figures=_figures(output,comparisons,benchmarks,diagnostics)
-    result={'comparisons':comparisons,'benchmarks':benchmarks,'diagnostics':diagnostics,'statuses':statuses,'figures':figures,
+    result={'report_schema_version':REPORT_SCHEMA_VERSION,'comparisons':comparisons,'benchmarks':benchmarks,'diagnostics':diagnostics,'statuses':statuses,'figures':figures,
             'adverse_records':{'path':'adverse_records.json','count':adverse_count,'storage':'complete streamed records'},
             'raw_record_count':raw_count,'resource_preflight':preflight}
     _write(output/'tables.json', result)
@@ -848,7 +1030,7 @@ def _write_report(manifest: JsonRecord, output: Path) -> GateDecision:
               ('All source, diagnostic, exact and forecast records',tables['diagnostics']),
               ('Operational comparisons',[{k:v for k,v in b.items() if k not in ('raw_workers','rows')} for b in tables['benchmarks']])]
     lines=[
-           'All failed candidates, family task rows, branch diagnostics and timing records are retained in raw_records.json / raw_records.csv and benchmark_workers.json. No success-only subgroup replaces the declared population.',
+           'Family task rows are retained in raw_records.json / raw_records.csv. The benchmark_raw_refs_v2 directory benchmark_workers.json links hash-verified indexes of complete workers, including every candidate, probe, failure and unknown field. Compact tables reference these full workers; consumers of historical embedded raw_workers must migrate to the indexes. No success-only subgroup replaces the declared population.',
            '', '## Blueprint §11.2 challenge pass','']
     for challenge,response in CHALLENGES.items():
         supplied=manifest.get('challenges',{}).get(challenge)

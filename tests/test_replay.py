@@ -143,3 +143,160 @@ class ReplayTests(unittest.TestCase):
                             ({'loss':1.}, {'loss':1.1}), ({'loss':1.}, {})):
             with self.assertRaises(ValueError):
                 api.compare_scientific(left, right, rtol=1e-10, atol=1e-12)
+
+
+class BoundedBenchmarkReplay(unittest.TestCase):
+    def test_benchmark_projection_preserves_cross_candidate_aliases(self):
+        from prepared_learning import _replay as api
+        from tests.test_reporting import benchmark_input
+        import copy
+        self.assertTrue(hasattr(api,'_benchmark_scientific'),'complete worker projection is missing')
+        with tempfile.TemporaryDirectory() as tmp:
+            _,run=benchmark_input(Path(tmp))
+            worker=json.loads(next((run/'blocks').glob('*.json')).read_text())[0]
+            renamed=copy.deepcopy(worker)
+            candidates=renamed['resource']['selection']['candidate_records']
+            candidates[0].update(asset_fit_id='B01:900',base_fit_id='B01:800')
+            candidates[1].update(shrink_fit_id='B01:900',noise_fit_id='B01:800')
+            left=api._benchmark_scientific(worker)
+            self.assertEqual(left,api._benchmark_scientific(renamed))
+            for field in ('shrink_fit_id','noise_fit_id'):
+                changed=copy.deepcopy(renamed); changed['resource']['selection']['candidate_records'][1][field]='B01:777'
+                with self.assertRaises(ValueError):
+                    api.compare_scientific(left,api._benchmark_scientific(changed),rtol=1e-10,atol=1e-12)
+            changed=copy.deepcopy(renamed); changed['resource']['selection']['candidate_records'][0]['base_fit_id']='B01:900'
+            changed['resource']['selection']['candidate_records'][1]['noise_fit_id']='B01:900'
+            with self.assertRaises(ValueError): api.compare_scientific(left,api._benchmark_scientific(changed),rtol=1e-10,atol=1e-12)
+            for key in left['resource']:
+                changed=copy.deepcopy(worker); changed['resource'][key]={'changed':True}
+                with self.subTest(field=key),self.assertRaises((ValueError,TypeError)):
+                    api.compare_scientific(left,api._benchmark_scientific(changed),rtol=1e-10,atol=1e-12)
+            for delta,passes in ((1e-13,True),(1e-4,False)):
+                changed=copy.deepcopy(worker); changed['resource']['selection']['candidate_records'][0]['loss']+=delta
+                if passes: api.compare_scientific(left,api._benchmark_scientific(changed),rtol=1e-10,atol=1e-12)
+                else:
+                    with self.assertRaises(ValueError): api.compare_scientific(left,api._benchmark_scientific(changed),rtol=1e-10,atol=1e-12)
+
+    def test_benchmark_file_output_retains_failure_evidence(self):
+        from prepared_learning import _replay as api
+        import sys,os
+        self.assertTrue(hasattr(api,'_run_file'),'file-backed worker execution is missing')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for code in (0,3,75):
+                stdout=root/'processes'/f'{code}.stdout.json'; stderr=root/'processes'/f'{code}.stderr.txt'; log=root/'processes'/f'{code}.log.json'
+                payload={'gate':'LOCAL_RESOURCE_LIMIT','evidence':{'phase':'test','recovery':'retry'}} if code==75 else {'full':'x'*100000}
+                expression=repr(payload) if code==75 else "{'full':'x'*100000}"
+                script='import sys,json; print(json.dumps('+expression+')); sys.stderr.write("e"*100000); sys.exit('+str(code)+')'
+                command=[sys.executable,'-c',script]
+                if code==0: self.assertEqual(api._run_file(command,cwd=root,env=dict(os.environ),stdout_path=stdout,stderr_path=stderr,log=log,package=root),stdout)
+                else:
+                    with self.assertRaises(api.ReportingResourceLimit if code==75 else ValueError):
+                        api._run_file(command,cwd=root,env=dict(os.environ),stdout_path=stdout,stderr_path=stderr,log=log,package=root)
+                self.assertEqual(json.loads(stdout.read_text()),payload); self.assertEqual(stderr.stat().st_size,100000)
+                record=json.loads(log.read_text()); self.assertEqual(record['returncode'],code)
+                self.assertEqual(root/record['stdout']['path'],stdout)
+                self.assertEqual(record['stdout']['sha256'],api._sha(stdout)); self.assertNotIn('x'*1000,json.dumps(record))
+
+    def test_benchmark_replay_pairs_without_cohort_retention(self):
+        from prepared_learning import _replay as api
+        from prepared_learning import reporting as report
+        from prepared_learning.benchmark import _campaign_configuration, _fixed_schedule
+        from prepared_learning.records import content_hash
+        from tests.test_reporting import benchmark_input
+        import copy,gc,weakref
+        self.assertTrue(hasattr(api,'_replay_benchmark'),'paired benchmark replay is missing')
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); descriptor,run=benchmark_input(root,blocks=4)
+            inputs=json.loads((run/'inputs.json').read_text()); config=inputs['inputs']['manifest']
+            import shutil
+            calibration=root/'calibration'; shutil.copytree(run,calibration)
+            (calibration/'benchmark.json').write_text(json.dumps({'status':'exploratory','fixture':True}))
+            workers=[w for path in sorted((run/'blocks').glob('*.json')) for w in json.loads(path.read_text())]
+            schedule=_fixed_schedule({'config':config,'pilot':[w['pilot'] for w in workers],'schedule':{'balanced_blocks':4}})
+            # Fixture schedule is recorded, and storage order deliberately differs from requests.
+            for w in workers:
+                for row in w['rows']: row['method_order']=schedule['orders'][row['block']]
+            for i,path in enumerate(sorted((run/'blocks').glob('*.json'))):
+                path.write_text(json.dumps(list(reversed(workers[i*4:(i+1)*4]))))
+            for path in (run/'requests').glob('*.json'):
+                req=json.loads(path.read_text()); req['method_order']=schedule['orders'][req['block']]
+                req['position']=req['method_order'].index(req['method']['method_id']); path.write_text(json.dumps(req))
+            frozen={**schedule,'identity':{'versions':{'fixture':True},'dirty_diff_sha256':None},
+                    'selected_execution_hashes':{w['resource']['method_id']:w['resource']['selected_execution_hash'] for w in workers},
+                    'condition_hash':content_hash(workers[0]['conditions'])}
+            frozen['configuration_sha256']=content_hash(_campaign_configuration(config))
+            frozen['calibration_path']=str(calibration/'benchmark.json')
+            frozen['calibration_sha256']=content_hash(json.loads((calibration/'benchmark.json').read_text()))
+            config.update(phase='finalized',frozen=frozen)
+            (run/'inputs.json').write_text(json.dumps(inputs))
+            entry={'run_path':str(run),'input_id':0,'source':{'fixture':True},'label':'fixture',
+                   'kind':'benchmark','fixture':True,'descriptor_path':str(descriptor)}
+            refs=[]; commands=[]; original=report._read; mutation=None
+            project=api._benchmark_scientific
+            class Tracked(dict): pass
+            def read(path):
+                value=original(path)
+                if isinstance(value,dict) and 'resource' in value:
+                    value=Tracked(value); refs.append(weakref.ref(value))
+                return value
+            def tracked_projection(worker):
+                value=Tracked(project(worker)); refs.append(weakref.ref(value)); return value
+            def run_file(command,**kw):
+                gc.collect(); self.assertTrue(all(ref() is None for ref in refs),'completed pair still retained')
+                req=json.loads(Path(command[-1]).read_text()); commands.append((req['block'],req['method']['method_id']))
+                match=next(w for w in workers if w['rows'][0]['block']==req['block'] and w['resource']['method_id']==req['method']['method_id'])
+                new=copy.deepcopy(match)
+                for row in new['rows']: row['end_to_end_ns']+=700
+                if mutation is not None: mutation(new)
+                report._write(kw['stdout_path'],new); kw['stderr_path'].write_text('')
+                return kw['stdout_path']
+            destination=root/'replay'; destination.mkdir()
+            with patch.object(api,'_run_file',side_effect=run_file),patch.object(report,'_read',side_effect=read),patch.object(api,'_read',side_effect=read),patch.object(api,'_benchmark_scientific',new=tracked_projection):
+                result=api._replay_benchmark(entry,destination,root,{'rtol':1e-10,'atol':1e-12},config)
+            self.assertEqual(result['workers'],16); self.assertEqual(len(set(commands)),16)
+            measured=json.loads((destination/'remeasured-workers.json').read_text())
+            self.assertEqual(len(measured),16); self.assertEqual(measured[0]['rows'][0]['end_to_end_ns'],1700)
+            self.assertEqual(result['timing_stratum'],'technical_replay')
+            self.assertEqual(result['report_schema_version'],'benchmark_raw_refs_v2')
+            moved=root/'moved-package'; shutil.copytree(destination,moved)
+            index=report._load_worker_index(result['remeasured_worker_records_ref'],moved)
+            for reference,expected_worker in zip(index['records'],measured):
+                self.assertEqual(report._load_worker_ref(reference,moved),expected_worker)
+            gc.collect(); self.assertTrue(all(ref() is None for ref in refs))
+
+            # Missing, duplicate, wrong-key and changed requests cannot run a
+            # different worker set and still receive a matched result.
+            request_path=sorted((run/'requests').glob('*.json'))[0]
+            original_request=json.loads(request_path.read_text())
+            for i,change in enumerate((
+                lambda r:r.update(block=99),
+                lambda r:r.update(method_order=list(reversed(r['method_order']))),
+                lambda r:r['settings'].update(fixed_repetitions=99),
+                lambda r:r['inputs']['manifest'].update(dimension=3),
+            )):
+                changed=copy.deepcopy(original_request); change(changed); request_path.write_text(json.dumps(changed))
+                target=root/f'request-failure-{i}'; target.mkdir()
+                with patch.object(api,'_run_file',side_effect=AssertionError('invalid request executed')):
+                    with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
+                self.assertFalse((target/'benchmark-input-0/remeasured/workers.index.json').exists())
+            request_path.unlink(); target=root/'missing-request'; target.mkdir()
+            with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
+            request_path.write_text(json.dumps(original_request))
+            duplicate=run/'requests/duplicate.json'; duplicate.write_text(request_path.read_text())
+            target=root/'duplicate-request'; target.mkdir()
+            with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
+            duplicate.unlink()
+            for i,mutation in enumerate((
+                lambda w:w['rows'][0].update(block=99),
+                lambda w:w['resource'].update(method_id='B04'),
+                lambda w:w['rows'][0].update(repetitions=99),
+                lambda w:w['conditions'].update(thermal='changed'),
+                lambda w:w['resource']['selection']['candidate_records'][1]['probes'][0].update(status='pass'),
+                lambda w:w['resource']['selected_asset'].update(unknown_asset={'changed':True}),
+            )):
+                target=root/f'result-failure-{i}'; target.mkdir()
+                with patch.object(api,'_run_file',side_effect=run_file):
+                    with self.assertRaises(ValueError): api._replay_benchmark(entry,target,root,{'rtol':1e-10,'atol':1e-12},config)
+                self.assertTrue((target/'processes/00000000.stdout.json').exists())
+                self.assertFalse((target/'benchmark-input-0/remeasured/workers.index.json').exists())

@@ -18,7 +18,10 @@ import time
 from .records import GateDecision, GateCode, content_hash
 from .reporting import (_read, _write, _sha, _scientific, compare_scientific,
                         compare_run_stores, _verify_inputs, ReportingResourceLimit,
-                        _validate_output_artifact, _artifact_summary)
+                        _validate_output_artifact, _artifact_summary, _guard_paths,
+                        _object_bytes, _benchmark, _load_worker_index, _load_worker_ref,
+                        _validate_benchmark_worker, _worker_key, _publish_worker,
+                        _publish_worker_index, _RecordStream, REPORT_SCHEMA_VERSION)
 
 
 def _run(command, *, cwd, env=None, log=None):
@@ -32,6 +35,97 @@ def _run(command, *, cwd, env=None, log=None):
         if limited.get('gate')=='LOCAL_RESOURCE_LIMIT': raise ReportingResourceLimit(limited['evidence'])
     if result.returncode: raise ValueError(f'replay operation failed ({result.returncode}): {command[:4]}; {result.stderr[-1500:]}')
     return result.stdout
+
+
+def _run_file(command, *, cwd, env, stdout_path, stderr_path, log, package=None):
+    """Keep complete process evidence on disk, including failed worker output."""
+    stdout_path=Path(stdout_path); stderr_path=Path(stderr_path)
+    stdout_path.parent.mkdir(parents=True,exist_ok=True); stderr_path.parent.mkdir(parents=True,exist_ok=True)
+    with stdout_path.open('wb') as stdout, stderr_path.open('wb') as stderr:
+        result=subprocess.run(command,cwd=cwd,env=env,stdout=stdout,stderr=stderr,check=False)
+    def reference(path):
+        return {'path':os.path.relpath(path,Path(package) if package is not None else Path(log).parent),'sha256':_sha(path),'size_bytes':path.stat().st_size}
+    _write(log,{'command':command,'cwd':str(cwd),'returncode':result.returncode,
+                'stdout':reference(stdout_path),'stderr':reference(stderr_path)})
+    if result.returncode==75:
+        _guard_paths((stdout_path,),phase='replay_resource_gate_before_parse')
+        try: limited=_read(stdout_path)
+        except ValueError: limited={}
+        if limited.get('gate')=='LOCAL_RESOURCE_LIMIT': raise ReportingResourceLimit(limited['evidence'])
+    if result.returncode:
+        raise ValueError(f'replay operation failed ({result.returncode}): {command[:4]}; complete stdout/stderr retained at {log}')
+    return stdout_path
+
+
+def _benchmark_scientific(worker):
+    """The complete historical projection, with ONE cost alias map per worker."""
+    resource=worker['resource']
+    fields=('method_id','initialization_norm','trainable_parameters','runtime_stored_scalars','runtime_serialized_bytes',
+            'selected_asset','selected_execution_hash','execution_hash','selection','risk','equality','equality_status','diagnostics')
+    return {'resource':_scientific({k:resource[k] for k in fields}),
+            'schedule':[{k:r[k] for k in ('method_id','block','timing_stratum')} for r in worker['rows']]}
+
+
+def _replay_benchmark(entry, destination, root, replay, config, *, retained_bytes=lambda:0):
+    """Validate/stage original workers, then compare exactly one full pair at a time."""
+    from .benchmark import THREAD_ENV, _campaign_configuration
+    summary=_benchmark(entry,output=destination,retained_bytes=retained_bytes)
+    if summary['status']!='completed': raise ValueError('benchmark replay requires complete original workers')
+    old_index_ref=summary['worker_records_ref']
+    index=_load_worker_index(old_index_ref,destination,retained_bytes=retained_bytes()+_object_bytes(summary))
+    old_refs={(r['worker_key']['block'],r['worker_key']['method_id']):r for r in index['records']}
+    # Compact report risk vectors/rows are unnecessary for scientific replay.
+    del index,summary
+    frozen=config['frozen']; expected={(block,mid) for block,order in enumerate(frozen['orders']) for mid in order}
+    if set(old_refs)!=expected: raise ValueError('benchmark original worker key set changed')
+    requests=[]; requested=set(); new_refs=[]
+    def reserve():
+        return retained_bytes()+sum(_object_bytes(v) for v in (config,old_refs,requests,requested,new_refs,expected))
+    for path in sorted((Path(entry['run_path'])/'requests').glob('*.json')):
+        if path.name.endswith('.failure.json'): continue
+        _guard_paths((path,),phase='benchmark_replay_request_before_parse',object_bytes=reserve())
+        record=_read(path); key=(record['block'],record['method']['method_id'])
+        if key in requested: raise ValueError('duplicate benchmark replay request')
+        if key not in expected: raise ValueError('unexpected benchmark replay request key')
+        block,mid=key; order=frozen['orders'][block]
+        if (record['method_order']!=order or type(record['position'])!=int or
+                not 0<=record['position']<len(order) or order[record['position']]!=mid or
+                record['settings'].get('fixed_repetitions')!=frozen['repetitions'][mid]):
+            raise ValueError('benchmark replay request schedule changed')
+        if _campaign_configuration(record['inputs']['manifest'])!=_campaign_configuration(config):
+            raise ValueError('benchmark replay request scientific inputs changed')
+        requested.add(key); requests.append((path,key)); del record
+    if requested!=expected: raise ValueError('benchmark replay request count/key mismatch')
+    directory=Path(f"benchmark-input-{entry['input_id']}")/'remeasured'
+    with _RecordStream(destination/'remeasured-workers.json') as aggregate:
+        for ordinal,(path,key) in enumerate(requests):
+            _guard_paths((path,),phase='benchmark_replay_request_execution',object_bytes=reserve())
+            record=_read(path); env=dict(os.environ)
+            env.update({name:str(record['settings']['threads']) for name in THREAD_ENV})
+            process=destination/'processes'/f'{ordinal:08d}'
+            stdout=process.with_suffix('.stdout.json'); stderr=process.with_suffix('.stderr.txt')
+            _run_file([sys.executable,'-m','prepared_learning._benchmark_worker',str(path)],
+                      cwd=root,env=env,stdout_path=stdout,stderr_path=stderr,log=process.with_suffix('.process.json'),package=destination)
+            del record,env
+            reference=old_refs[key]; old_path=destination/reference['path']
+            # Two full workers plus both complete projections, using the same
+            # semantic factor and all retained metadata. Never cohort-sized.
+            _guard_paths((old_path,stdout),phase='benchmark_replay_pair_before_parse',copies=2,object_bytes=reserve())
+            old=_load_worker_ref(reference,destination,retained_bytes=reserve())
+            new=_read(stdout)
+            if _worker_key(new)!=reference['worker_key']: raise ValueError('benchmark replay result/request key mismatch')
+            _validate_benchmark_worker(new,frozen)
+            old_science=_benchmark_scientific(old); new_science=_benchmark_scientific(new)
+            compare_scientific(old_science,new_science,rtol=replay['rtol'],atol=replay['atol'])
+            new_reference=_publish_worker(new,destination,directory,ordinal,source_path=stdout,
+                                          source_sha256=_sha(stdout),source_pointer='')
+            new_refs.append(new_reference); aggregate.write(new)
+            del old,new,old_science,new_science,reference,new_reference
+    new_index_ref=_publish_worker_index(new_refs,destination,directory)
+    return {'report_schema_version':REPORT_SCHEMA_VERSION,'input_id':entry['input_id'],'kind':'benchmark','status':'matched','workers':len(new_refs),
+            'package_path':destination.name,
+            'worker_records_ref':old_index_ref,'remeasured_worker_records_ref':new_index_ref,
+            'timing_policy':'remeasured_not_equal','timing_stratum':'technical_replay'}
 
 
 def _git_bytes(root, revision, path):
@@ -123,7 +217,7 @@ def clean_replay(manifest, output):
                  'fixture':any(e.get('fixture') for e in manifest['inputs']),
                  'input_order_sha256':manifest['input_order_sha256'],'wheel_hashes':wheel_manifest,
                  'resource_preflight':preflight,
-                 'restored_assets':restored,'executions':worker,'rtol':rtol,'atol':atol,
+                 'restored_assets':restored,'execution_packages_base':'executions','executions':worker,'rtol':rtol,'atol':atol,
                  'timing_policy':'remeasured_not_equal','elapsed_seconds':time.perf_counter()-start,
                  'verification_scope':'same machine, exact committed source and fresh locked editable environment; replay is not a new independent sample; fixtures cannot establish production G10'}
         _write(output/'replay.json',receipt)
@@ -158,30 +252,8 @@ def worker(request):
             actual=_benchmark_identity(config)
             if config.get('phase')!='finalized': raise ValueError('clean benchmark replay requires finalized recorded schedule')
             if actual!=config['frozen']['identity']: raise ValueError('benchmark replay source/runtime identity changed')
-            old_workers=[]
-            for path in sorted((Path(entry['run_path'])/'blocks').glob('*.json')): old_workers.extend(_read(path))
-            new_workers=[]
-            for path in sorted((Path(entry['run_path'])/'requests').glob('*.json')):
-                if path.name.endswith('.failure.json'): continue
-                record=_read(path)
-                env=dict(os.environ)
-                from .benchmark import THREAD_ENV
-                env.update({key:str(record['settings']['threads']) for key in THREAD_ENV})
-                raw=_run([sys.executable,'-m','prepared_learning._benchmark_worker',str(path)],cwd=root,env=env,log=destination/(path.stem+'-process.json'))
-                new_workers.append(json.loads(raw))
-            if not new_workers or len(old_workers)!=len(new_workers): raise ValueError('benchmark replay count mismatch')
-            def scientific(worker):
-                resource=worker['resource']
-                fields=('method_id','initialization_norm','trainable_parameters','runtime_stored_scalars','runtime_serialized_bytes',
-                        'selected_asset','selected_execution_hash','execution_hash','selection','risk','equality','equality_status','diagnostics')
-                return {'resource':_scientific({k:resource[k] for k in fields}),
-                        'schedule':[{k:r[k] for k in ('method_id','block','timing_stratum')} for r in worker['rows']]}
-            old_workers.sort(key=lambda w:(w['rows'][0]['block'],w['resource']['method_id']))
-            new_workers.sort(key=lambda w:(w['rows'][0]['block'],w['resource']['method_id']))
-            compare_scientific([scientific(w) for w in old_workers],[scientific(w) for w in new_workers],rtol=replay['rtol'],atol=replay['atol'])
-            _write(destination/'remeasured-workers.json',new_workers)
-            results.append({'input_id':index,'kind':kind,'status':'matched','workers':len(new_workers),
-                            'timing_policy':'remeasured_not_equal','timing_stratum':'technical_replay'})
+            results.append(_replay_benchmark(entry,destination,root,replay,config,
+                retained_bytes=lambda:_object_bytes(manifest)+_object_bytes(results)))
         elif kind in ('not_run','source','forecast'):
             results.append({'input_id':index,'kind':kind,'status':'retained_not_executed'})
         else:
