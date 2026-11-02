@@ -45,7 +45,7 @@ def solve_qp(qp, variable_scale):
     face_repair=0.; feasibility_repair=0.; polish_valid=True
     origin='zero_budget'; native_iterate=None
     if variable_scale==0:
-        x=np.zeros(len(qp.linear)); result=None; repair=0.
+        x=np.zeros(len(qp.linear)); before=x.copy(); result=None; repair=0.
     else:
         scale=variable_scale; magnitude=max(float(np.max(np.abs(qp.linear))*scale),float(np.max(np.abs(qp.hessian))*scale*scale))
         if magnitude==0 or not np.isfinite(magnitude): raise ValueError('objective scaling not representable')
@@ -70,6 +70,7 @@ def solve_qp(qp, variable_scale):
                 'native_iterate_shape':None if y is None else list(y.shape),
                 'native_iterate_rejection_reasons':native_rejections,
                 'candidate_origin':'invalid_native_zero_substitute',
+                'admitted_candidate_original_units':None,
                 'final_quality_passed':qp_quality_passes(diagnostic,qp.offset[-1]),
                 'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,
                 'repair_inf':None,'feasibility_repair_inf':0.,
@@ -126,6 +127,7 @@ def solve_qp(qp, variable_scale):
         'native_solver_status':None if result is None else int(result.status),
         'native_scaled_iterate':native_iterate,
         'candidate_origin':origin,'final_quality_passed':quality,
+        'admitted_candidate_original_units':tuple(float(v) for v in before),
         'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,
         # Total change from the admitted candidate, including face reconstruction.
         'repair_inf':repair,'feasibility_repair_inf':feasibility_repair,

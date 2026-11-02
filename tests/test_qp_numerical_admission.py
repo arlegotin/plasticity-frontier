@@ -81,10 +81,11 @@ class NumericalAdmissionTests(unittest.TestCase):
         self.assertEqual(diag.kkt['candidate_origin'], 'native')
         self.assertTrue(diag.kkt['final_quality_passed'])
         self.assertGreaterEqual(diag.dual['minimum_multiplier'], 0.)
-        # This changes admission, not the retained native metric. Mathematical
-        # optimum is (.6, 0, ..., 0), with a degenerate zero floor multiplier.
-        np.testing.assert_array_equal(result.F.variables, CASES['W1']['retained_variables']['F'])
-        np.testing.assert_allclose(result.F.variables, [.6] + [0.]*7, atol=1e-15, rtol=0)
+        # Source36 retains its distinct noise/provenance and bitwise pre-point.
+        self.assertIn('rank_one_canonicalization', diag.kkt)
+        np.testing.assert_array_equal(diag.kkt['rank_one_canonicalization']['pre_variables'],
+                                      CASES['W1']['retained_variables']['F'])
+        np.testing.assert_array_equal(result.F.variables, [.6] + [0.]*7)
         self.assertEqual(diag.kkt['active_face_reconstruction_indices'], ())
         self.assertEqual(result.Z.status, 'completed')
 
