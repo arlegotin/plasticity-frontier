@@ -651,7 +651,7 @@ class PhasedReplayMemory(unittest.TestCase):
                     api.compare_run_stores(run,run,rtol=1e-10,atol=1e-12,retained_bytes=8*1024**2)
             # A large path/key inventory must be reserved before building maps.
             folder=next((run/'blocks').iterdir())/'assets'
-            for index in range(600): (folder/(str(index)+'-'+'x'*180+'.npy')).touch()
+            for index in range(3000): (folder/(str(index)+'-'+'x'*180+'.npy')).touch()
             with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
                     patch.object(RunStore,'open',side_effect=AssertionError('opened before map admission')):
                 with self.assertRaises(api.ReportingResourceLimit):
@@ -824,3 +824,194 @@ class PhasedReplayMemory(unittest.TestCase):
                 with self.assertRaises(api.ReportingResourceLimit):
                     replay._replay_benchmark(entry,destination,root,{'rtol':1e-10,'atol':1e-12},config)
             self.assertFalse((destination/'remeasured-workers.json').exists())
+
+
+class CompleteComparatorCapacity(unittest.TestCase):
+    """Production-shaped metadata and complete pair lifetime, without science."""
+    def setUp(self):
+        available=patch('prepared_learning.pilot._available_memory',return_value=20_000_000_000)
+        available.start(); self.addCleanup(available.stop)
+
+    def inventory(self, root, *, blocks=36, assets=1082, key_prefix='replication-', padding=0):
+        from prepared_learning.runner import IDENTITY_FIELDS
+        import hashlib
+        stores=[]
+        for side in ('original-','clean-replay-'):
+            store=root/(side+'long-source-and-environment-path-'*4); stores.append(store)
+            store.mkdir()
+            (store/'run.json').write_text(json.dumps({key:'same-fixture-identity' for key in IDENTITY_FIELDS}))
+            for index in range(blocks):
+                block=store/'blocks'/hashlib.sha256(str(index).encode()).hexdigest(); block.mkdir(parents=True)
+                (block/'commit.json').write_text(json.dumps({'key':key_prefix+str(index),'sha256':'0'*64,
+                                                            'padding':'p'*padding}))
+                (block/'records.json').write_text('[]')
+        original_glob=Path.glob
+        def virtual_assets(path, pattern, **kwargs):
+            if path.name=='assets' and pattern=='*.npy':
+                return (path/(f'asset-{index:04d}-'+'a'*64+'.npy') for index in range(assets))
+            return original_glob(path,pattern,**kwargs)
+        return stores,virtual_assets
+
+    def scale(self):
+        from prepared_learning import reporting as api
+        # M10 complete raw block and longer-path complete J36 inventories.
+        return {**api._empty_scale(),'files_scanned':80_000,'json_bytes':650_000_000,
+                'max_json_bytes':14_417_382,'json_working_bytes':14_417_382,
+                'semantic_json_bytes':650_000_000,'max_semantic_json_bytes':14_417_382,
+                'inventory_bytes':800_000_000,'max_array_bytes':416,'array_bytes':18_000_000}
+
+    def test_complete_j36_maps_and_full_pair_fit_without_retaining_raw_block(self):
+        self.complete_pair_case(oversized=False)
+
+    def test_oversized_actual_pair_stops_before_its_decode(self):
+        self.complete_pair_case(oversized=True)
+
+    def complete_pair_case(self, *, oversized):
+        import gc,os,weakref,sqlite3
+        from types import SimpleNamespace
+        from prepared_learning import reporting as api
+        class PairReached(Exception): pass
+        class TrackedList(list): pass
+        class TrackedDict(dict): pass
+        rows_refs=[]; phase_evidence=[]; pair_decodes=[]; plans=[]
+        scalar='🔬'*3_000_000 if oversized else 'x'*13_106_710
+        scientific_row={'kind':'execution','outer_replication':0,'result':{'unknown_complete_payload':scalar}}
+        class Index:
+            def __init__(self): self.rows=[]
+            def execute(self, sql, args=()):
+                if sql.startswith('INSERT INTO records'): self.rows.append(args)
+                if sql.startswith('SELECT side, max(length(payload))'):
+                    return SimpleNamespace(fetchall=lambda:[(side,max(len(r[2]) for r in self.rows if r[0]==side),
+                                                                  max(len(r[1]) for r in self.rows if r[0]==side)) for side in (0,1)])
+                if sql.startswith('SELECT unit,payload'):
+                    gc.collect()
+                    self_test.assertTrue(all(ref() is None for ref in rows_refs),'raw block/projection retained into pair fetch')
+                    return iter((r[1],r[2]) for r in self.rows if r[0]==args[0])
+                return self
+            def commit(self): pass
+            def close(self): self.rows.clear()
+        self_test=self; guard=api._resource_check; paths=api._guard_paths; read=api._read; project=api._scientific
+        decode=api.json.loads; compare=api.compare_scientific; map_plan=api._comparison_map_plan
+        def tracked_read(path,**kwargs):
+            value=read(path,**kwargs)
+            if Path(path).name=='records.json':
+                value=TrackedList(TrackedDict(row) for row in value)
+                rows_refs.extend(weakref.ref(row) for row in value); rows_refs.append(weakref.ref(value))
+            return value
+        def tracked_project(value,*args,**kwargs):
+            result=project(value,*args,**kwargs)
+            if isinstance(result,dict):
+                result=TrackedDict(result); rows_refs.append(weakref.ref(result))
+            return result
+        def guarded(scale,**kwargs):
+            result=guard(scale,**kwargs); phase_evidence.append(result); return result
+        def fixture_paths(values,**kwargs):
+            if kwargs['phase']=='run_comparison_before_open':
+                return guarded(self.scale(),phase=kwargs['phase'],object_bytes=kwargs['object_bytes'])
+            return paths(values,**kwargs)
+        def planned(*args,**kwargs):
+            result=map_plan(*args,**kwargs); plans.append(result); return result
+        def tracked_decode(value,*args,**kwargs):
+            if isinstance(value,str) and 'unknown_complete_payload' in value and not value.startswith('['):
+                pair_decodes.append(len(value))
+            return decode(value,*args,**kwargs)
+        def compared(left,right,**kwargs):
+            compare(left,right,**kwargs)
+            if isinstance(left,dict) and 'unknown_complete_payload' in left.get('result',{}): raise PairReached()
+        with tempfile.TemporaryDirectory() as tmp:
+            stores,assets=self.inventory(Path(tmp))
+            for store in stores:
+                first=sorted((store/'blocks').iterdir())[0]
+                (first/'records.json').write_text(json.dumps([scientific_row],ensure_ascii=False))
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':'7500000000'}), \
+                    patch.object(Path,'glob',new=assets),patch.object(api,'_guard_paths',new=fixture_paths), \
+                    patch.object(api,'_comparison_map_plan',new=planned), \
+                    patch('shutil.disk_usage',return_value=SimpleNamespace(free=100_000_000_000)), \
+                    patch.object(api,'_resource_check',new=guarded),patch.object(api,'_read',new=tracked_read), \
+                    patch.object(api,'_scientific',new=tracked_project),patch.object(api.json,'loads',new=tracked_decode), \
+                    patch.object(api,'compare_scientific',new=compared),patch.object(sqlite3,'connect',return_value=Index()), \
+                    patch.object(api.RunStore,'open',return_value=SimpleNamespace(_verify=lambda block:None)):
+                if oversized:
+                    with self.assertRaises(api.ReportingResourceLimit) as caught:
+                        api.compare_run_stores(*stores,rtol=1e-10,atol=1e-12,retained_bytes=21_721_574)
+                    self.assertIn('record_pair',caught.exception.evidence['phase'])
+                    self.assertEqual(pair_decodes,[],'oversized actual pair decoded')
+                    gc.collect(); self.assertTrue(all(ref() is None for ref in rows_refs))
+                else:
+                    try:
+                        with self.assertRaises(PairReached):
+                            api.compare_run_stores(*stores,rtol=1e-10,atol=1e-12,retained_bytes=21_721_574)
+                    except api.ReportingResourceLimit as exc:
+                        self.fail('complete planned J36 maps/pair refused: '+str(exc.evidence))
+                    pair=next(e for e in reversed(phase_evidence) if 'record_pair' in e['phase'])
+                    self.assertEqual(pair['retained_copies'],1)
+                    self.assertEqual(pair['policy']['json_expansion_factor'],256)
+                    self.assertEqual(pair['inventory_bytes'],0,'released raw inventory charged to pair')
+                    self.assertEqual(pair['json_working_bytes'],max(pair_decodes))
+                    self.assertLess(pair['estimated_peak_bytes'],7_500_000_000)
+                    self.assertEqual(len(pair_decodes),2)
+                    self.assertEqual(plans[0]['array_counts'],[38_952,38_952])
+                    self.capacity_evidence={'pair':pair,'phases':phase_evidence,'native_map_projection':plans[0]}
+
+    def test_native_projection_covers_unicode_maps_sets_hashes_and_ignores_padding(self):
+        import os,sys,hashlib
+        from prepared_learning import reporting as api
+        self.assertTrue(hasattr(api,'_comparison_map_plan'),'complete native container projection is missing')
+        def actual_size(value,seen=None):
+            seen=set() if seen is None else seen
+            if id(value) in seen: return 0
+            seen.add(id(value)); total=sys.getsizeof(value)
+            if isinstance(value,dict):
+                return total+sum(actual_size(k,seen)+actual_size(v,seen) for k,v in value.items())
+            if isinstance(value,(list,tuple,set)): return total+sum(actual_size(v,seen) for v in value)
+            return total
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)/('unicode-κ🔬'*8); root.mkdir()
+            stores,assets=self.inventory(root,blocks=2,assets=19,key_prefix='κ🔬'*128)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':'7500000000'}),patch.object(Path,'glob',new=assets):
+                plan=api._comparison_map_plan(*stores,scale=self.scale(),retained_bytes=21_721_574)
+                maps=[]
+                for store in stores:
+                    mapping={}
+                    for block in (store/'blocks').iterdir():
+                        key=json.loads((block/'commit.json').read_text())['key']
+                        for asset in assets(block/'assets','*.npy'): mapping[key+'/'+asset.name]=str(asset)
+                    maps.append(mapping)
+                hashes={key:hashlib.sha256(key.encode()).hexdigest() for key in maps[0]}
+                complete=(maps,set(maps[0]),set(maps[1]),hashes)
+                self.assertGreaterEqual(plan['native_bytes'],actual_size(complete))
+                self.assertEqual(plan['array_counts'],[38,38])
+                for store in stores:
+                    for block in (store/'blocks').iterdir():
+                        marker=json.loads((block/'commit.json').read_text()); marker['irrelevant_padding']='x'*(256*1024)
+                        (block/'commit.json').write_text(json.dumps(marker))
+                padded=api._comparison_map_plan(*stores,scale=self.scale(),retained_bytes=21_721_574)
+                self.assertEqual(plan['native_bytes'],padded['native_bytes'],'unretained marker padding multiplied per asset')
+
+    def test_actual_long_unicode_key_growth_refuses_before_full_maps(self):
+        import os
+        from prepared_learning import reporting as api
+        with tempfile.TemporaryDirectory() as tmp:
+            stores,assets=self.inventory(Path(tmp),blocks=2,assets=1082,key_prefix='🔬'*32768)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':'7500000000'}), \
+                    patch.object(Path,'glob',new=assets), \
+                    patch.object(api,'_comparison_container_sizes',side_effect=AssertionError('large maps/probes allocated before growth guard')):
+                with self.assertRaises(api.ReportingResourceLimit) as caught:
+                    api._comparison_map_plan(*stores,scale=self.scale(),retained_bytes=21_721_574)
+            self.assertEqual(caught.exception.evidence['phase'],'run_comparison_map_metadata_growth')
+            self.assertGreater(caught.exception.evidence['estimated_peak_bytes'],7_500_000_000)
+
+    def test_marker_native_guard_precedes_metadata_decode(self):
+        import os
+        from prepared_learning import reporting as api
+        with tempfile.TemporaryDirectory() as tmp:
+            stores,assets=self.inventory(Path(tmp),blocks=1,assets=1)
+            marker=next((stores[0]/'blocks').iterdir())/'commit.json'
+            with marker.open('wb') as stream: stream.truncate(4*1024**2)
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(128*1024**2)}), \
+                    patch.object(Path,'glob',new=assets), \
+                    patch.object(api.json,'loads',side_effect=AssertionError('oversized metadata decoded')):
+                with self.assertRaises(api.ReportingResourceLimit) as caught:
+                    api._comparison_map_plan(*stores,scale=self.scale(),retained_bytes=0)
+            self.assertEqual(caught.exception.evidence['phase'],'json_before_parse')
+            self.assertEqual(caught.exception.evidence['policy']['json_expansion_factor'],64)

@@ -1205,28 +1205,107 @@ def _scientific(value, _measurement_ids=None):
     return value
 
 
+def _comparison_container_sizes(count, *, scale, retained_bytes):
+    """Measure this runtime's actual growing str-dict/set/list table capacities.
+
+    The probe retains numeric string keys and None values only. Its admission
+    bounds every entry by a whole one-entry container plus its largest key;
+    this temporary bound is never multiplied into the real per-asset graph.
+    """
+    import sys
+    key_size=sys.getsizeof(str(max(0,count-1)))
+    temporary=(count*(sys.getsizeof({'0':None})+sys.getsizeof({'0'})+
+                      sys.getsizeof([None])+key_size)+sys.getsizeof(None))
+    _resource_check(scale,phase='run_comparison_container_probe_before_allocation',
+                    object_bytes=retained_bytes+temporary)
+    dictionary={}; sequence=[]
+    for ordinal in range(count):
+        dictionary[str(ordinal)]=None; sequence.append(None)
+    keys=set(dictionary)
+    return {'dict':sys.getsizeof(dictionary),'set':sys.getsizeof(keys),'list':sys.getsizeof(sequence)}
+
+
+def _comparison_map_plan(left, right, *, scale, retained_bytes):
+    """Project the complete native graph; retain only bounded marker metadata.
+
+    Map values are str paths, so their graph is directly measurable. Logical
+    keys and path strings are measured individually, including Unicode width.
+    Set/hash containers share map keys; hash values are separate ASCII digests.
+    Marker padding is live once during this pass, never once per array.
+    """
+    import struct,sys
+    counts=[]; key_sizes=[]; path_sizes=[]; block_counts=[]; block_name_sizes=[]
+    digest_size=sys.getsizeof('0'*64)
+    for root in (Path(left),Path(right)):
+        count=key_size=path_size=blocks=names=0
+        for block in (root/'blocks').iterdir():
+            marker=_read(block/'commit.json',retained_bytes=retained_bytes)
+            key=marker.get('key') if isinstance(marker,dict) else None
+            if not isinstance(key,str): raise ValueError('scientific array logical key must be a string')
+            blocks+=1; names+=sys.getsizeof(block.name)
+            for asset in (block/'assets').glob('*.npy'):
+                logical=key+'/'+asset.name; path=str(asset)
+                count+=1; key_size+=sys.getsizeof(logical); path_size+=sys.getsizeof(path)
+                del logical,path
+            # These strings are prospective; no full map has been built yet.
+            # Account for the one real parsed marker (including unknown fields)
+            # separately, and stop actual excessive key/path growth early.
+            projected=sum(key_sizes)+sum(path_sizes)+key_size+path_size
+            _resource_check(scale,phase='run_comparison_map_metadata_growth',
+                            object_bytes=retained_bytes+projected+_object_bytes(marker))
+            del marker,key
+        counts.append(count); key_sizes.append(key_size); path_sizes.append(path_size)
+        block_counts.append(blocks); block_name_sizes.append(names)
+    strings=sum(key_sizes)+sum(path_sizes)+counts[0]*digest_size
+    containers={}
+    for count in set(counts+block_counts+[2]):
+        containers[count]=_comparison_container_sizes(count,scale=scale,retained_bytes=retained_bytes+strings)
+    # All three dictionaries and both simultaneous key sets are reserved even
+    # though the key-set expression ends before the returned hash map grows.
+    dictionaries=sum(containers[n]['dict'] for n in counts)+containers[counts[0]]['dict']
+    sets=sum(containers[n]['set'] for n in counts)
+    # A growing table may coexist briefly with the old table it replaces.
+    # Only one map/set grows at a time; reserve one complete largest table.
+    growth=max((containers[n][kind] for n in counts for kind in ('dict','set')),default=0)
+    arrays_list=containers[2]['list']
+    # One store's sorted name list is live while indexing. Reserve its strings,
+    # growing list table and a full pointer per name for timsort scratch space.
+    block_names=max((containers[n]['list']+size+n*struct.calcsize('P')
+                     for n,size in zip(block_counts,block_name_sizes)),default=0)
+    native=strings+dictionaries+sets+growth+arrays_list+block_names
+    return {'native_bytes':native,'array_counts':counts,'logical_key_bytes':sum(key_sizes),
+            'path_string_bytes':sum(path_sizes),'hash_value_bytes':counts[0]*digest_size,
+            'dictionary_capacity_bytes':dictionaries,'key_set_capacity_bytes':sets,
+            'container_growth_bytes':growth,
+            'array_list_bytes':arrays_list,'block_names_and_sort_bytes':block_names}
+
+
+def _comparison_pair_scale(lengths):
+    """One semantic256 workspace covers BOTH native64 decoded record trees.
+
+    Only parsed pairs remain here, with no scientific projection/plot copy.
+    For L/R encoded lengths: 64*(L+R) <= 128*max(L,R) <= 256*max(L,R).
+    Complete encoded strings/keys and all retained maps are charged separately.
+    """
+    working=max((record[1] for record in lengths),default=0)
+    total=sum(record[1] for record in lengths)
+    return {**_empty_scale(),'json_bytes':total,'semantic_json_bytes':total,
+            'max_json_bytes':working,'max_semantic_json_bytes':working,'json_working_bytes':working}
+
+
 def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0) -> JsonRecord:
     import sqlite3,shutil,itertools
     left=Path(left); right=Path(right)
     preflight=_guard_paths((path for root in (left,right) for path in _store_paths(root)),
                             phase='run_comparison_before_open',streaming=True,object_bytes=retained_bytes)
-    # One bounded metadata pass reserves both path maps, logical asset keys,
-    # returned hashes and set-comparison buffers BEFORE any store is opened.
-    # A commit's byte size bounds its logical key, including escaped Unicode.
-    map_bytes=0
-    for root in (left,right):
-        for block in (root/'blocks').iterdir():
-            key_bytes=(block/'commit.json').stat().st_size
-            for asset in (block/'assets').glob('*.npy'):
-                map_bytes+=1024+4*(len(os.fsencode(asset))+key_bytes+128)
     scale={key:preflight[key] for key in _empty_scale()}
-    # SQLite cache, encoded row/key buffers and array comparison chunks are
-    # additional to the existing one-block semantic workspace, never a cohort.
+    plan=_comparison_map_plan(left,right,scale=scale,retained_bytes=retained_bytes)
+    map_bytes=plan['native_bytes']
     buffers=2*1024*1024+4*65536*8
-    def admit(phase, *, objects=0, scalar_bytes=0):
-        return _resource_check(scale,phase=phase,object_bytes=retained_bytes+map_bytes+objects,
-                               scalar_bytes=buffers+scalar_bytes)
-    preflight=admit('run_comparison_maps_before_open')
+    def admit(phase, *, objects=0, working_scale=scale):
+        return _resource_check(working_scale,phase=phase,object_bytes=retained_bytes+map_bytes+objects,
+                               scalar_bytes=buffers)
+    preflight={**admit('run_comparison_maps_before_open'),'native_map_projection':plan}
     arrays=[]; count=0
     left_run=_read(left/'run.json',retained_bytes=retained_bytes+map_bytes)
     right_run=_read(right/'run.json',retained_bytes=retained_bytes+map_bytes+_object_bytes(left_run))
@@ -1248,7 +1327,9 @@ def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0)
             for side,root in enumerate((left,right)):
                 admit('run_comparison_store_before_open')
                 store=RunStore.open(root,_read(root/'run.json',retained_bytes=retained_bytes+map_bytes)); assets={}
-                for block in sorted((root/'blocks').iterdir()):
+                block_names=os.listdir(root/'blocks'); block_names.sort()
+                for name in block_names:
+                    block=root/'blocks'/name
                     admit('run_comparison_block_before_parse')
                     store._verify(block)
                     rows=_read(block/'records.json',retained_bytes=retained_bytes+map_bytes)
@@ -1264,26 +1345,36 @@ def compare_run_stores(left: Path, right: Path, *, rtol, atol, retained_bytes=0)
                     # The loop variable otherwise retains the last full record.
                     if 'row' in locals(): del row
                     marker=_read(block/'commit.json',retained_bytes=retained_bytes+map_bytes)
-                    for asset in (block/'assets').glob('*.npy'): assets[marker['key']+'/'+asset.name]=asset
+                    for asset in (block/'assets').glob('*.npy'): assets[marker['key']+'/'+asset.name]=str(asset)
                     del marker
                 arrays.append(assets)
+                del block_names
             del store,assets
             index.commit(); index.execute('CREATE INDEX record_order ON records(side,unit,payload)')
+            # SQL performs one bounded metadata scan over encoded ASCII JSON;
+            # refuse a prospective full pair before either cursor fetches it.
+            lengths=index.execute('SELECT side, max(length(payload)), max(length(unit)) FROM records GROUP BY side').fetchall()
+            pair_scale=_comparison_pair_scale(lengths)
+            import sys
+            encoded=sum(2*sys.getsizeof('')+payload+unit for _,payload,unit in lengths)
+            encoded+=2*sys.getsizeof((None,None))+sys.getsizeof((None,None))
+            pair_preflight=admit('run_comparison_record_pair_before_fetch',objects=encoded,working_scale=pair_scale)
+            preflight['record_pair_preflight']=pair_preflight
             cursors=[index.execute('SELECT unit,payload FROM records WHERE side=? ORDER BY unit,payload',(side,)) for side in (0,1)]
             for a,b in itertools.zip_longest(*cursors):
                 if a is None or b is None or a[0]!=b[0]: raise ValueError('scientific record keys/count differ')
-                # JSON strings returned by SQLite coexist with both decoded
-                # records. Charge their actual bytes using the cached scale.
-                admit('run_comparison_record_pair_before_parse',objects=_object_bytes((a,b)))
+                actual_scale=_comparison_pair_scale(((0,len(a[1]),len(a[0])),(1,len(b[1]),len(b[0]))))
+                admit('run_comparison_record_pair_before_parse',objects=_object_bytes((a,b)),working_scale=actual_scale)
                 compare_scientific(json.loads(a[1]),json.loads(b[1]),rtol=rtol,atol=atol)
                 count+=1
             if 'a' in locals(): del a,b
         finally: index.close()
-    admit('run_comparison_array_maps')
+    array_scale={**_empty_scale(),'max_array_bytes':scale['max_array_bytes']}
+    preflight['array_preflight']=admit('run_comparison_array_maps',working_scale=array_scale)
     if set(arrays[0])!=set(arrays[1]): raise ValueError('scientific array inventory differs')
     hashes={}
     for key,a in arrays[0].items():
-        admit('run_comparison_array_before_load')
+        admit('run_comparison_array_before_load',working_scale=array_scale)
         b=arrays[1][key]; aa=np.load(a,allow_pickle=False,mmap_mode='r'); bb=np.load(b,allow_pickle=False,mmap_mode='r')
         if aa.shape!=bb.shape or aa.dtype!=bb.dtype: raise ValueError('scientific array differs: '+key)
         for a_chunk,b_chunk in np.nditer([aa,bb],flags=['external_loop','buffered','zerosize_ok'],
