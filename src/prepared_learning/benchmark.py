@@ -275,6 +275,17 @@ def _fixed_schedule(evidence):
     return {'blocks':count,'orders':balanced_orders(ids,count,int(config.get('seed',0))^71313),'repetitions':repetitions}
 
 
+def _guard_calibration_parse(path: Path, *, phase: str) -> None:
+    """The native consumer parses JSON regardless of the control's filename."""
+    from .reporting import _empty_scale, _resource_check, REPORT_PARSE_FACTOR
+    size=path.stat().st_size; scale=_empty_scale()
+    scale.update(files_scanned=1,json_bytes=size,max_json_bytes=size,json_working_bytes=size,
+                 semantic_json_bytes=size,max_semantic_json_bytes=size,
+                 inventory_bytes=4096+16*len(os.fsencode(path)),
+                 largest_file_bytes=size,largest_file=str(path))
+    _resource_check(scale,phase=phase,json_factor=REPORT_PARSE_FACTOR)
+
+
 def _canonical_calibration_path(calibration_path: Path) -> Path:
     return calibration_path.with_suffix('.canonical.json')
 
@@ -327,11 +338,11 @@ def finalize_benchmark_manifest(calibration_path, manifest_path, campaign_output
     Calibration and campaign use the same fixed source-selected assets. Timing
     samples are disjoint fresh executions. This is not new preparation inference.
     """
-    from .reporting import _guard_paths, _sha, REPORT_PARSE_FACTOR
+    from .reporting import _sha
     manifest_path=Path(manifest_path)
     if manifest_path.exists() or manifest_path.is_symlink(): raise ValueError('finalized manifest already exists')
     calibration_path=Path(calibration_path).resolve()
-    _guard_paths((calibration_path,),phase='calibration_finalize_before_parse',json_factor=REPORT_PARSE_FACTOR)
+    _guard_calibration_parse(calibration_path,phase='calibration_finalize_before_parse')
     source_sha256=_sha(calibration_path)
     evidence=json.loads(calibration_path.read_text())
     if evidence.get('status')!='exploratory' or evidence.get('config',{}).get('workflow')!='generated': raise ValueError('generated exploratory calibration required')
@@ -382,9 +393,9 @@ def validate_campaign_manifest(manifest, *, manifest_path=None):
     frozen=manifest.get('frozen',{})
     if manifest.get('phase')!='finalized': raise ValueError('finalized phase required')
     if content_hash(_campaign_configuration(manifest))!=frozen.get('configuration_sha256'): raise ValueError('campaign configuration changed')
-    from .reporting import _guard_paths, _sha, REPORT_PARSE_FACTOR
+    from .reporting import _sha
     calibration_path=Path(frozen['calibration_path'])
-    _guard_paths((calibration_path,),phase='calibration_validate_before_parse',json_factor=REPORT_PARSE_FACTOR)
+    _guard_calibration_parse(calibration_path,phase='calibration_validate_before_parse')
     source_sha256=_sha(calibration_path)
     _verify_calibration_control(frozen)
     evidence=json.loads(calibration_path.read_text())

@@ -168,6 +168,68 @@ class BenchmarkTests(unittest.TestCase):
                     with self.assertRaises(ValueError): b.validate_campaign_manifest(result)
                 source.write_bytes(original)
 
+    def test_calibration_native_admission_does_not_depend_on_filename(self):
+        import copy,json,os
+        from unittest.mock import patch
+        from tests.test_reporting import calibration_source
+        from prepared_learning import benchmark as b, reporting as report
+        with tempfile.TemporaryDirectory() as tmp,patch('prepared_learning.pilot._available_memory',return_value=1024**3):
+            for name in ('control.dat','control','control.JSON','control.npy','linked.json'):
+                root=Path(tmp)/name; root.mkdir()
+                _,run,evidence=calibration_source(root,padding=1024**2)
+                source=run/('target.dat' if name=='linked.json' else name)
+                (run/'benchmark.json').rename(source)
+                supplied=run/name
+                if name=='linked.json': supplied.symlink_to(source)
+                original=source.read_bytes(); size=len(original)
+                target=root/'frozen.json'; output=root/'fixed'
+                # 96 MiB admits base+inventory, but not this native JSON payload.
+                cap=96*1024**2
+                self.assertLess(64*1024**2+4096+16*len(os.fsencode(source)),cap)
+                self.assertGreater(64*1024**2+64*size,cap)
+                with patch.object(b,'_benchmark_identity',return_value=evidence['identity']):
+                    with self.subTest(filename=name,consumer='finalizer'),patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(cap)}),patch.object(b.json,'loads',side_effect=AssertionError('control decoded before native admission')):
+                        with self.assertRaises(report.ReportingResourceLimit) as refused:
+                            b.finalize_benchmark_manifest(supplied,target,output)
+                        scale=refused.exception.evidence
+                        self.assertEqual(scale['json_working_bytes'],size)
+                        self.assertEqual(scale['semantic_json_bytes'],size)
+                        self.assertEqual(scale['files_scanned'],1)
+                        self.assertEqual(scale['inventory_bytes'],4096+16*len(os.fsencode(source)))
+                        self.assertEqual(scale['largest_file'],str(source))
+                        self.assertEqual(scale['largest_file_bytes'],size)
+                        self.assertEqual(scale['max_json_bytes'],size)
+                        self.assertEqual(scale['max_semantic_json_bytes'],size)
+                        self.assertEqual(scale['policy']['json_expansion_factor'],64)
+                        self.assertGreater(scale['estimated_peak_bytes'],cap)
+                    self.assertFalse(target.exists()); self.assertFalse(output.exists())
+                    with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024**2)}):
+                        manifest=b.finalize_benchmark_manifest(supplied,target,output)
+                        self.assertEqual(b.validate_campaign_manifest(manifest)['status'],'pass')
+                    frozen_bytes=target.read_bytes()
+                    legacy=copy.deepcopy(manifest); del legacy['frozen']['calibration_control']
+                    for consumer,value in (('validator',manifest),('legacy validator',legacy)):
+                        with self.subTest(filename=name,consumer=consumer),patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(cap)}),patch.object(b.json,'loads',side_effect=AssertionError('control decoded before native admission')):
+                            with self.assertRaises(report.ReportingResourceLimit) as refused:
+                                b.validate_campaign_manifest(value)
+                            scale=refused.exception.evidence
+                            self.assertEqual(scale['json_working_bytes'],size)
+                            self.assertEqual(scale['semantic_json_bytes'],size)
+                            self.assertEqual(scale['files_scanned'],1)
+                            self.assertEqual(scale['inventory_bytes'],4096+16*len(os.fsencode(source)))
+                            self.assertEqual(scale['largest_file'],str(source))
+                            self.assertEqual(scale['largest_file_bytes'],size)
+                            self.assertEqual(scale['max_json_bytes'],size)
+                            self.assertEqual(scale['max_semantic_json_bytes'],size)
+                            self.assertEqual(scale['array_bytes'],0)
+                            self.assertEqual(scale['policy']['json_expansion_factor'],64)
+                            self.assertGreater(scale['estimated_peak_bytes'],cap)
+                        with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(256*1024**2)}):
+                            self.assertEqual(b.validate_campaign_manifest(value)['status'],'pass')
+                    self.assertEqual(source.read_bytes(),original)
+                    self.assertEqual(target.read_bytes(),frozen_bytes); self.assertFalse(output.exists())
+                    self.assertEqual(manifest['frozen']['calibration_path'],str(source.resolve()))
+
     def test_cli_calibration_native_limit_is_retryable(self):
         import json
         from unittest.mock import patch
