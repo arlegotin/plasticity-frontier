@@ -1,0 +1,76 @@
+# Exact-rank-one oracle canonicalization design
+
+## Intent, authority and evidence
+
+Repair the evidenced F/Z representation disagreement on exactly rank-one oracle inputs by reconstructing their proven common optimizer. This is a builder-proposed numerical refinement under section 11 of `2026-11-01-plasticity-frontier-design.md` and the existing instruction to continue when a clear path exists. The controller has delegated this design and plan after the source-hold release; this document does not claim a new user-approved scientific hypothesis. Implementation and retained-observation execution remain separately reviewed stages.
+
+Baseline source is `45f67d578168b4b8c72bdaf801c480e5864a121c`. Its second full G6 completed, was sealed, and passed artifact review, but remains `INSENSITIVE_OR_UNSUITABLE`: W1 has two failed B04 attempts (90 and 239), 258 completed candidates and unresolved tuning; W2 has 260 completed candidates and resolved tuning. Neither historical source36 nor source45 verdict changes. No campaign protected keys or fresh G9 root have been allocated by this work.
+
+The bounded investigation is `.superpowers/sdd/2026-11-02-full-campaign-execution/rank-one-tie-investigation.md`. Durable facts and proof needed to implement this design are reproduced here so the ignored investigation is not a required scientific premise. Evidence lives beneath `runs/campaign/2026-11-02-final-program-45f67d5/full-pilot-capture/`: `wide-failure-extract.json`, `wide-failure-diagnostics.json`, and `wide-failed-records/W1-candidate-{90,239}.raw.json`. The two raw slices are respectively 472908 and 472909 bytes, SHA256 `d316ff822767f9b2ad21759c5ee4744ab78b4ae57bb48aba3cdd758b6f40d52a` and `6c132c564bb640c9604c5453d991a7bc744631f0b8d05f90b078c1c2d505c8bb`. Their fitted asset is `13c76cc43f41ab7a8aad4f2ae80f7e3c795dde5e4da264d317b323c5f8dea844`; both failures share the same mathematical input, not independent numerical evidence.
+
+The actual fitted spectrum is exactly `[1.0] + [0.0]*63`, noise variance `0.9076946029828858`, d64/n8/m8/k0.6. This differs from W1's rank-eight generating population. F retains `[0.5999999999999999] + [5.0455701160561596e-17]*7`; Z retains `[0.6] + [0.0]*7`. Both native solves and existing final quality checks pass. F's optional polish rejects a floor multiplier `-4.379639035320418e-17`; projecting its captured point still leaves the leading gain one ulp below 0.6. The two production objectives, `0.29084625713422996` and `0.29084625713422985`, differ by `1.1102230246251565e-16`. Frontier comparison correctly retains both as unresolved, and B04 correctly refuses their unequal float objectives.
+
+The stored maps also differ: for their shared leading column u, `M_F-M_Z = delta*I + (0.5999999999999999-0.6)*u*u.T`, where `delta=5.0455701160561596e-17`. In the captured CompactMetric, subtracting delta from the leading F variable rounds back to that same float, so its stored leading increment is0.5999999999999999; this expression describes the stored map, not an exact unrounded subtraction. F has width 2/130 trainable parameters, Z width 1/65. A comparator waiver would conceal this representation difference.
+
+## Approaches
+
+1. **Structural exact-rank-one reconstruction — recommended controller-delegated approach.** Derive the scalar optimum and exact zero face from the production spectrum and constraints, after ordinary native/quality admission. It addresses both the floor and leading-gain bit without changing objectives, constraints, thresholds or comparator policy.
+2. **General structured prefix solver replacement.** Enumerate F prefix/floor/budget faces and implement a separate production Z solver. This is broader, with cancellation, weak-positive and active-face obligations not justified by this capture. Defer until separate evidence requires it.
+3. **Postchecked optional polish.** Fresh feasibility/KKT checks could support a separate general admission contract, but the captured projected polish still has the wrong leading bit. It does not solve this failure without the structural argument or another face solve.
+
+Increasing tolerances, accepting slightly negative multipliers by cutoff, snapping small gains, or widening B04's tie policy is excluded. These are not alternative implementations of the proven map.
+
+## Self-contained mathematical argument and its limits
+
+Use the production coefficients `c=(n+1)/n`, `rho=(1+sigma2)/n`, `qi=c*si+rho`. Assume validated ordered spectrum with `s0>0`, every `si=0` exactly for i>0, and finite strictly positive representable rho and curvatures. For d>=2 and m>=2, `j=min(m-1,d-1)>=1`. F uses `(g0,...,g[j-1],b)` with `gi>=b>=0` and `sum(gi)-(j-1)*b<=k`. Hence
+
+`g0 + sum(i=1,...,j-1)(gi-b) <= k`, so `0<=g0<=k`.
+
+For fixed g0, replacing every other gi and b by zero preserves feasibility and the only nonzero linear term. It removes `rho*sum(i=1,...,j-1)(gi^2) + (d-j)*rho*b^2`, strictly positive unless all removed coordinates were already zero. The unique F optimizer therefore has exactly zero secondary gains and floor. Z's nonnegative gains with summed budget similarly lose only strictly positive quadratic costs when secondary gains are set to zero. Both reduce to the strictly convex scalar objective `1-2*s0*a+q0*a^2` on `[0,k]`; their unique common optimizer is
+
+`a=min(k,s0/q0)`, all other physical gains zero.
+
+At the captured input, `rho=0.23846182537286073`, `q0=1.3634618253728608`, `s0/q0=0.7334272081482984`, so a=k=0.6. The exact zero floor follows from positive curvature, even though its optimal multiplier is zero; positive-multiplier-only reconstruction cannot establish it.
+
+The related common-face result clarifies the scope. Suppose a Z-optimal zero-floor map is representable in F with r>=1 positive explicit gains, r<=j, summed gain k, and budget multiplier beta>=0. Let `S_rest=sum(si for zero-gain physical directions)`. With F lower multipliers lambda_i, floor multiplier mu, and Lagrangian subtracting the nonnegative slacks, positive-gain stationarity is `2*qi*gi-2*si+beta=0`, zero explicit-gain stationarity is `lambda_i=beta-2*si`, and floor stationarity gives
+
+`mu = -2*S_rest + (1-r)*beta`.
+
+Since mu must be nonnegative, a common optimum requires `S_rest=0` and `(r-1)*beta=0`. For beta>0 this singles out rank one. A direct descent proof sets floor and previously zero explicit gains to small t>0 and increases each positive gain by `(r-1)*t/r`; it preserves the F budget and has directional derivative `-2*S_rest-(r-1)*beta`. A negative derivative strictly improves F.
+
+Budget equality alone does not imply beta>0. With beta=0 and S_rest=0, higher-rank common maps can occur at `k=sum(si/qi over positive support)` or with slack budget, provided the support fits F. Distinct-map objective crossings, support not fitting F, and arbitrarily weak positive residual mass do not receive a float64 separation guarantee. This design deliberately does not canonicalize those cases or claim universal branch resolution.
+
+## Architecture and admission
+
+Place the structural decision in `src/prepared_learning/frontier.py`, exclusively on the QPs just produced by `build_oracle_qp` inside `solve_frontier`. The frontier knows the actual spectrum, branch, d and m. Do not add rank-based behavior to generic `solve_qp`, empirical `build_empirical_qp`/`fit_empirical_gains`, B11, tuning bounds or metric constructors. A rank-one prior alone never determines a query-loss QP optimizer. Preserve every public signature.
+
+Add a private `_canonical_rank_one_target(qp, spectrum, k, width, branch) -> np.ndarray | None` in the frontier. Its caller is restricted to that known production geometry. It returns None for non-exact rank one, d<2, m<2 or k=0; validates finite positive production curvatures and expected branch vector size before returning the scalar point. It does not inspect metadata rank, recompute covariance eigenvalues or use a gain/eigenvalue tolerance. Any strictly positive secondary eigenvalue disables it.
+
+Use the actual production `q0=qp.hessian[0,0]` and `s0`, shared arithmetic for both shapes. Calculate `s0/q0` directly, then min with actual k; do not form `2*q0`, `k*q0` or a reciprocal that can overflow. Production q0>=s0>0 bounds this ratio by one. A zero/nonfinite ratio or target, nonpositive/nonfinite curvature, or inconsistent representability is an explicit rejected correction, not an all-zero optimizer. Existing objective/budget-scaling failures occur before eligibility and retain their failures.
+
+For nonzero budgets, the order is mandatory:
+
+1. Run unchanged native solving, optional polish, active-face and feasibility repair. Require native success, valid finite iterate, existing `solver_success`, and the unchanged original-unit quality gate on this pre-canonical point. A direct unconstrained candidate still requires the native success that `solve_qp` currently requires.
+2. For Z, evaluate the existing independent rank comparison on that pre-canonical point first. A pre-existing relative discrepancy above 1e-6 vetoes reconstruction; this refinement cannot rescue that failure. Calculate the independent vector once and retain it for the final independent comparison, never as the production target.
+3. Form the structural target only within the proven class, and diagnose it freshly with `diagnose_qp`; require unchanged `qp_quality_passes`. Recompute final Z discrepancies against the independent vector with the unchanged denominator rule and 1e-6 threshold.
+4. Only after all gates pass, retain the target as final, derive metric/support/resources from it, and run the existing frontier comparison and B04 exact-float tie rule unchanged. Each branch computes its own production objective; never copy an objective across branches.
+
+On attempted arithmetic, diagnosis, final-quality or final-independent-check failure, fail closed with an explicit rejection record. Retain the original finite pre-canonical point and its diagnostics as the returned diagnostic point, force `solver_success=False`, and preserve the attempted target/post-diagnostics where available. Do not report a successful correction or silently fall back to completed status. Ineligible inputs retain their existing behavior.
+
+## Provenance and exact correction accounting
+
+`solve_qp(qp, variable_scale)` still returns `(x, NumericDiagnostics)`. Add `kkt.admitted_candidate_original_units`: an immutable tuple of Python floats copied exactly from `before`, the original-unit candidate after native/unconstrained/polish choice but before either repair. Store a zero tuple for the zero-budget path and null for invalid-native substitutes. This is provenance only; generic QP behavior is unchanged. JSON round trips must retain the finite float64 values exactly.
+
+Retain all native success/status/message/scaled-iterate and shape/rejection evidence; candidate origin; polish candidate, multipliers, constraints and rejection reason; active-face indices/size/magnitude; feasibility-repair magnitude; original repair magnitude; and pre-canonical full quality diagnostics. Keep existing `candidate_origin` as the solver candidate's origin; add `final_point_origin='rank_one_canonical'` only on successful structural reconstruction.
+
+Use a nested `kkt.rank_one_canonicalization` record with `status` (`ineligible`, `skipped`, `applied`, `rejected`), `reason`, `pre_variables`, `pre_diagnostics`, `target_variables`, `corrected_indices`, `attempted_correction_inf`, `correction_inf` and `post_diagnostics`. Full pre/post snapshots are finite JSON-safe diagnostic records without recursive canonicalization nesting; store snapshots only when a structural attempt is made. New vectors and snapshots use immutable JSON-native scalar sequences/mappings, not new NumPy arrays that execution recursively publishes as separate `.npy` assets. `correction_inf` is the actual applied distance from the pre-canonical point, zero for a rejected attempt; attempted distance is separately labelled. On success the top-level quality/residual/dual fields describe the final target, while native/polish provenance remains unchanged. Charge the actual complete enlarged payload and serialization costs to existing resource admission; do not substitute compact-summary size or change thresholds. Source45's measured capacity remains historical evidence, not a guarantee for the new diagnostic representation.
+
+On success, existing `repair_inf` must remain exactly `max(abs(final_x-admitted_candidate_original_units))`, not a sum of stage norms and not merely the last correction. `pre_diagnostics.kkt.repair_inf` preserves its previous meaning/value; `feasibility_repair_inf` and `active_face_reconstruction_inf` continue to describe their own historical stages. On rejection leave those original repair values intact. This avoids both undercount and silently replacing the exact total distance with an upper bound. The captured F canonical step is `1.1102230246251565e-16`; removal of its floor is `5.0455701160561596e-17`. Serialization must retain strict JSON without NaN/Infinity, including rejected attempts.
+
+## Boundaries, tests and completion
+
+Leave d>=2/m1 and d1 on their current paths, with an explicit ineligibility reason. For m1 F is isotropic with `b=min(k,s0/sum(q))`, generally different from Z's rank-one map; for d1 the scalar F floor must remain a, not zero. Leave k0's direct zero-budget path and `d+L-1` zero-map parameter count intact. Noiseless inputs retain rho=1/n>0 when representable. Positive-secondary, repeated-positive and other higher-rank spectra remain outside the structural class. Multiple depths must use the frontier's existing computed k without a new budget tolerance.
+
+Tests must cover the captured mathematical input and provenance, both branch objective evaluations, common-map action on rotated bases, exact support/resources/constructors, active/inactive/boundary scalar budgets, weak-positive and width/scalar exceptions, native/malformed/nonfinite/bad-quality refusals, pre/post independent-check failures, representability and exact total correction accounting. Preserve the old source36 W1 regression: move its bitwise retained-point assertion to the pre-canonical snapshot and assert the new mathematical final point separately; do not delete it. Preserve the non-rank-one W2 Z positive-multiplier regression unchanged. Fixtures contain mathematical inputs and hashes only, no source observations or truth.
+
+All diagnostics remain ordinary float64, not rigorous/global/error-enclosure claims. Tiny diagnostics and public same-observation verification add zero independent science units. After reviewed source/tests, repeat the actual source45 W1/W2 public preparations with exactly the original observations and capture all outcomes, support/correction changes and costs. Only successful scoped source review, artifact review and whole-plan review return the repaired source to the enclosing campaign. A genuinely fresh full G6 on a new committed source and unused audited exploratory root is still required; this plan allocates neither that root nor any protected/G9 execution. Preserve existing 10800-second full-pilot allowance, 180 W0 schedule, cap8, precision, grids, counts and reserve policies; no new scientific or resource-policy decision is made here.
