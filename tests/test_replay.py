@@ -554,6 +554,19 @@ class PhasedReplayMemory(unittest.TestCase):
                 self.assertEqual(json.loads(process['stdout']),api._read(manifest['inputs'][index]['raw_path']))
                 self.assertEqual(process['stderr'],'complete deliberate failure')
             self.assertEqual(len(list((root/'replay').glob('replay.json'))),1)
+            # Report reconstruction deliberately keeps its complete semantic
+            # cohort. Its budget also fits below the old two-copy replay bound.
+            self.assertGreater(64*1024**2+2*(256*old['json_working_bytes']+old['inventory_bytes']),1536*1024**2)
+            manifest['replay']['receipt']={'path':str(root/'replay/replay.json'),'sha256':api._sha(root/'replay/replay.json')}
+            with patch.dict(os.environ,{'PREPARED_REPORT_MEMORY_BYTES':str(1536*1024**2)}):
+                report=api.write_report(manifest,root/'delivery')
+            self.assertEqual(report.evidence['clean_replay'],'matched')
+            self.assertNotEqual(report.code,'SUPPORTED_IN_SCOPE','fixture receipt established production G10')
+            tables=api._read(root/'delivery/tables.json')
+            self.assertEqual([r['input_id'] for r in tables['statuses']],list(range(16)))
+            self.assertEqual(len(tables['diagnostics']),16)
+            for index,record in enumerate(tables['diagnostics']):
+                self.assertEqual(record['raw'],api._read(manifest['inputs'][index]['raw_path']))
 
     def test_native_validation_and_read_charge_caller_before_parse(self):
         api=reporting(self)
