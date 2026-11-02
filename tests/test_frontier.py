@@ -68,13 +68,26 @@ class FrontierTests(unittest.TestCase):
      self.assertAlmostEqual(branch.variables[-1]/expected,1.,delta=1e-5)
     else: self.assertEqual(r.selection_status,'unresolved')
  def test_nonfinite_failed_iterates_are_retained(self):
+  import json
   from scipy.optimize import OptimizeResult
+  from prepared_learning.records import to_json_record
   from prepared_learning.frontier import solve_frontier
-  def failed(*args,**kwargs): return OptimizeResult(success=False,x=np.full(len(args[1]),np.nan),message='nonfinite solver iterate')
-  with patch('prepared_learning.quadratic.minimize',side_effect=failed): r=solve_frontier(*fixture())
-  self.assertEqual(r.selection_status,'unresolved')
-  for branch in (r.F,r.Z):
-   self.assertEqual(branch.status,'failed'); self.assertTrue(np.all(np.isfinite(branch.variables)))
+  for success,status in ((False,9),(True,0)):
+   def failed(*args,**kwargs): return OptimizeResult(success=success,status=status,x=np.full(len(args[1]),np.nan),message='nonfinite solver iterate')
+   with self.subTest(success=success), patch('prepared_learning.quadratic.minimize',side_effect=failed):
+    r=solve_frontier(*fixture())
+    self.assertEqual(r.selection_status,'unresolved')
+    for branch in (r.F,r.Z):
+     self.assertEqual(branch.status,'failed'); self.assertTrue(np.all(np.isfinite(branch.variables)))
+     kkt=branch.diagnostics.kkt
+     self.assertIs(kkt['native_solver_success'],success)
+     self.assertEqual(kkt['native_solver_status'],status)
+     self.assertEqual(kkt['native_scaled_iterate'],(None,)*len(branch.variables))
+     self.assertEqual(kkt['native_iterate_rejection_reasons'],('nonfinite_iterate',))
+     self.assertEqual(kkt['candidate_origin'],'invalid_native_zero_substitute')
+     self.assertFalse(kkt['solver_success'])
+     self.assertEqual(kkt['solver_message'],'nonfinite solver iterate')
+    json.dumps(to_json_record(r),allow_nan=False)
  def test_final_gate_rejects_bad_quality_despite_success_label(self):
   from dataclasses import replace
   from prepared_learning.frontier import solve_frontier

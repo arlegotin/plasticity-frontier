@@ -31,6 +31,45 @@ def case_qp(name, branch):
 
 
 class NumericalAdmissionTests(unittest.TestCase):
+    def test_invalid_native_iterates_retain_shape_values_and_failed_provenance(self):
+        # Shape mistakes and nonfinite values must remain distinguishable from
+        # the zero substitute; even native success cannot admit that substitute.
+        cases = ((np.array([.2, np.inf]), ['malformed_shape', 'nonfinite_iterate'], [.2, None]),
+                 (np.full((2, 4), .1), ['malformed_shape'], [[.1]*4]*2),
+                 (np.array(.3), ['malformed_shape'], .3),
+                 ([[.1], [.2, .3]], ['malformed_iterate'], [[.1], [.2, .3]]),
+                 ('invalid', ['malformed_iterate'], 'invalid'))
+        for raw, reasons, retained in cases:
+            with self.subTest(raw=raw):
+                native = OptimizeResult(success=True, status=0, x=raw, message='native reports success')
+                with patch('prepared_learning.quadratic.minimize', return_value=native):
+                    x, diag = solve_qp(case_qp('W1', 'F'), .6)
+                kkt = to_json_record(diag)['kkt']
+                self.assertFalse(kkt['solver_success'])
+                self.assertTrue(kkt['native_solver_success'])
+                self.assertEqual(kkt['native_solver_status'], 0)
+                self.assertEqual(kkt['native_scaled_iterate'], retained)
+                self.assertEqual(kkt['native_iterate_shape'], list(raw.shape) if isinstance(raw, np.ndarray) else None)
+                self.assertEqual(kkt['native_iterate_rejection_reasons'], reasons)
+                self.assertEqual(kkt['candidate_origin'], 'invalid_native_zero_substitute')
+                self.assertIsNone(kkt['repair_inf'])
+                np.testing.assert_array_equal(x, np.zeros(8))
+                json.dumps(to_json_record(diag), allow_nan=False)
+
+    def test_invalid_native_substitute_is_failed_even_when_its_kkt_passes(self):
+        c = CASES['W1']
+        qp = build_oracle_qp(c['spectrum'], 8, c['noise_variance'], 0., 8, 'F')
+        native = OptimizeResult(success=True, status=0, x=np.full(8, np.nan), message='native success')
+        # A positive variable scale exercises native solving for a QP whose
+        # zero-budget feasible substitute is also its exact optimum.
+        with patch('prepared_learning.quadratic.minimize', return_value=native):
+            x, diag = solve_qp(qp, .6)
+        np.testing.assert_array_equal(x, np.zeros(8))
+        self.assertTrue(diag.kkt['native_solver_success'])
+        self.assertTrue(diag.kkt['final_quality_passed'])
+        self.assertFalse(diag.kkt['solver_success'])
+        self.assertEqual(diag.kkt['candidate_origin'], 'invalid_native_zero_substitute')
+
     def test_w1_rejected_polish_retains_quality_checked_native_point(self):
         result = solve_frontier(*case_args('W1'))
         self.assertEqual(result.F.status, 'completed')

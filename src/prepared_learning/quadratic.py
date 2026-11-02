@@ -1,4 +1,5 @@
 """Oracle quadratic programs in original units."""
+from dataclasses import replace
 import numpy as np
 from scipy.optimize import minimize, nnls
 from .records import QPData, NumericDiagnostics
@@ -50,9 +51,34 @@ def solve_qp(qp, variable_scale):
         if magnitude==0 or not np.isfinite(magnitude): raise ValueError('objective scaling not representable')
         A=qp.A; offset=qp.offset/scale
         result=minimize(lambda y:(qp.linear@(scale*y)+(scale*y)@qp.hessian@(scale*y))/magnitude, np.zeros(len(qp.linear)), jac=lambda y:scale*(qp.linear+2*qp.hessian@(scale*y))/magnitude, method='SLSQP',constraints={'type':'ineq','fun':lambda y:A@y+offset,'jac':lambda y:A},options={'ftol':1e-14,'maxiter':2000})
-        y=np.asarray(result.x,dtype=float)
-        if y.shape!=qp.linear.shape or not np.all(np.isfinite(y)):
-            raise ValueError('nonfinite or invalid solver iterate: '+str(result.message))
+        native_rejections=[]
+        try:
+            y=np.asarray(result.x,dtype=float)
+        except (TypeError,ValueError):
+            y=None; native_rejections.append('malformed_iterate')
+        if y is not None:
+            if y.shape!=qp.linear.shape: native_rejections.append('malformed_shape')
+            if not np.all(np.isfinite(y)): native_rejections.append('nonfinite_iterate')
+        if native_rejections:
+            # This zero point is only a finite diagnostic substitute. Never
+            # admit it, even if native success or its own KKT checks pass.
+            x=np.zeros(len(qp.linear)); diagnostic=diagnose_qp(qp,x)
+            diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,
+                'solver_success':False,'solver_message':str(result.message),
+                'native_solver_success':bool(result.success),'native_solver_status':int(result.status),
+                'native_scaled_iterate':_json_safe_iterate(result.x),
+                'native_iterate_shape':None if y is None else list(y.shape),
+                'native_iterate_rejection_reasons':native_rejections,
+                'candidate_origin':'invalid_native_zero_substitute',
+                'final_quality_passed':qp_quality_passes(diagnostic,qp.offset[-1]),
+                'options':{'ftol':1e-14,'maxiter':2000},'variable_scale':variable_scale,
+                'repair_inf':None,'feasibility_repair_inf':0.,
+                'active_set_polish_valid':False,'active_set_polish_rejection_reasons':[],
+                'active_set_polish_constraints':[],'active_set_polish_candidate_scaled':None,
+                'active_set_polish_multipliers_scaled':[],
+                'active_face_reconstruction_indices':[],'active_face_reconstruction_size':0,
+                'active_face_reconstruction_inf':0.})
+            return x,diagnostic
         native_iterate=y.copy(); origin='native'
         # Test the diagonal unconstrained minimizer directly before treating any
         # near-zero slack as active. This retains very weak positive directions.
@@ -93,7 +119,6 @@ def solve_qp(qp, variable_scale):
         repair=float(np.max(np.abs(x-before),initial=0))
     diagnostic=diagnose_qp(qp,x)
     quality=qp_quality_passes(diagnostic,qp.offset[-1])
-    from dataclasses import replace
     diagnostic=replace(diagnostic,kkt={**diagnostic.kkt,
         'solver_success':bool(quality and (result is None or result.success)),
         'solver_message':'zero budget' if result is None else str(result.message),
@@ -115,6 +140,16 @@ def solve_qp(qp, variable_scale):
         'active_face_reconstruction_size':len(reconstructed),
         'active_face_reconstruction_inf':face_repair})
     return x,diagnostic
+
+
+def _json_safe_iterate(value):
+    """Retain invalid native values and shape, with nonfinite numbers as null."""
+    if isinstance(value,np.ndarray): return _json_safe_iterate(value.tolist())
+    if isinstance(value,np.generic): return _json_safe_iterate(value.item())
+    if isinstance(value,(list,tuple)): return [_json_safe_iterate(v) for v in value]
+    if isinstance(value,float): return value if np.isfinite(value) else None
+    if value is None or isinstance(value,(str,int,bool)): return value
+    return repr(value)
 
 
 def qp_quality_passes(diagnostic,k):
