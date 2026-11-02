@@ -142,7 +142,7 @@ def prepared_candidates(result, config):
             failures[key]=str(exc)
             result.setdefault('restoration_failures',[]).append({'configuration_key':'restoration:'+key,'method_id':row['method_id'],
                 **failure_evidence(exc,state,'restoration:'+key)})
-    for mid in {r['method_id'] for r in ledger}:
+    for mid in sorted({r['method_id'] for r in ledger}):
         eligible=[r for r in ledger if r['method_id']==mid and r.get('status')=='completed' and r.get('refinement_iteration',0)==final]
         if eligible:
             chosen=min(eligible,key=lambda r:(r['validation_loss'],r['logical_candidate_id']))

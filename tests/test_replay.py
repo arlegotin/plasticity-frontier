@@ -7,7 +7,134 @@ from unittest.mock import patch
 from tests.test_reporting import reporting, confirmation_input
 
 
+def learned_family_manifest():
+    """One audited root300 software fixture with the original learned selectors."""
+    from dataclasses import replace
+    from prepared_learning.protocol import checkout_identity
+    from prepared_learning.records import content_hash, to_json_record
+    from tests.test_confirmation import tiny, execution_manifest
+    from tests.test_protocol import runtime_fixture
+    config, _ = tiny()
+    config = replace(config, methods=('B01','B02','B03','B04','B11:F','B11:Z'))
+    manifest = execution_manifest()
+    scientific = manifest['scientific']
+    scientific['config'] = to_json_record(config)
+    scientific['selectors'] = {'baseline':['B01','B02','B11:Z'],
+                               'joint':['B03','B04','B11:F','B11:Z']}
+    scientific['versions'], _ = checkout_identity(scientific['selectors'],
+        config.numerics['fitting_candidates'], runtime=runtime_fixture())
+    manifest['scientific_sha256'] = content_hash(scientific)
+    manifest['protocol_sha256'] = content_hash({'schedule':scientific})
+    return manifest
+
+
 class ReplayTests(unittest.TestCase):
+    def test_learned_replay_across_process_hash_seeds(self):
+        import os
+        import subprocess
+        import sys
+        from prepared_learning.runner import RunStore
+        api = reporting(self)
+        # Hash randomization must be declared before interpreter startup/imports.
+        seeds = ('0','1','2','3','4','5','6','7')
+        child = '''
+import json, sys
+from pathlib import Path
+from unittest.mock import patch
+from prepared_learning import confirmation
+manifest = json.loads(Path(sys.argv[1]).read_text())
+# Existing detached-fixture accommodation only; preparation and publication are real.
+with patch.object(confirmation, '_live_identity'):
+    decision = confirmation.run_confirmation(manifest, Path(sys.argv[2]))
+print(json.dumps({'gate':decision.code, 'run_path':decision.evidence['run_path']}))
+'''
+        family_ids = ['family:B01','family:B02','family:B03','family:B04',
+                      'family:B11:F','family:B11:Z']
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = learned_family_manifest()
+            source = json.dumps(manifest, sort_keys=True)
+            manifest_path = root/'fixture.json'
+            manifest_path.write_text(source)
+            paths = []
+            reference_associations = None
+            for seed in seeds:
+                process = subprocess.run([sys.executable, '-c', child, str(manifest_path),
+                                          str(root/('seed-'+seed))],
+                    cwd=Path(__file__).resolve().parents[1],
+                    env={**os.environ, 'PYTHONHASHSEED':seed}, text=True,
+                    capture_output=True, check=True)
+                decision = json.loads(process.stdout)
+                self.assertEqual(decision['gate'], 'INSENSITIVE_OR_UNSUITABLE', process.stderr)
+                self.assertEqual(manifest_path.read_text(), source)
+                paths.append(Path(decision['run_path']))
+            for seed, path in zip(seeds, paths):
+                rows = RunStore(path).read_records('execution')
+                self.assertEqual(len(rows), 2)
+                associations = []
+                for row in rows:
+                    result = row['result']
+                    self.assertEqual(result['status'], 'completed')
+                    self.assertEqual(result['failures'], {})
+                    self.assertEqual(len(result['source_keys']), 5)
+                    ledger = result['candidate_records']
+                    self.assertEqual({r['method_id'] for r in ledger}, set(manifest['scientific']['config']['methods']))
+                    self.assertTrue(all(r['status']=='completed' for r in ledger))
+                    candidates = ['candidate:'+r['candidate_id'] for r in ledger]
+                    geometry = result['geometry_records']
+                    keys = [r['method_id'] for r in geometry]
+                    print('hash seed', seed, 'outer', result['outer_replication'],
+                          'candidates', len(candidates), 'family order', keys[len(candidates):-2])
+                    with self.subTest(seed=seed, outer=result['outer_replication'], check='geometry order'):
+                        self.assertEqual(keys, candidates+family_ids+['baseline','joint'])
+                    by_key = {r['method_id']:r for r in geometry}
+                    for role in ('baseline','joint'):
+                        selected = result['selected'][role]
+                        candidate = 'candidate:'+selected['candidate_id']
+                        self.assertIn(selected['method_id'], manifest['scientific']['selectors'][role])
+                        self.assertEqual(result['prepared_resources'][role], result['prepared_resources'][candidate])
+                        self.assertEqual({k:v for k,v in by_key[role].items() if k!='method_id'},
+                                         {k:v for k,v in by_key[candidate].items() if k!='method_id'})
+                    associations.append({k:result[k] for k in ('candidate_records','source_keys','source_key',
+                        'training_observation_hash','validation_observation_hash','selected','prepared_resources')})
+                if reference_associations is None:
+                    reference_associations = api._scientific(associations)
+                api.compare_scientific(reference_associations, api._scientific(associations), rtol=1e-10, atol=1e-12)
+                with self.subTest(seed=seed, check='native strict store and assets'):
+                    try:
+                        comparison = api.compare_run_stores(paths[0], path, rtol=1e-10, atol=1e-12)
+                    except ValueError as error:
+                        self.fail(str(error))
+                    self.assertEqual(comparison['status'], 'matched')
+                    self.assertGreater(comparison['scientific_records_compared'], 0)
+                    self.assertGreater(comparison['arrays_compared'], 0)
+                    print('hash seed', seed, 'strict comparison:', comparison['scientific_records_compared'],
+                          'records,', comparison['arrays_compared'], 'exact frozen arrays')
+
+    def test_complete_learned_geometry_comparison_rejects_scientific_changes(self):
+        import copy
+        from prepared_learning import confirmation
+        from prepared_learning.runner import RunStore
+        api = reporting(self)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(confirmation, '_live_identity'):
+            decision = confirmation.run_confirmation(learned_family_manifest(), Path(tmp))
+            self.assertEqual(decision.code, 'INSENSITIVE_OR_UNSUITABLE')
+            original = RunStore(Path(decision.evidence['run_path'])).read_records('execution')[0]
+        geometry = original['result']['geometry_records']
+        family = next(i for i,r in enumerate(geometry) if r['method_id']=='family:B11:F')
+        other = next(i for i,r in enumerate(geometry) if r['method_id']=='family:B11:Z')
+        for change in ('gamma','identity','missing','duplicate','selected','permutation'):
+            changed = copy.deepcopy(original)
+            records = changed['result']['geometry_records']
+            if change=='gamma': records[family]['gamma'] += .1
+            elif change=='identity': records[family]['method_id'] = 'family:changed'
+            elif change=='missing': records.pop(family)
+            elif change=='duplicate': records.append(copy.deepcopy(records[family]))
+            elif change=='selected': changed['result']['selected']['joint']['candidate_id'] = 'changed-candidate'
+            else: records[family], records[other] = records[other], records[family]
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                api.compare_scientific(api._scientific(original), api._scientific(changed), rtol=1e-10, atol=1e-12)
+
     def test_worker_resource_stop_remains_local_resource_limit(self):
         api=reporting(self)
         import subprocess
