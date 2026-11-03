@@ -6,16 +6,6 @@ import tempfile
 
 from verify_public_results import rows, verify
 
-LABELS = {
-    'B01': 'Isotropic (B01)',
-    'B02': 'Zero-head branch (B02)',
-    'B03': 'Floor branch (B03)',
-    'B04': 'Joint F/Z (B04)',
-    'B11:F': 'Fitted floor branch (B11:F)',
-    'B11:Z': 'Fitted zero-head branch (B11:Z)',
-    'B08:ridge': 'Ridge regression',
-    'B10:empirical_bayes': 'Empirical Bayes',
-}
 INK, BLUE, TEAL, ORANGE, GRID = '#142c3e', '#376799', '#087f70', '#bf5f28', '#dfe5e9'
 
 
@@ -30,7 +20,6 @@ def main():
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
-        from matplotlib.ticker import MultipleLocator
 
         plt.rcParams.update({
             'font.family': 'DejaVu Sans', 'font.size': 11, 'text.color': INK,
@@ -81,55 +70,58 @@ def main():
         save(fig, 'primary-improvement')
 
         methods = {row['method_id']: row for row in rows('benchmark_method_summary.csv')}
-        ordered = sorted(LABELS, key=lambda name: float(methods[name]['empirical_mean_of_2048_losses']))
-        fig, axis = plt.subplots(figsize=(11.5, 5.6))
-        fig.subplots_adjust(left=.31, right=.94, top=.76, bottom=.25)
-        heading(fig, 'Empirical Bayes has the lowest error in this cohort',
-                'One fixed prepared cohort · 2,048 shared tasks · observed mean squared coefficient error')
-        for y, name in enumerate(ordered):
-            value = float(methods[name]['empirical_mean_of_2048_losses'])
-            has_direct = 'B05:'+name in methods
-            axis.hlines(y, 0, value, color=GRID, lw=1)
-            axis.scatter(value, y-.08 if has_direct else y, s=48,
-                         color=TEAL if has_direct else ORANGE,
-                         marker='o' if has_direct else 's', zorder=3)
-            if has_direct:
-                direct = float(methods['B05:'+name]['empirical_mean_of_2048_losses'])
-                axis.scatter(direct, y+.10, s=48, facecolors='white', edgecolors=BLUE, linewidth=1.5, zorder=4)
-            axis.text(value+.018, y, f'{value:.3f}', va='center', fontsize=10)
-        axis.set_yticks(range(len(ordered)), [LABELS[name] for name in ordered])
-        axis.set(xlim=(0, .90), ylim=(7.6, -.6), xlabel='Mean squared coefficient error (lower is better)')
-        axis.tick_params(axis='y', length=0, pad=10)
-        axis.xaxis.set_major_locator(MultipleLocator(.2))
-        axis.grid(axis='x', color=GRID, alpha=.6)
-        fig.text(.31, .045, 'Filled circles: networks · open circles: matching direct operators (B05)\nSquares: ridge / empirical Bayes. Direct controls have the same horizontal position.', fontsize=10)
-        save(fig, 'method-comparison')
+        fig, axis = plt.subplots(figsize=(11.5, 6.7))
+        fig.subplots_adjust(left=.095, right=.97, top=.80, bottom=.20)
+        heading(fig, 'Error and cost: lower-left is better',
+                'One fixed prepared cohort · 2,048 shared tasks · pipeline means over 14 balanced timing blocks')
+        for name, row in methods.items():
+            cost = float(row['warm_pipeline_mean_ms']) / 1000
+            error = float(row['empirical_mean_of_2048_losses'])
+            if name.startswith('B05:'):
+                axis.scatter(cost, error, s=110, facecolors='none', edgecolors=BLUE,
+                             linewidth=1.6, zorder=4)
+            elif name in ('B08:ridge', 'B10:empirical_bayes'):
+                axis.scatter(cost, error, s=95, color=ORANGE, marker='s', zorder=5)
+            else:
+                axis.scatter(cost, error, s=65, color=TEAL, zorder=5)
 
-        order = []
-        for name in ('B01', 'B02', 'B03', 'B04', 'B11:F', 'B11:Z'):
-            order.extend([name, 'B05:'+name])
-        order.extend(['B10:empirical_bayes', 'B08:ridge'])
-        fig, axis = plt.subplots(figsize=(11.5, 7.3))
-        fig.subplots_adjust(left=.31, right=.95, top=.81, bottom=.19)
-        heading(fig, 'Pipeline cost depends on the method',
-                '14 balanced timing blocks · seconds per repetition · includes fitting and the declared evaluation workload')
-        labels = []
-        for y, name in enumerate(order):
-            cold = float(methods[name]['cold_pipeline_mean_ms'])/1000
-            warm = float(methods[name]['warm_pipeline_mean_ms'])/1000
-            axis.barh(y-.14, cold, height=.25, color=BLUE, label='Cold' if y == 0 else None)
-            axis.barh(y+.14, warm, height=.25, color=TEAL, label='Warm' if y == 0 else None)
-            axis.text(max(cold, warm)+.07, y, f'{warm:.3f}', va='center', fontsize=9)
-            labels.append('Direct '+name[4:] if name.startswith('B05:') else LABELS[name])
-        axis.set_yticks(range(len(order)), labels, fontsize=10)
-        axis.set(xlim=(0, 7), ylim=(13.7, -.7), xlabel='Full-pipeline seconds per repetition (lower is better)')
-        axis.tick_params(axis='y', length=0, pad=10)
+        annotations = {
+            'B01': ('Isotropic (B01)', (18, -3), 'left'),
+            'B02': ('Zero-head (B02)', (-5, 22), 'left'),
+            'B03': ('Floor / joint (B03, B04)', (34, -40), 'left'),
+            'B11:F': ('Fitted floor (B11:F)', (95, 25), 'left'),
+            'B11:Z': ('Fitted zero-head (B11:Z)', (40, -16), 'left'),
+            'B08:ridge': ('Ridge regression', (-12, 18), 'right'),
+            'B10:empirical_bayes': ('Empirical Bayes', (145, 8), 'left'),
+        }
+        for name, (label, offset, align) in annotations.items():
+            row = methods[name]
+            cost = float(row['warm_pipeline_mean_ms']) / 1000
+            error = float(row['empirical_mean_of_2048_losses'])
+            axis.annotate(f'{label}\n{error:.3f} error · {cost:.2f} s',
+                          xy=(cost, error), xytext=offset, textcoords='offset points',
+                          ha=align, va='center', fontsize=10,
+                          arrowprops={'arrowstyle': '-', 'color': '#8497a5', 'lw': .9},
+                          bbox={'boxstyle': 'round,pad=.25', 'facecolor': 'white',
+                                'edgecolor': 'none', 'alpha': .94})
+        axis.set(xlim=(0, 7.1), ylim=(.66, .81),
+                 xlabel='Warm full-pipeline time (seconds per repetition; lower is better)',
+                 ylabel='Mean squared coefficient error (lower is better)')
+        axis.set_xticks(range(8))
+        axis.set_yticks([.675, .700, .725, .750, .775, .800])
+        axis.grid(color=GRID, alpha=.65)
         axis.set_axisbelow(True)
-        axis.grid(axis='x', color=GRID, alpha=.6)
-        axis.legend(loc='upper right', frameon=False, ncols=2)
-        fig.text(.31, .035, 'Labels show warm means. These are full-pipeline measurements, not prediction latency.\nWarm B11:Z uses 2 repetitions; all other methods use 1. No energy was measured.', fontsize=10)
-        save(fig, 'pipeline-cost')
-    print(f'Wrote three SVG/PNG figure pairs to {args.output}')
+        axis.scatter([], [], s=65, color=TEAL, label='Networks')
+        axis.scatter([], [], s=110, facecolors='none', edgecolors=BLUE,
+                     linewidth=1.6, label='Matching direct operators (B05)')
+        axis.scatter([], [], s=95, color=ORANGE, marker='s', label='Ridge / empirical Bayes')
+        axis.legend(loc='lower right', frameon=False, fontsize=10, labelspacing=.8)
+        fig.text(.095, .065,
+                 'All 14 methods are plotted; some points overlap. Times include fitting, adaptation and evaluation.\n'
+                 'Warm B11:Z uses 2 repetitions; others use 1. This is full-pipeline time, not prediction latency.',
+                 fontsize=10)
+        save(fig, 'error-cost-tradeoff')
+    print(f'Wrote two SVG/PNG figure pairs to {args.output}')
 
 
 if __name__ == '__main__':

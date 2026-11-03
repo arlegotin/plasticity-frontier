@@ -60,5 +60,5 @@ The supplied receipt does not independently verify those omitted files.
 Run `python3 scripts/verify_public_results.py` from the repository root for a
 standard-library consistency check. Run
 `.venv/bin/python scripts/rebuild_release_figures.py --output runs/readme-figures`
-to regenerate the three README figures from these CSVs. These are one-update
+to regenerate the README figures from these CSVs. These are one-update
 comparisons, not multi-epoch training curves. Original data sources remain sealed.

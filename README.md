@@ -43,27 +43,24 @@ answers. The implementation uses step size 1 and loss `‖Xw − y‖² / (2n)`.
 [The original note](docs/prepared_learning_research.pdf) and
 [blueprint](docs/blueprint.md) give the assumptions and derivation.
 
-## What the alternatives achieve
+## Error versus cost
 
 The primary result compares **two selection procedures**. The joint selector adds
 the isotropic-floor family to the baseline's isotropic and zero-head choices;
 both include fitted-gain variants.
 
-A separate comparison fixes one prepared cohort and evaluates all 14 methods on
-**2,048 shared test tasks**:
+A separate comparison fixes one prepared cohort and evaluates all **14 methods
+on 2,048 shared test tasks**. The plot puts error and cost together: **lower-left
+is better**. Time covers the full pipeline on one ARM64 Mac, including fitting,
+adaptation and evaluation.
 
-![Mean observed errors on 2,048 shared tasks: empirical Bayes is lowest at 0.676; joint F/Z is 0.717. Six direct-operator controls reproduce the corresponding network errors.](docs/figures/method-comparison.png)
+![Error versus warm pipeline time for all 14 methods: zero-head B02 is fastest at 0.89 seconds with 0.774 error; floor/joint methods take about 1.28 seconds with 0.717 error; empirical Bayes takes 1.51 seconds with 0.676 error. Lower-left is better.](docs/figures/error-cost-tradeoff.png)
 
-**Empirical Bayes gets lower error here.** All six direct operators reproduce
-their network's task losses. The construction establishes how to realize the
-learning map, with no special advantage from its network representation.
-
-## What it costs
-
-Times cover the full pipeline, including fitting, adaptation and evaluation,
-on one ARM64 Mac. They aren't per-prediction latency.
-
-![Cold and warm full-pipeline times for all 14 methods, averaged across 14 balanced timing blocks.](docs/figures/pipeline-cost.png)
+By the recorded means, **B02 is fastest, empirical Bayes has the lowest error,
+and the floor/joint methods sit between them**. All six direct operators reproduce
+their network's task losses; their open circles overlap or sit nearby. The
+construction establishes how to realize the learning map, with no special
+advantage from its network representation. These times aren't per-prediction latency.
 
 The completed study covers small Gaussian linear-regression tasks and one update.
 Nonlinear networks, real-world transfer and energy savings remain untested. The
