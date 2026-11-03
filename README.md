@@ -2,9 +2,9 @@
 
 This repository preserves the supplied research inputs and builds a local CPU float64 research environment. The original ZIP and PDFs are inputs: do not modify them or run the source scripts in place. `doctor` stages a validated read-only source snapshot under `source_bundle/`; experiments must use copies and write outputs under `runs/`. Optional source assets do not gate equation-based fixtures.
 
-The [1 November local verdict](docs/results/2026-11-01-local-verdict.md) records a verified exact example and a source-tuning gate that stopped protected confirmation. Practical learned performance remains unconfirmed. [Selected evidence and figures](reports/2026-11-01-local/README.md), the [campaign summary](protocol/campaign-2026-11-01-summary.json), and the [execution audit](docs/superpowers/reviews/2026-11-01-execution-audit.md) preserve the executed scope and its limits.
+The [current result](docs/results/2026-11-03-source0b493b1-verdict.md) records a positive scoped comparison across 31 independent preparations: baseline conditional coefficient risk 0.754794 versus 0.706105 for joint selection, paired improvement 0.0486885 with approximate 95% Student interval [0.0424602, 0.0549168]. The descriptive reduction is 6.450567%. Complete native clean replay matched, and receipt-attached final G10 is supported in scope. Independent delivery review passed with concerns and zero defects; the source hold is released. Broad final integration and the controller archive remain closing work. The [execution audit](docs/superpowers/reviews/2026-11-03-full-program-execution-audit.md) preserves direct-map controls, empirical-Bayes tradeoffs, numerical-budget qualifications and unperformed scopes. Executed source remains `0b493b194c23456845812bea905f76ebbdd01b13` after later documentation commits; large raw artifacts remain local and ignored.
 
-The [tuning follow-up](docs/results/2026-11-01-branch-resolution-followup.md) resolves all 18 reused development preparations while preserving the common candidate maps. The [capacity follow-up](docs/results/2026-11-02-capacity-readiness.md) verifies complete historical report reconstruction under a 2 GiB cap. The [full campaign execution plan](docs/superpowers/plans/2026-11-02-full-campaign-execution.md) continues with fresh independent pilot data; protected confirmation and the full operational panel remain gated.
+The [1 November verdict](docs/results/2026-11-01-local-verdict.md), [tuning follow-up](docs/results/2026-11-01-branch-resolution-followup.md), [capacity follow-up](docs/results/2026-11-02-capacity-readiness.md), [source09fe result and failed replay](docs/results/2026-11-02-source09fe-verdict.md), and [sourcee01 preconfirmation hold](docs/results/2026-11-02-sourcee01-capacity-verdict.md) remain separately labelled history. The [full campaign plan](docs/superpowers/plans/2026-11-02-full-campaign-execution.md) records the approved scope. No broad practical, natural-transfer, energy or global/exact-optimality conclusion follows.
 
 Bootstrap on a native arm64 macOS Python compatible with the locked wheels (the recorded environment used Python 3.14.6):
 
@@ -105,20 +105,28 @@ cp protocol/report_inputs.json protocol/replay.json
 
 Keep `wheelhouse/`, the original Python installation, original raw run directories and all explicit assets locally. To restore missing wheels, use the download command above with the recorded source's lock, then verify hashes before replay. Preserve the supplied PDF, blueprint, ZIP and source-manifest bytes; never edit the read-only snapshot. Replay refuses uncommitted scientific source, missing assets, fixture promotion, unresolved operational schedules and identity changes. A restored source must already contain the replay implementation. All plotting uses Matplotlib's Agg backend with a temporary configuration directory. Plotting wheel versions, PyPI SHA-256 checks and license files are recorded in `licenses/plotting-wheel-verification.json`; core NumPy/SciPy builds remain unchanged.
 
-Replay compares exact keys, counts and frozen asset hashes plus float arrays/metrics with the manifest's default `rtol=1e-10`, `atol=1e-12`. Confirmation comparison uses a temporary SQLite disk index with a 2 MiB cache and reads one record pair at a time; arrays use memory maps and chunks of at most 65,536 elements. Index admission requires eight times both stores' raw JSON bytes plus 64 MiB to fit within half the temporary filesystem's free space. Insufficient disk space also returns `LOCAL_RESOURCE_LIMIT` before building the index. Durations and memory measurements are freshly recorded, not required to match bitwise, and never pooled with original observations. The temporary environment and index are deleted after execution; commands, installation logs, replayed runs and `runs/clean_replay/replay.json` remain. Attach that receipt to the report manifest using its actual hash:
+Replay compares exact keys, counts and frozen asset hashes plus float arrays/metrics with the manifest's default `rtol=1e-10`, `atol=1e-12`. Confirmation comparison uses a temporary SQLite disk index with a 2 MiB cache and reads one record pair at a time; arrays use memory maps and chunks of at most 65,536 elements. Index admission requires eight times both stores' raw JSON bytes plus 64 MiB to fit within half the temporary filesystem's free space. Insufficient disk space also returns `LOCAL_RESOURCE_LIMIT` before building the index. Durations and memory measurements are freshly recorded, not required to match bitwise, and never pooled with original observations. The temporary environment and index are deleted after execution; commands, installation logs, replayed runs and `runs/clean_replay/replay.json` remain. Create a new delivery manifest that attaches the actual matched receipt, preserving the original report manifest. Reconstruct the receipt-attached report into a separate output directory:
 
 ```sh
-.venv/bin/python - <<'PY'
+.venv/bin/python - <<'PYCODE'
 import hashlib, json
 from pathlib import Path
-path = Path('protocol/report_inputs.json')
-manifest = json.loads(path.read_text())
+original = Path('protocol/report_inputs.json')
+delivery = Path('protocol/report_delivery_inputs.json')
+manifest = json.loads(original.read_text())
 receipt = Path('runs/clean_replay/replay.json').resolve()
-manifest['replay']['receipt'] = {'path': str(receipt), 'sha256': hashlib.sha256(receipt.read_bytes()).hexdigest()}
-path.write_text(json.dumps(manifest, indent=2) + '\n')
-PY
-.venv/bin/python -m prepared_learning report --manifest protocol/report_inputs.json --output reports
+manifest['replay']['receipt'] = {
+    'path': str(receipt),
+    'sha256': hashlib.sha256(receipt.read_bytes()).hexdigest(),
+}
+with delivery.open('x') as stream:
+    json.dump(manifest, stream, indent=2)
+    stream.write('\n')
+PYCODE
+.venv/bin/python -m prepared_learning report --manifest protocol/report_delivery_inputs.json --output runs/report-delivery
 ```
+
+Use the actual campaign paths and preserve the same complete ordered inputs. The delivery manifest changes only the attached receipt; the source identity remains the earlier executed commit.
 
 Benchmark exports now declare `report_schema_version: "benchmark_raw_refs_v2"` in `tables.json` and each benchmark summary. `benchmark_workers.json` is an index directory: each input links a hash-bound `workers.index.json`, whose numeric worker files preserve complete original worker semantics, including unknown fields, every candidate, probe and failure. Compact resources retain the risk/timing/claim fields and references to full resources and selections. Readers of historical embedded `raw_workers` must follow these package-relative references and verify their hashes, keys and counts. Input descriptors and producer blocks remain schema v1; archived reports are unchanged. Benchmark replay writes complete stdout/stderr to files and compares one full scientific worker pair at a time; cost-ID aliases are shared across the complete projection. Replay receipts declare `execution_packages_base: "executions"`; benchmark results declare their per-input `package_path`, and all worker/index/process-output references resolve relative to that package.
 
