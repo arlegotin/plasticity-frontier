@@ -9,3 +9,5 @@ protocol/controller-rulings-2026-11-01.json -text
 # Compact release evidence is hash-bound and must survive checkout unchanged.
 docs/results/release-v0.1.0/** -text
 docs/results/release-v0.1.0/*.csv -whitespace
+# Preserve Matplotlib's generated SVG bytes, including path-line whitespace.
+docs/figures/*.svg -text -whitespace

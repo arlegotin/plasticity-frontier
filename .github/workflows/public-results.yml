@@ -1,0 +1,14 @@
+name: Public result consistency
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Verify committed result data and replay receipt
+        run: python3 scripts/verify_public_results.py
