@@ -18,7 +18,8 @@ budget of 0.6 and a cap of 21 trainable parameters.
 
 ![31 independent preparations: joint selection lowers expected error, with mean paired improvement 0.0487 and approximate 95% interval 0.0425 to 0.0549.](docs/figures/primary-improvement.png)
 
-Each line joins one preparation's results; positive differences favor joint
+Orange triangles show the joint selector; blue circles show the baseline. Each
+line joins one preparation's results; positive differences favor joint
 selection. The approximate 95% Student interval for the **absolute improvement**
 is **[0.0425, 0.0549]**. The percentage reduction is descriptive.
 
@@ -57,8 +58,9 @@ adaptation and evaluation.
 ![Error versus warm pipeline time for all 14 methods: zero-head B02 is fastest at 0.89 seconds with 0.774 error; floor/joint methods take about 1.28 seconds with 0.717 error; empirical Bayes takes 1.51 seconds with 0.676 error. Lower-left is better.](docs/figures/error-cost-tradeoff.png)
 
 By the recorded means, **B02 is fastest, empirical Bayes has the lowest error,
-and the floor/joint methods sit between them**. All six direct operators reproduce
-their network's task losses; their open circles overlap or sit nearby. The
+and the floor/joint methods sit between them**. The orange triangle marks our joint
+frontier (B04); every comparator is a blue circle. All six direct operators reproduce
+their network's task losses; their points overlap or sit nearby. The
 construction establishes how to realize the learning map, with no special
 advantage from its network representation. These times aren't per-prediction latency.
 

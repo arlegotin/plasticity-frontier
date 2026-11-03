@@ -6,7 +6,7 @@ import tempfile
 
 from verify_public_results import rows, verify
 
-INK, BLUE, TEAL, ORANGE, GRID = '#142c3e', '#376799', '#087f70', '#bf5f28', '#dfe5e9'
+INK, BLUE, ORANGE, GRID = '#142c3e', '#376799', '#bf5f28', '#dfe5e9'
 
 
 def main():
@@ -50,17 +50,21 @@ def main():
             offset = (index-15)*.0035
             a, b = float(row['baseline_loss']), float(row['joint_loss'])
             paired.plot([offset, 1+offset], [a, b], color=GRID, lw=1, zorder=1)
-            paired.scatter([offset, 1+offset], [a, b], c=[BLUE, TEAL], s=18, alpha=.8, zorder=2)
+            paired.scatter(offset, a, color=BLUE, marker='o', s=18, alpha=.8, zorder=2,
+                           label='Baseline' if index == 0 else None)
+            paired.scatter(1+offset, b, color=ORANGE, marker='^', s=27, alpha=.9, zorder=3,
+                           label='Joint selector (ours)' if index == 0 else None)
         paired.set(xlim=(-.3, 1.3), ylim=(.63, .86), ylabel='Expected squared coefficient error ↓')
         paired.set_xticks([0, 1], ['Baseline selector\nmean 0.7548', 'Joint selector\nmean 0.7061'])
         paired.tick_params(axis='x', length=0)
         paired.grid(axis='y', color=GRID, alpha=.6)
+        paired.legend(loc='upper left', frameon=False, fontsize=9)
         differences = [float(row['improvement_baseline_minus_joint']) for row in primary]
         low, high = summary['approximate_95_interval']
-        delta.axhspan(low, high, color=TEAL, alpha=.15, label='Approximate 95% CI for mean')
-        delta.axhline(summary['paired_improvement'], color=TEAL, lw=1.8, label='Mean paired improvement')
+        delta.axhspan(low, high, color=ORANGE, alpha=.15, label='Approximate 95% CI for mean')
+        delta.axhline(summary['paired_improvement'], color=ORANGE, lw=1.8, label='Mean paired improvement')
         delta.axhline(0, color=INK, lw=1)
-        delta.scatter(range(1, 32), differences, color=TEAL, s=24, zorder=3)
+        delta.scatter(range(1, 32), differences, color=ORANGE, marker='^', s=32, zorder=3)
         delta.set(xlim=(0, 32), ylim=(-.004, .108), xlabel='Independent preparation',
                   ylabel='Error reduction (baseline − joint) ↑')
         delta.set_xticks([1, 10, 20, 31])
@@ -77,18 +81,17 @@ def main():
         for name, row in methods.items():
             cost = float(row['warm_pipeline_mean_ms']) / 1000
             error = float(row['empirical_mean_of_2048_losses'])
-            if name.startswith('B05:'):
-                axis.scatter(cost, error, s=110, facecolors='none', edgecolors=BLUE,
-                             linewidth=1.6, zorder=4)
-            elif name in ('B08:ridge', 'B10:empirical_bayes'):
-                axis.scatter(cost, error, s=95, color=ORANGE, marker='s', zorder=5)
+            if name == 'B04':
+                axis.scatter(cost, error, s=125, color=ORANGE, marker='^',
+                             edgecolors='white', linewidth=.7, zorder=8)
             else:
-                axis.scatter(cost, error, s=65, color=TEAL, zorder=5)
+                axis.scatter(cost, error, s=65, color=BLUE, marker='o', zorder=5)
 
         annotations = {
             'B01': ('Isotropic (B01)', (18, -3), 'left'),
             'B02': ('Zero-head (B02)', (-5, 22), 'left'),
-            'B03': ('Floor / joint (B03, B04)', (34, -40), 'left'),
+            'B03': ('Floor branch (B03)', (160, -11), 'left'),
+            'B04': ('Joint frontier (ours, B04)', (34, -40), 'left'),
             'B11:F': ('Fitted floor (B11:F)', (95, 25), 'left'),
             'B11:Z': ('Fitted zero-head (B11:Z)', (40, -16), 'left'),
             'B08:ridge': ('Ridge regression', (-12, 18), 'right'),
@@ -101,6 +104,7 @@ def main():
             axis.annotate(f'{label}\n{error:.3f} error · {cost:.2f} s',
                           xy=(cost, error), xytext=offset, textcoords='offset points',
                           ha=align, va='center', fontsize=10,
+                          color=ORANGE if name == 'B04' else INK,
                           arrowprops={'arrowstyle': '-', 'color': '#8497a5', 'lw': .9},
                           bbox={'boxstyle': 'round,pad=.25', 'facecolor': 'white',
                                 'edgecolor': 'none', 'alpha': .94})
@@ -111,10 +115,8 @@ def main():
         axis.set_yticks([.675, .700, .725, .750, .775, .800])
         axis.grid(color=GRID, alpha=.65)
         axis.set_axisbelow(True)
-        axis.scatter([], [], s=65, color=TEAL, label='Networks')
-        axis.scatter([], [], s=110, facecolors='none', edgecolors=BLUE,
-                     linewidth=1.6, label='Matching direct operators (B05)')
-        axis.scatter([], [], s=95, color=ORANGE, marker='s', label='Ridge / empirical Bayes')
+        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our method: joint frontier (B04)')
+        axis.scatter([], [], s=65, color=BLUE, marker='o', label='All other methods')
         axis.legend(loc='lower right', frameon=False, fontsize=10, labelspacing=.8)
         fig.text(.095, .065,
                  'All 14 methods are plotted; some points overlap. Times include fitting, adaptation and evaluation.\n'
