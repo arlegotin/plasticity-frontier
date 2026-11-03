@@ -1,0 +1,15 @@
+method_id,empirical_mean_of_2048_losses,reported_risk_mean,reported_risk_is_analytic,risk_scope,cold_pipeline_mean_ms,warm_pipeline_mean_ms
+B01,0.7955073250608539,0.7824999999999998,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,2762.7504345714287,2772.961255928571
+B02,0.7742915500445151,0.7632349147470582,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,893.4158125714285,890.1461667142858
+B03,0.7165663137709454,0.7082040475707332,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1283.3026102142856,1278.5893245714285
+B04,0.7165663137709454,0.7082040475707332,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1282.534196357143,1276.548741
+B05:B01,0.7955073250608539,0.7824999999999998,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,2766.995154785714,2780.407779714286
+B05:B02,0.7742915500445151,0.7632349147470582,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,897.0950982857142,896.0764761428572
+B05:B03,0.7165663137709454,0.7082040475707332,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1294.3266993571428,1295.4225029285715
+B05:B04,0.7165663137709454,0.7082040475707332,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1283.0121427857143,1284.634116142857
+B05:B11:F,0.7216477358375029,0.7131762545703515,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1382.0075149285715,1377.8049404285714
+B05:B11:Z,0.770183628422787,0.7590147512141581,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1364.6076727142856,1360.1173390714284
+B08:ridge,0.7555696211111537,0.7555696211111537,False,coefficient error on fixed independent Gaussian test tasks; selected preparation fixed,6406.255553571428,6397.712979214286
+B10:empirical_bayes,0.6756790550520798,0.6756790550520798,False,coefficient error on fixed independent Gaussian test tasks; selected preparation fixed,1514.9636459285714,1513.2804792857144
+B11:F,0.7216477358375029,0.7131762545703515,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1377.8255415714286,1371.9642887142857
+B11:Z,0.770183628422787,0.7590147512141581,True,analytic conditional expected coefficient error under declared Gaussian population; float64 diagnostic,1362.700324357143,1364.0491040357144

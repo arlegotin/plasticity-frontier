@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "release": "v0.1.0",
+  "role": "compact derived publication; no new observations",
+  "executed_source": "0b493b194c23456845812bea905f76ebbdd01b13",
+  "source_code_sha256": "dcd81b054c543dd3e8f01edf904e923a7b72b23b06bae2f18416d70c73699423",
+  "source_tables": {
+    "path": "runs/campaign/2026-11-03-final-program-0b493b1/report-final/tables.json",
+    "sha256": "19b423f614d79a22dec7326951713495ef0eae5ba8273c9137cb042eae203ea8"
+  },
+  "source_primary_raw_csv": {
+    "path": "runs/campaign/2026-11-03-final-program-0b493b1/report-final/raw_records.csv",
+    "sha256": "8148f888d187d7e07e5f58e93beb6d581762e6e36c3a6aa59bf07564f26be5ce"
+  },
+  "replay_uncompressed_sha256": "98fe8b7def4779f5818cb9ef428358009624d7aaf0dec16463ba71399c818600",
+  "primary_summary": {
+    "independent_preparations": 31,
+    "baseline_mean": 0.7547938095665752,
+    "joint_mean": 0.7061053274739573,
+    "paired_improvement": 0.048688482092617925,
+    "standard_error": 0.003049690404680606,
+    "approximate_95_interval": [
+      0.04246018337889255,
+      0.0549167808063433
+    ],
+    "student_critical_value": 2.0422724563012378,
+    "descriptive_reduction_percent": 6.450567224521395,
+    "loss": "analytic conditional expected squared coefficient error"
+  },
+  "benchmark_scope": {
+    "shared_tasks": 2048,
+    "methods": 14,
+    "fixed_preparation_cohort": true,
+    "timing_blocks": 14,
+    "pipeline_time_unit": "milliseconds per repetition",
+    "warm_repetitions": {
+      "B11:Z": 2,
+      "all_other_methods": 1
+    },
+    "figure_loss_column": "empirical_mean_of_2048_losses"
+  },
+  "files": {
+    "benchmark_2048_task_losses.csv": {
+      "bytes": 690316,
+      "sha256": "321c96e808cccd02298b3798f785955e026e55262654f794de25885e29120c5b"
+    },
+    "benchmark_method_summary.csv": {
+      "bytes": 2775,
+      "sha256": "cd281cb70c27e4b2c28eace560af3337a5cde4f3b26ea83b18fb58313926fd6e"
+    },
+    "clean-replay.json.gz": {
+      "bytes": 372335,
+      "sha256": "900de3ea5e33ac2d772c0d01a4b0a5e6981abaa298fdf8fa80ade05b22643207"
+    },
+    "gate_decision.json": {
+      "bytes": 788,
+      "sha256": "9bdabbe3cfac3d50e8d6c7c2cd40a9fd086659c2c18033db24fd5c34b96f77c7"
+    },
+    "paired_operational_comparisons.csv": {
+      "bytes": 154915,
+      "sha256": "1ca343bccb6dbd91d96b7d0437576da2b9eaa74c885efa8ffe6fabe69a72b80e"
+    },
+    "primary_31_pairs.csv": {
+      "bytes": 3979,
+      "sha256": "8632a6788382c10791d3b6504642fe813ec87a6c6a82d1133cdb6bb7b991cbb7"
+    }
+  }
+}

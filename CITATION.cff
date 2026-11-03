@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite this repository and record the commit used."
+type: software
+title: "Plasticity Frontier: Preparing zero-output networks for one-step learning"
+authors:
+  - family-names: Legotin
+    given-names: Artem
+version: 0.1.0
+date-released: "2026-11-03"
+repository-code: "https://github.com/arlegotin/plasticity-frontier"
+url: "https://github.com/arlegotin/plasticity-frontier"
+license:
+  - AGPL-3.0-only
+  - CC-BY-4.0
+abstract: >-
+  Research software for preparing zero-output deep linear networks under joint
+  initialization-norm and trainable-parameter budgets. Estimates task structure,
+  solves constrained update-map problems, compiles the maps into network weights,
+  and checks the simultaneous first gradient step. In a controlled Gaussian
+  experiment across 31 independent source preparations, joint selection reduced
+  mean conditional coefficient error from 0.754794 to 0.706105, a descriptive
+  reduction of 6.45 percent. Direct operators reproduce the network updates;
+  empirical Bayes achieves lower error in a separate fixed-cohort comparison.
+  Includes plotting data, exact rational fixtures and a matched same-machine
+  clean-replay receipt. Broader practical or nonlinear-network advantage is unproved.
+keywords:
+  - initialization
+  - learning geometry
+  - deep linear networks
+  - one-step learning
+  - reproducible research
+references:
+  - type: report
+    title: "The cost of preparing a network to learn: A sharp norm formula for zero-output deep linear networks and an isotropic-to-specialized adaptation transition"
+    authors:
+      - name: "An autonomous mathematical investigation"
+    year: 2026
+    url: "https://github.com/arlegotin/plasticity-frontier/blob/main/docs/prepared_learning_research.pdf"

@@ -6,3 +6,6 @@ reports/2026-11-01-local/*.csv -whitespace
 reports/2026-11-01-local/*.svg -whitespace
 protocol/campaign-2026-11-01-*.json -text
 protocol/controller-rulings-2026-11-01.json -text
+# Compact release evidence is hash-bound and must survive checkout unchanged.
+docs/results/release-v0.1.0/** -text
+docs/results/release-v0.1.0/*.csv -whitespace

@@ -1,11 +1,27 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "prepared-learning-poc"
 version = "0.1.0"
+description = "Budget-constrained preparation of zero-output networks for one-step learning"
+readme = "README.md"
+authors = [{name = "Artem Legotin"}]
+license = "AGPL-3.0-only AND CC-BY-4.0"
+license-files = ["LICENSE", "LICENSING.md", "NOTICE", "THIRD_PARTY_NOTICES.md", "licenses/CC-BY-4.0.txt"]
+requires-python = ">=3.12"
 dependencies = ["numpy", "scipy", "matplotlib"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.urls]
+Repository = "https://github.com/arlegotin/plasticity-frontier"
+Issues = "https://github.com/arlegotin/plasticity-frontier/issues"
+Results = "https://github.com/arlegotin/plasticity-frontier/blob/main/docs/results/2026-11-03-source0b493b1-verdict.md"
+Reproduction = "https://github.com/arlegotin/plasticity-frontier/blob/main/REPRODUCE.md"
+
+[tool.setuptools]
+packages = ["prepared_learning", "checks"]
+
+[tool.setuptools.package-dir]
+prepared_learning = "src/prepared_learning"
+checks = "checks"
