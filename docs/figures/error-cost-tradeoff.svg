@@ -325,7 +325,7 @@ z
    <g id="patch_9">
     <path d="M 364.63678 284.518255 
 Q 287.882425 280.693725 211.12807 276.869194 
-" style="fill: none; stroke: #8497a5; stroke-width: 0.9; stroke-linecap: round"/>
+" style="fill: none; stroke: #bf5f28; stroke-width: 0.9; stroke-linecap: round"/>
    </g>
    <g id="text_19">
     <g id="patch_10">
@@ -347,7 +347,7 @@ z
    <g id="patch_11">
     <path d="M 267.25829 301.48681 
 Q 239.010508 289.518203 210.762725 277.549596 
-" style="fill: none; stroke: #8497a5; stroke-width: 0.9; stroke-linecap: round"/>
+" style="fill: none; stroke: #bf5f28; stroke-width: 0.9; stroke-linecap: round"/>
    </g>
    <g id="text_20">
     <g id="patch_12">
@@ -367,17 +367,17 @@ z
     <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #bf5f28" transform="translate(242.92191 325.368664)">0.717 error · 1.28 s</text>
    </g>
    <g id="patch_13">
-    <path d="M 309.19061 251.14844 
-Q 264.909416 258.884413 220.628223 266.620386 
-" style="fill: none; stroke: #8497a5; stroke-width: 0.9; stroke-linecap: round"/>
+    <path d="M 309.185656 252.447129 
+Q 264.909648 259.547444 220.63364 266.647758 
+" style="fill: none; stroke: #bf5f28; stroke-width: 0.9; stroke-linecap: round"/>
    </g>
    <g id="text_21">
     <g id="patch_14">
      <path d="M 313.658328 256.466873 
-L 409.861453 256.466873 
-Q 412.361453 256.466873 412.361453 253.966873 
-L 412.361453 229.962185 
-Q 412.361453 227.462185 409.861453 227.462185 
+L 435.44739 256.466873 
+Q 437.94739 256.466873 437.94739 253.966873 
+L 437.94739 229.962185 
+Q 437.94739 227.462185 435.44739 227.462185 
 L 313.658328 227.462185 
 Q 311.158328 227.462185 311.158328 229.962185 
 L 311.158328 253.966873 
@@ -385,8 +385,8 @@ Q 311.158328 256.466873 313.658328 256.466873
 z
 " style="fill: #ffffff; opacity: 0.94"/>
     </g>
-    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(313.658328 238.561599)">Fitted floor (B11:F)</text>
-    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(313.658328 250.563552)">0.722 error · 1.37 s</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #bf5f28" transform="translate(313.658328 238.561599)">Fitted floor (ours, B11:F)</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #bf5f28" transform="translate(313.658328 250.563552)">0.722 error · 1.37 s</text>
    </g>
    <g id="patch_15">
     <path d="M 253.376179 178.929697 
@@ -519,16 +519,11 @@ z
    </g>
    <g id="PathCollection_13">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="218.658328" y="266.964529" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_14">
-    <g clip-path="url(#p12b505f509)">
      <use xlink:href="#mb094817b0d" x="217.850644" y="173.309671" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="legend_1">
-    <g id="PathCollection_15">
+    <g id="PathCollection_14">
      <defs>
       <path id="me18f941abb" d="M 0 -5.59017 
 L -5.59017 5.59017 
@@ -537,22 +532,22 @@ z
 " style="stroke: #bf5f28"/>
      </defs>
      <g>
-      <use xlink:href="#me18f941abb" x="593.4725" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
+      <use xlink:href="#me18f941abb" x="576.180313" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
      </g>
     </g>
     <g id="text_25">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="611.4725" y="356.516875" transform="rotate(-0 611.4725 356.516875)">Our methods: floor / joint (B03, B04)</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="594.180313" y="356.516875" transform="rotate(-0 594.180313 356.516875)">Our floor / joint variants</text>
     </g>
-    <g id="PathCollection_16">
+    <g id="PathCollection_15">
      <g>
-      <use xlink:href="#mb094817b0d" x="593.4725" y="371.892656" style="fill: #376799; stroke: #376799"/>
+      <use xlink:href="#mb094817b0d" x="576.180313" y="371.892656" style="fill: #376799; stroke: #376799"/>
      </g>
     </g>
     <g id="text_26">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="611.4725" y="374.517656" transform="rotate(-0 611.4725 374.517656)">All other methods</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="594.180313" y="374.517656" transform="rotate(-0 594.180313 374.517656)">Comparators, including direct operators</text>
     </g>
    </g>
-   <g id="PathCollection_17">
+   <g id="PathCollection_16">
     <defs>
      <path id="m8438d75008" d="M 0 -5.59017 
 L -5.59017 5.59017 
@@ -564,9 +559,14 @@ z
      <use xlink:href="#m8438d75008" x="209.130136" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>
    </g>
-   <g id="PathCollection_18">
+   <g id="PathCollection_17">
     <g clip-path="url(#p12b505f509)">
      <use xlink:href="#m8438d75008" x="208.92191" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="PathCollection_18">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m8438d75008" x="218.658328" y="266.964529" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>
    </g>
   </g>
@@ -577,7 +577,7 @@ z
    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526473" x="37.26" y="63.454359" transform="rotate(-0 37.26 63.454359)">One fixed prepared cohort · 2,048 shared tasks · pipeline means over 14 balanced timing blocks</text>
   </g>
   <g id="text_29">
-   <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 439.041266)">All 14 methods are plotted; some points overlap. Times include fitting, adaptation and evaluation.</text>
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 439.041266)">All 14 methods are plotted. Blue direct-operator controls can overlap our orange triangles.</text>
    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 451.044)">Warm B11:Z uses 2 repetitions; others use 1. This is full-pipeline time, not prediction latency.</text>
   </g>
  </g>

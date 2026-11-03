@@ -7,7 +7,7 @@ import tempfile
 from verify_public_results import rows, verify
 
 INK, BLUE, ORANGE, GRID = '#142c3e', '#376799', '#bf5f28', '#dfe5e9'
-OUR_METHODS = {'B03', 'B04'}
+OUR_METHODS = {'B03', 'B04', 'B11:F'}
 
 
 def main():
@@ -93,7 +93,7 @@ def main():
             'B02': ('Zero-head (B02)', (-5, 22), 'left'),
             'B03': ('Floor branch (ours, B03)', (160, -11), 'left'),
             'B04': ('Joint frontier (ours, B04)', (34, -40), 'left'),
-            'B11:F': ('Fitted floor (B11:F)', (95, 25), 'left'),
+            'B11:F': ('Fitted floor (ours, B11:F)', (95, 25), 'left'),
             'B11:Z': ('Fitted zero-head (B11:Z)', (40, -16), 'left'),
             'B08:ridge': ('Ridge regression', (-12, 18), 'right'),
             'B10:empirical_bayes': ('Empirical Bayes', (145, 8), 'left'),
@@ -106,7 +106,9 @@ def main():
                           xy=(cost, error), xytext=offset, textcoords='offset points',
                           ha=align, va='center', fontsize=10,
                           color=ORANGE if name in OUR_METHODS else INK,
-                          arrowprops={'arrowstyle': '-', 'color': '#8497a5', 'lw': .9},
+                          arrowprops={'arrowstyle': '-',
+                                      'color': ORANGE if name in OUR_METHODS else '#8497a5',
+                                      'lw': .9},
                           bbox={'boxstyle': 'round,pad=.25', 'facecolor': 'white',
                                 'edgecolor': 'none', 'alpha': .94})
         axis.set(xlim=(0, 7.1), ylim=(.66, .81),
@@ -116,11 +118,11 @@ def main():
         axis.set_yticks([.675, .700, .725, .750, .775, .800])
         axis.grid(color=GRID, alpha=.65)
         axis.set_axisbelow(True)
-        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our methods: floor / joint (B03, B04)')
-        axis.scatter([], [], s=65, color=BLUE, marker='o', label='All other methods')
+        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our floor / joint variants')
+        axis.scatter([], [], s=65, color=BLUE, marker='o', label='Comparators, including direct operators')
         axis.legend(loc='lower right', frameon=False, fontsize=10, labelspacing=.8)
         fig.text(.095, .065,
-                 'All 14 methods are plotted; some points overlap. Times include fitting, adaptation and evaluation.\n'
+                 'All 14 methods are plotted. Blue direct-operator controls can overlap our orange triangles.\n'
                  'Warm B11:Z uses 2 repetitions; others use 1. This is full-pipeline time, not prediction latency.',
                  fontsize=10)
         save(fig, 'error-cost-tradeoff')
