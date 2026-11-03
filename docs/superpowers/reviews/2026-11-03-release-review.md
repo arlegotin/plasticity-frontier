@@ -28,6 +28,11 @@ Scientific execution remains source `0b493b194c23456845812bea905f76ebbdd01b13`.
 
 - Full suite: `python -m unittest discover -v`, **395 tests passed**, 250.523 s
   in the recorded local environment. No scientific source code changed.
+- Fresh clone: **395 tests passed**, 246.851 s, using its own virtual environment,
+  installed locked dependencies and editable package, with no experiment store
+  copied over. Its first preflight omitted the local `.venv` and empty `runs/`
+  prerequisites and failed with missing-file errors. `REPRODUCE.md` now makes
+  both prerequisites explicit; the configured run passed in full.
 - `python3 scripts/verify_public_results.py` reproduced the primary means, SE
   and interval arithmetic; verified 31 distinct source preparations, 2,048 shared
   tasks, 14 method means, six direct equalities, export hashes and replay status.
@@ -42,6 +47,9 @@ Independent fresh-context release reviewer `release_science_review` inspected
 the scientific framing, exports, scripts, package metadata and attribution, and
 visually inspected all three figures. No blocking findings or requested edits.
 The reviewer separately ran the public-data verifier successfully.
+The setup correction, release notes and narrow public-data CI workflow also
+received a follow-up review with no blocking findings. Public-data CI passed
+on GitHub after the initial publication commit.
 
 These checks validate the release presentation and compact evidence. They do not
 replace protected execution, supply omitted raw packages, or add external peer

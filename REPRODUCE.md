@@ -38,12 +38,16 @@ to the recorded environment. A portable installation for code exploration is:
 ```sh
 python3 -m venv .venv
 .venv/bin/python -m pip install -e .
+mkdir -p runs
 .venv/bin/python -m prepared_learning check-theory --config configs/exploration/exact_cases.json
 ```
 
 This checks finite rational fixtures; it does not prove the general theorem or
 reproduce the 31-preparation result. The original source inputs remain unchanged
 in `docs/`. Source scripts should run from copies; outputs belong in `runs/`.
+
+Run integration tests from the repository root with the environment named
+`.venv`; several tests invoke `.venv/bin/python` and use `runs/` as scratch space.
 
 ## Recorded environment and full campaign procedure
 
@@ -62,6 +66,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --no-index --find-links wheelhouse -r requirements.lock.txt
 .venv/bin/python -m pip install --no-build-isolation --no-deps -e .
 .venv/bin/python -m pip check
+mkdir -p runs
 .venv/bin/python -m unittest discover -v
 .venv/bin/python -m prepared_learning doctor --output runs/environment
 ```
