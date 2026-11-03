@@ -1,6 +1,6 @@
 # Continuation rulings and costs — current37 snapshot
 
-**Current snapshot of R1–R37, not final completion.** Full16 matched nonfixture clean replay and receipt-attached final native G10 are complete. Independent delivery review passed with concerns/zero defects and root released the source hold. Broad final integration review and the controller archive remain closing work. Further cleanup/disposition rulings may follow. This is a concise ordered rendering of the parent `final-response-rulings-index.json`; it excludes the original38 implementation rulings already delivered separately. “Cost if wrong” preserves the stated consequence, not a measured expenditure or new forecast.
+**R1–R37 for the completed scoped program.** Full16 matched nonfixture clean replay and receipt-attached final native G10 are complete. Independent delivery review passed with concerns/zero defects and root released the source hold. Final integration review passed with zero defects. R37’s 209-file controller snapshot is hash-verified; original bound paths remain available. This is a concise ordered rendering of the parent `final-response-rulings-index.json`; it excludes the original38 implementation rulings already delivered separately. “Cost if wrong” preserves the stated consequence, not a measured expenditure or new forecast.
 
 | Ruling | Decision and retained limit | Explicit cost if wrong |
 |---|---|---|

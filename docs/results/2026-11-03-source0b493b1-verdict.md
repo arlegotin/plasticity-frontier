@@ -1,6 +1,6 @@
 # Prepared learning: positive scoped result and matched clean replay
 
-**Native final G10 is `SUPPORTED_IN_SCOPE`, clean replay is `matched`, and no claims are blocked.** Independent delivery review passed with concerns and zero defects; root released the source hold on 3 November 2026. Broad final integration review and the controller archive remain closing work.
+**Native final G10 is `SUPPORTED_IN_SCOPE`, clean replay is `matched`, and no claims are blocked.** Independent delivery review passed with concerns and zero defects; root released the source hold on 3 November 2026. Final integration review passed with zero defects; the controller snapshot is hash-verified and original seal-bound paths are retained.
 
 Executed source: `0b493b194c23456845812bea905f76ebbdd01b13`. Campaign: `runs/campaign/2026-11-03-final-program-0b493b1/`. Later documentation commits do not change the executed source. Complete large artifacts remain local and ignored; this small publication does not promise a remote archive.
 
