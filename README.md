@@ -60,10 +60,14 @@ adaptation and evaluation.
 By the recorded means, **B02 is fastest, empirical Bayes has the lowest error,
 and the floor/joint methods sit between them**. Orange triangles mark our floor
 branch (B03), joint frontier (B04), and fitted floor variant (B11:F). Comparators
-are blue circles. All six direct operators reproduce their network's task losses;
-their blue circles can overlap our orange triangles. The
+use blue circles. Direct implementations inherit their parent method's color and
+shape, so our three matching direct forms are also orange triangles. All six
+direct operators reproduce their network's task losses. The
 construction establishes how to realize the learning map, with no special
 advantage from its network representation. These times aren't per-prediction latency.
+
+[The plotted points](docs/figures/error-cost-tradeoff-points.csv) list every
+method's family, marker, color, error and time.
 
 The completed study covers small Gaussian linear-regression tasks and one update.
 Nonlinear networks, real-world transfer and energy savings remain untested. The

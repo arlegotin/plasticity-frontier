@@ -1,5 +1,6 @@
 """Render the README comparisons from the committed, verified CSV exports."""
 import argparse
+import csv
 import os
 from pathlib import Path
 import tempfile
@@ -8,6 +9,17 @@ from verify_public_results import rows, verify
 
 INK, BLUE, ORANGE, GRID = '#142c3e', '#376799', '#bf5f28', '#dfe5e9'
 OUR_METHODS = {'B03', 'B04', 'B11:F'}
+COMPARATOR_METHODS = {'B01', 'B02', 'B11:Z', 'B08:ridge', 'B10:empirical_bayes'}
+
+
+def method_style(method_id):
+    """Direct implementations inherit the visual family of their parent map."""
+    family = method_id.removeprefix('B05:')
+    if family not in OUR_METHODS | COMPARATOR_METHODS:
+        raise ValueError(f'Unclassified plot method family: {family}')
+    ours = family in OUR_METHODS
+    return {'family': family, 'group': 'ours' if ours else 'comparator',
+            'marker': '^' if ours else 'o', 'color': ORANGE if ours else BLUE}
 
 
 def main():
@@ -79,14 +91,20 @@ def main():
         fig.subplots_adjust(left=.095, right=.97, top=.80, bottom=.20)
         heading(fig, 'Error and cost: lower-left is better',
                 'One fixed prepared cohort · 2,048 shared tasks · pipeline means over 14 balanced timing blocks')
+        plot_points = []
         for name, row in methods.items():
             cost = float(row['warm_pipeline_mean_ms']) / 1000
             error = float(row['empirical_mean_of_2048_losses'])
-            if name in OUR_METHODS:
-                axis.scatter(cost, error, s=125, color=ORANGE, marker='^',
-                             edgecolors='white', linewidth=.7, zorder=8)
-            else:
-                axis.scatter(cost, error, s=65, color=BLUE, marker='o', zorder=5)
+            style = method_style(name)
+            ours = style['group'] == 'ours'
+            point = axis.scatter(cost, error, s=125 if ours else 65,
+                                 color=style['color'], marker=style['marker'],
+                                 edgecolors='white' if ours else BLUE,
+                                 linewidth=.7, zorder=8 if ours else 5)
+            point.set_gid('method-' + name.replace(':', '-'))
+            plot_points.append({'method_id': name, **style,
+                                'warm_pipeline_seconds': cost,
+                                'empirical_mean_loss': error})
 
         annotations = {
             'B01': ('Isotropic (B01)', (18, -3), 'left'),
@@ -105,9 +123,9 @@ def main():
             axis.annotate(f'{label}\n{error:.3f} error · {cost:.2f} s',
                           xy=(cost, error), xytext=offset, textcoords='offset points',
                           ha=align, va='center', fontsize=10,
-                          color=ORANGE if name in OUR_METHODS else INK,
+                          color=ORANGE if method_style(name)['group'] == 'ours' else INK,
                           arrowprops={'arrowstyle': '-',
-                                      'color': ORANGE if name in OUR_METHODS else '#8497a5',
+                                      'color': ORANGE if method_style(name)['group'] == 'ours' else '#8497a5',
                                       'lw': .9},
                           bbox={'boxstyle': 'round,pad=.25', 'facecolor': 'white',
                                 'edgecolor': 'none', 'alpha': .94})
@@ -118,15 +136,19 @@ def main():
         axis.set_yticks([.675, .700, .725, .750, .775, .800])
         axis.grid(color=GRID, alpha=.65)
         axis.set_axisbelow(True)
-        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our floor / joint variants')
-        axis.scatter([], [], s=65, color=BLUE, marker='o', label='Comparators, including direct operators')
+        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our floor / joint family')
+        axis.scatter([], [], s=65, color=BLUE, marker='o', label='Other method families')
         axis.legend(loc='lower right', frameon=False, fontsize=10, labelspacing=.8)
         fig.text(.095, .065,
-                 'All 14 methods are plotted. Blue direct-operator controls can overlap our orange triangles.\n'
+                 'All 14 methods: orange includes our network and matching direct forms; blue marks other families.\n'
                  'Warm B11:Z uses 2 repetitions; others use 1. This is full-pipeline time, not prediction latency.',
                  fontsize=10)
         save(fig, 'error-cost-tradeoff')
-    print(f'Wrote two SVG/PNG figure pairs to {args.output}')
+        with (args.output / 'error-cost-tradeoff-points.csv').open('w', newline='') as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(plot_points[0]), lineterminator='\n')
+            writer.writeheader()
+            writer.writerows(plot_points)
+    print(f'Wrote two SVG/PNG figure pairs and the error/cost point-style CSV to {args.output}')
 
 
 if __name__ == '__main__':

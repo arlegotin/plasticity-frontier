@@ -454,9 +454,78 @@ z
     <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(378.07855 344.262766)">Empirical Bayes</text>
     <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(378.07855 356.264719)">0.676 error · 1.51 s</text>
    </g>
-   <g id="PathCollection_3">
+   <g id="method-B01">
     <defs>
-     <path id="mb094817b0d" d="M 0 4.031129 
+     <path id="m00f125aced" d="M 0 4.031129 
+C 1.069068 4.031129 2.094493 3.606384 2.850439 2.850439 
+C 3.606384 2.094493 4.031129 1.069068 4.031129 0 
+C 4.031129 -1.069068 3.606384 -2.094493 2.850439 -2.850439 
+C 2.094493 -3.606384 1.069068 -4.031129 0 -4.031129 
+C -1.069068 -4.031129 -2.094493 -3.606384 -2.850439 -2.850439 
+C -3.606384 -2.094493 -4.031129 -1.069068 -4.031129 0 
+C -4.031129 1.069068 -3.606384 2.094493 -2.850439 2.850439 
+C -2.094493 3.606384 -1.069068 4.031129 0 4.031129 
+z
+" style="stroke: #376799; stroke-width: 0.7"/>
+    </defs>
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="361.619215" y="124.445066" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B02">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="169.492521" y="165.383025" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B05-B01">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="362.379076" y="124.445066" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B05-B02">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="170.097663" y="165.383025" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B05-B11-Z">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="217.449438" y="173.309671" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B08-ridge">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="731.49705" y="201.508859" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B10-empirical_bayes">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="233.07855" y="355.665695" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B11-Z">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m00f125aced" x="217.850644" y="173.309671" style="fill: #376799; stroke: #376799; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="legend_1">
+    <g id="PathCollection_3">
+     <defs>
+      <path id="me18f941abb" d="M 0 -5.59017 
+L -5.59017 5.59017 
+L 5.59017 5.59017 
+z
+" style="stroke: #bf5f28"/>
+     </defs>
+     <g>
+      <use xlink:href="#me18f941abb" x="663.705312" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
+     </g>
+    </g>
+    <g id="text_25">
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="681.705312" y="356.516875" transform="rotate(-0 681.705312 356.516875)">Our floor / joint family</text>
+    </g>
+    <g id="PathCollection_4">
+     <defs>
+      <path id="mb094817b0d" d="M 0 4.031129 
 C 1.069068 4.031129 2.094493 3.606384 2.850439 2.850439 
 C 3.606384 2.094493 4.031129 1.069068 4.031129 0 
 C 4.031129 -1.069068 3.606384 -2.094493 2.850439 -2.850439 
@@ -467,87 +536,16 @@ C -4.031129 1.069068 -3.606384 2.094493 -2.850439 2.850439
 C -2.094493 3.606384 -1.069068 4.031129 0 4.031129 
 z
 " style="stroke: #376799"/>
-    </defs>
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="361.619215" y="124.445066" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_4">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="169.492521" y="165.383025" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_5">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="362.379076" y="124.445066" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_6">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="170.097663" y="165.383025" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_7">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="210.847831" y="276.769641" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_8">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="209.74696" y="276.769641" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_9">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="219.254321" y="266.964529" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_10">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="217.449438" y="173.309671" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_11">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="731.49705" y="201.508859" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_12">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="233.07855" y="355.665695" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_13">
-    <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="217.850644" y="173.309671" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="legend_1">
-    <g id="PathCollection_14">
-     <defs>
-      <path id="me18f941abb" d="M 0 -5.59017 
-L -5.59017 5.59017 
-L 5.59017 5.59017 
-z
-" style="stroke: #bf5f28"/>
      </defs>
      <g>
-      <use xlink:href="#me18f941abb" x="576.180313" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
-     </g>
-    </g>
-    <g id="text_25">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="594.180313" y="356.516875" transform="rotate(-0 594.180313 356.516875)">Our floor / joint variants</text>
-    </g>
-    <g id="PathCollection_15">
-     <g>
-      <use xlink:href="#mb094817b0d" x="576.180313" y="371.892656" style="fill: #376799; stroke: #376799"/>
+      <use xlink:href="#mb094817b0d" x="663.705312" y="371.892656" style="fill: #376799; stroke: #376799"/>
      </g>
     </g>
     <g id="text_26">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="594.180313" y="374.517656" transform="rotate(-0 594.180313 374.517656)">Comparators, including direct operators</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="681.705312" y="374.517656" transform="rotate(-0 681.705312 374.517656)">Other method families</text>
     </g>
    </g>
-   <g id="PathCollection_16">
+   <g id="method-B03">
     <defs>
      <path id="m8438d75008" d="M 0 -5.59017 
 L -5.59017 5.59017 
@@ -559,12 +557,27 @@ z
      <use xlink:href="#m8438d75008" x="209.130136" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>
    </g>
-   <g id="PathCollection_17">
+   <g id="method-B04">
     <g clip-path="url(#p12b505f509)">
      <use xlink:href="#m8438d75008" x="208.92191" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>
    </g>
-   <g id="PathCollection_18">
+   <g id="method-B05-B03">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m8438d75008" x="210.847831" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B05-B04">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m8438d75008" x="209.74696" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B05-B11-F">
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m8438d75008" x="219.254321" y="266.964529" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="method-B11-F">
     <g clip-path="url(#p12b505f509)">
      <use xlink:href="#m8438d75008" x="218.658328" y="266.964529" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>
@@ -577,7 +590,7 @@ z
    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526473" x="37.26" y="63.454359" transform="rotate(-0 37.26 63.454359)">One fixed prepared cohort · 2,048 shared tasks · pipeline means over 14 balanced timing blocks</text>
   </g>
   <g id="text_29">
-   <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 439.041266)">All 14 methods are plotted. Blue direct-operator controls can overlap our orange triangles.</text>
+   <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 439.041266)">All 14 methods: orange includes our network and matching direct forms; blue marks other families.</text>
    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(78.66 451.044)">Warm B11:Z uses 2 repetitions; others use 1. This is full-pipeline time, not prediction latency.</text>
   </g>
  </g>
