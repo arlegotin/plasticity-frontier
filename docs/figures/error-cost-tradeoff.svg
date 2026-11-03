@@ -323,17 +323,17 @@ z
     <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(164.492521 151.982048)">0.774 error · 0.89 s</text>
    </g>
    <g id="patch_9">
-    <path d="M 364.637323 284.989565 
-Q 287.8827 280.932407 211.128077 276.87525 
+    <path d="M 364.63678 284.518255 
+Q 287.882425 280.693725 211.12807 276.869194 
 " style="fill: none; stroke: #8497a5; stroke-width: 0.9; stroke-linecap: round"/>
    </g>
    <g id="text_19">
     <g id="patch_10">
      <path d="M 369.130136 302.271985 
-L 465.333261 302.271985 
-Q 467.833261 302.271985 467.833261 299.771985 
-L 467.833261 275.767297 
-Q 467.833261 273.267297 465.333261 273.267297 
+L 490.647324 302.271985 
+Q 493.147324 302.271985 493.147324 299.771985 
+L 493.147324 275.767297 
+Q 493.147324 273.267297 490.647324 273.267297 
 L 369.130136 273.267297 
 Q 366.630136 273.267297 366.630136 275.767297 
 L 366.630136 299.771985 
@@ -341,8 +341,8 @@ Q 366.630136 302.271985 369.130136 302.271985
 z
 " style="fill: #ffffff; opacity: 0.94"/>
     </g>
-    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(369.130136 284.366711)">Floor branch (B03)</text>
-    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #142c3e" transform="translate(369.130136 296.368664)">0.717 error · 1.28 s</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #bf5f28" transform="translate(369.130136 284.366711)">Floor branch (ours, B03)</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #bf5f28" transform="translate(369.130136 296.368664)">0.717 error · 1.28 s</text>
    </g>
    <g id="patch_11">
     <path d="M 267.25829 301.48681 
@@ -479,61 +479,56 @@ z
    </g>
    <g id="PathCollection_5">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="209.130136" y="276.769641" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="362.379076" y="124.445066" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_6">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="362.379076" y="124.445066" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="170.097663" y="165.383025" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_7">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="170.097663" y="165.383025" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="210.847831" y="276.769641" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_8">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="210.847831" y="276.769641" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="209.74696" y="276.769641" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_9">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="209.74696" y="276.769641" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="219.254321" y="266.964529" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_10">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="219.254321" y="266.964529" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="217.449438" y="173.309671" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_11">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="217.449438" y="173.309671" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="731.49705" y="201.508859" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_12">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="731.49705" y="201.508859" style="fill: #376799; stroke: #376799"/>
+     <use xlink:href="#mb094817b0d" x="233.07855" y="355.665695" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="PathCollection_13">
     <g clip-path="url(#p12b505f509)">
-     <use xlink:href="#mb094817b0d" x="233.07855" y="355.665695" style="fill: #376799; stroke: #376799"/>
-    </g>
-   </g>
-   <g id="PathCollection_14">
-    <g clip-path="url(#p12b505f509)">
      <use xlink:href="#mb094817b0d" x="218.658328" y="266.964529" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
-   <g id="PathCollection_15">
+   <g id="PathCollection_14">
     <g clip-path="url(#p12b505f509)">
      <use xlink:href="#mb094817b0d" x="217.850644" y="173.309671" style="fill: #376799; stroke: #376799"/>
     </g>
    </g>
    <g id="legend_1">
-    <g id="PathCollection_16">
+    <g id="PathCollection_15">
      <defs>
       <path id="me18f941abb" d="M 0 -5.59017 
 L -5.59017 5.59017 
@@ -542,22 +537,22 @@ z
 " style="stroke: #bf5f28"/>
      </defs>
      <g>
-      <use xlink:href="#me18f941abb" x="616.988125" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
+      <use xlink:href="#me18f941abb" x="593.4725" y="353.891875" style="fill: #bf5f28; stroke: #bf5f28"/>
      </g>
     </g>
     <g id="text_25">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="634.988125" y="356.516875" transform="rotate(-0 634.988125 356.516875)">Our method: joint frontier (B04)</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="611.4725" y="356.516875" transform="rotate(-0 611.4725 356.516875)">Our methods: floor / joint (B03, B04)</text>
     </g>
-    <g id="PathCollection_17">
+    <g id="PathCollection_16">
      <g>
-      <use xlink:href="#mb094817b0d" x="616.988125" y="371.892656" style="fill: #376799; stroke: #376799"/>
+      <use xlink:href="#mb094817b0d" x="593.4725" y="371.892656" style="fill: #376799; stroke: #376799"/>
      </g>
     </g>
     <g id="text_26">
-     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="634.988125" y="374.517656" transform="rotate(-0 634.988125 374.517656)">All other methods</text>
+     <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #142c3e" x="611.4725" y="374.517656" transform="rotate(-0 611.4725 374.517656)">All other methods</text>
     </g>
    </g>
-   <g id="PathCollection_18">
+   <g id="PathCollection_17">
     <defs>
      <path id="m8438d75008" d="M 0 -5.59017 
 L -5.59017 5.59017 
@@ -565,6 +560,11 @@ L 5.59017 5.59017
 z
 " style="stroke: #ffffff; stroke-width: 0.7"/>
     </defs>
+    <g clip-path="url(#p12b505f509)">
+     <use xlink:href="#m8438d75008" x="209.130136" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
+    </g>
+   </g>
+   <g id="PathCollection_18">
     <g clip-path="url(#p12b505f509)">
      <use xlink:href="#m8438d75008" x="208.92191" y="276.769641" style="fill: #bf5f28; stroke: #ffffff; stroke-width: 0.7"/>
     </g>

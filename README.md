@@ -58,8 +58,8 @@ adaptation and evaluation.
 ![Error versus warm pipeline time for all 14 methods: zero-head B02 is fastest at 0.89 seconds with 0.774 error; floor/joint methods take about 1.28 seconds with 0.717 error; empirical Bayes takes 1.51 seconds with 0.676 error. Lower-left is better.](docs/figures/error-cost-tradeoff.png)
 
 By the recorded means, **B02 is fastest, empirical Bayes has the lowest error,
-and the floor/joint methods sit between them**. The orange triangle marks our joint
-frontier (B04); every comparator is a blue circle. All six direct operators reproduce
+and the floor/joint methods sit between them**. Orange triangles mark our floor
+branch (B03) and joint frontier (B04); comparators are blue circles. All six direct operators reproduce
 their network's task losses; their points overlap or sit nearby. The
 construction establishes how to realize the learning map, with no special
 advantage from its network representation. These times aren't per-prediction latency.

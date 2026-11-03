@@ -7,6 +7,7 @@ import tempfile
 from verify_public_results import rows, verify
 
 INK, BLUE, ORANGE, GRID = '#142c3e', '#376799', '#bf5f28', '#dfe5e9'
+OUR_METHODS = {'B03', 'B04'}
 
 
 def main():
@@ -81,7 +82,7 @@ def main():
         for name, row in methods.items():
             cost = float(row['warm_pipeline_mean_ms']) / 1000
             error = float(row['empirical_mean_of_2048_losses'])
-            if name == 'B04':
+            if name in OUR_METHODS:
                 axis.scatter(cost, error, s=125, color=ORANGE, marker='^',
                              edgecolors='white', linewidth=.7, zorder=8)
             else:
@@ -90,7 +91,7 @@ def main():
         annotations = {
             'B01': ('Isotropic (B01)', (18, -3), 'left'),
             'B02': ('Zero-head (B02)', (-5, 22), 'left'),
-            'B03': ('Floor branch (B03)', (160, -11), 'left'),
+            'B03': ('Floor branch (ours, B03)', (160, -11), 'left'),
             'B04': ('Joint frontier (ours, B04)', (34, -40), 'left'),
             'B11:F': ('Fitted floor (B11:F)', (95, 25), 'left'),
             'B11:Z': ('Fitted zero-head (B11:Z)', (40, -16), 'left'),
@@ -104,7 +105,7 @@ def main():
             axis.annotate(f'{label}\n{error:.3f} error · {cost:.2f} s',
                           xy=(cost, error), xytext=offset, textcoords='offset points',
                           ha=align, va='center', fontsize=10,
-                          color=ORANGE if name == 'B04' else INK,
+                          color=ORANGE if name in OUR_METHODS else INK,
                           arrowprops={'arrowstyle': '-', 'color': '#8497a5', 'lw': .9},
                           bbox={'boxstyle': 'round,pad=.25', 'facecolor': 'white',
                                 'edgecolor': 'none', 'alpha': .94})
@@ -115,7 +116,7 @@ def main():
         axis.set_yticks([.675, .700, .725, .750, .775, .800])
         axis.grid(color=GRID, alpha=.65)
         axis.set_axisbelow(True)
-        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our method: joint frontier (B04)')
+        axis.scatter([], [], s=125, color=ORANGE, marker='^', label='Our methods: floor / joint (B03, B04)')
         axis.scatter([], [], s=65, color=BLUE, marker='o', label='All other methods')
         axis.legend(loc='lower right', frameon=False, fontsize=10, labelspacing=.8)
         fig.text(.095, .065,
